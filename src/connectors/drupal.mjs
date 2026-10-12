@@ -206,7 +206,7 @@ export default class DrupalConnector extends Connector {
     const e = r && typeof r === 'object' ? r.entity : null;
     if (!e?.uuid) return null;
     if (e.type !== 'node') throw new ConnectorError('unsupported', `Drupal: ${path} is a ${e.type} entity; only nodes are supported.`);
-    return { bundle: e.bundle, uuid: e.uuid };
+    return { bundle: e.bundle, uuid: e.uuid, lang: e.langcode || null };
   }
 
   // Cœur : entité path_alias (filtre sur alias), puis /node/N → bundle et UUID.
@@ -257,6 +257,10 @@ export default class DrupalConnector extends Connector {
     const res = await this.resolve(url);
     const type = `node--${res.bundle}`;
     const { data } = await this.load(type, res.uuid);
+    const lc = data.attributes?.langcode;
+    if (res.lang && lc && res.lang !== lc && !['und', 'zxx'].includes(res.lang)) {
+      throw new ConnectorError('unsupported', `Drupal: ${url} is the "${res.lang}" translation of this node; only the original language (${lc}) is edited by this connector.`);
+    }
     return { type, uuid: res.uuid, attrs: data.attributes || {}, rels: data.relationships || {} };
   }
 
@@ -411,7 +415,7 @@ export default class DrupalConnector extends Connector {
       if (hit) await this.req(`/redirect/redirect/${hit.id}`, { method: 'DELETE' });
       return;
     }
-    const attributes = { redirect_redirect: { uri: this.toUri(value), title: '', options: [] }, status_code: 301 };
+    const attributes = { redirect_redirect: { uri: this.toUri(value), title: '' }, status_code: 301 };
     if (hit) return this.patch('redirect--redirect', hit.id, { attributes: { ...attributes, ...(hit.attributes.enabled === false ? { enabled: true } : {}) } });
     await this.req('/redirect/redirect', { method: 'POST', body: { data: { type: 'redirect--redirect', attributes: { redirect_source: { path, query }, ...attributes } } } });
   }
