@@ -56,6 +56,9 @@ const summaryOf = (id, R) => ({
   category_scores: R.summary.categoryScores,
   top_issues: R.issues.slice(0, 15).map((i) => ({ id: i.id, severity: i.severity, category: i.category, urls: i.count, label: issueLabel(i) })),
   skipped: R.meta.skipped,
+  search_console: R.meta.gsc || undefined,
+  pagespeed: R.meta.psi ? { tested: R.meta.psi.tested, strategy: R.meta.psi.strategy, origin_core_web_vitals: R.meta.psi.origin } : undefined,
+  warnings: R.meta.warnings?.length ? R.meta.warnings : undefined,
 });
 
 const server = new McpServer({ name: 'arachnide-seo-mcp-server', version: VERSION }, {
@@ -89,10 +92,16 @@ server.registerTool('arachnide_crawl', {
     include: z.string().optional().describe('Only crawl URLs matching this regex'),
     exclude: z.string().optional().describe('Skip URLs matching this regex'),
     concurrency: z.number().int().min(1).max(20).default(5),
+    psi_pages: z.number().int().min(0).max(200).default(0).describe('Run PageSpeed Insights (Lighthouse score + Core Web Vitals field data from CrUX) on the N most important pages. Uses env ARACHNIDE_PSI_KEY if set.'),
+    psi_strategy: z.enum(['mobile', 'desktop']).default('mobile'),
+    gsc_key_file: z.string().optional().describe('Path of a Google service account JSON key with access to the Search Console property (clicks, impressions, CTR, position per URL)'),
+    gsc_property: z.string().optional().describe('Search Console property, e.g. sc-domain:example.com (auto-detected if omitted)'),
+    gsc_csv_path: z.string().optional().describe('Path of a Search Console "Pages" CSV export, instead of the API'),
   },
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 }, tool(async (a, extra) => {
-  const opts = toCrawlerOptions({ maxPages: a.max_pages, maxDepth: a.max_depth, render: a.render, checkImages: a.check_images, checkExternal: a.check_external, userAgent: a.user_agent, robotsMode: a.robots, include: a.include || '', exclude: a.exclude || '', concurrency: a.concurrency });
+  const { readFile } = await import('node:fs/promises');
+  const opts = toCrawlerOptions({ maxPages: a.max_pages, maxDepth: a.max_depth, render: a.render, checkImages: a.check_images, checkExternal: a.check_external, userAgent: a.user_agent, robotsMode: a.robots, include: a.include || '', exclude: a.exclude || '', concurrency: a.concurrency, psiMax: a.psi_pages, psiStrategy: a.psi_strategy, gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv_path ? await readFile(a.gsc_csv_path, 'utf8') : '' });
   const c = new Crawler(a.url, opts);
   const token = extra?._meta?.progressToken;
   let last = 0;

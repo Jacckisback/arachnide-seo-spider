@@ -1,9 +1,9 @@
 // Conversion des options envoyées par l'interface (formulaire) en options du crawler, avec validation.
 import { USER_AGENTS } from './crawler.mjs';
 
-const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec'];
+const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec', 'psiMax', 'gscDays'];
 const BOOLS = ['crawlSubdomains', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render'];
-const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders'];
+const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders', 'psiKey', 'gscKeyFile', 'gscProperty', 'gscCsv'];
 
 const bad = (key, detail) => Object.assign(new Error(`Invalid option: ${detail}`), { status: 400, key });
 
@@ -45,5 +45,9 @@ export function toCrawlerOptions(o = {}) {
   for (const e of opts.extractors) if (e.type === 'regex') checkRegex(e.selector, e.name);
   opts.userAgent = USER_AGENTS[o.userAgent] || (o.customUserAgent ? String(o.customUserAgent) : USER_AGENTS.arachnide);
   opts.concurrency = Math.min(Math.max(opts.concurrency || 5, 1), 30);
+  if (opts.psiMax != null) opts.psiMax = Math.min(Math.max(Math.round(opts.psiMax), 0), 500);
+  opts.psiStrategy = o.psiStrategy === 'desktop' ? 'desktop' : 'mobile';
+  if (!opts.psiKey && process.env.ARACHNIDE_PSI_KEY) opts.psiKey = process.env.ARACHNIDE_PSI_KEY;
+  if (opts.gscDays != null) opts.gscDays = Math.min(Math.max(Math.round(opts.gscDays), 1), 480);
   return opts;
 }

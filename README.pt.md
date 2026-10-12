@@ -30,6 +30,14 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
   <img src="docs/screenshots/dashboard.png" alt="Painel: pontuação de saúde SEO, pontuação por categoria, códigos de resposta, profundidade de clique e prioridades" width="100%">
 </p>
 
+## 📈 Novidades da 3.2: dados Google e rastreios agendados
+
+- **Core Web Vitals de utilizadores reais** (PageSpeed Insights + CrUX: LCP, INP, CLS…) e pontuação Lighthouse das suas páginas principais.
+- **Google Search Console**: cliques, impressões, CTR e posição por URL, via API ou importação do CSV. Encontra também **páginas que o Google conhece mas que os seus links não alcançam**, CTR baixos e páginas não indexáveis com tráfego.
+- **Rastreios agendados** (diários / semanais / mensais) com **alertas por email** quando a pontuação desce ou surgem erros, com o relatório completo em anexo.
+
+Configuração em 5 minutos: **[docs/GOOGLE-AND-SCHEDULES.md](docs/GOOGLE-AND-SCHEDULES.md)** (em inglês).
+
 ## 🤖 Novidade na 3.0: o Claude audita **e corrige** o seu site (MCP)
 
 O Arachnide agora inclui um **servidor MCP**. Ligue-o ao Claude (Claude Code ou Claude Desktop) e peça em linguagem simples: *“Audite www.meu-site.pt e corrija os títulos, as descrições e os textos alternativos em falta das páginas mais importantes.”* O Claude vai:

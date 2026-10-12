@@ -9,6 +9,8 @@ import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { findChrome } from './renderer.mjs';
 import { toCrawlerOptions } from './options.mjs';
 import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl } from './store.mjs';
+import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, startScheduler } from './schedules.mjs';
+import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -101,6 +103,37 @@ const server = http.createServer(async (req, res) => {
       crawler?.stop();
       return send(res, 200, { ok: true });
     }
+    // Crawls planifiés et réglages e-mail
+    if (p === '/api/schedules' && req.method === 'GET') return send(res, 200, (await readSchedules()).map((s) => ({ ...s, nextRun: s.enabled ? nextRun(s).toISOString() : null })));
+    if (p === '/api/schedules' && req.method === 'POST') {
+      try {
+        return send(res, 200, await saveSchedule(await readBody(req)));
+      } catch (e) {
+        throw Object.assign(e, { status: 400, key: 'sched.invalid' });
+      }
+    }
+    let m = /^\/api\/schedules\/([\w-]+)(\/run)?$/.exec(p);
+    if (m && req.method === 'DELETE') {
+      await deleteSchedule(m[1]);
+      return send(res, 200, { ok: true });
+    }
+    if (m && m[2] && req.method === 'POST') {
+      const s = (await readSchedules()).find((x) => x.id === m[1]);
+      if (!s) return send(res, 404, { error: 'Unknown schedule' });
+      runSchedule(s).then((r) => broadcast('schedule', { id: s.id, ...r })).catch(() => {});
+      return send(res, 202, { started: true });
+    }
+    if (p === '/api/smtp' && req.method === 'GET') return send(res, 200, await publicSmtp());
+    if (p === '/api/smtp' && req.method === 'POST') return send(res, 200, await saveSmtp(await readBody(req)));
+    if (p === '/api/smtp/test' && req.method === 'POST') {
+      const { to } = await readBody(req);
+      try {
+        await sendMail({ to, subject: 'Arachnide SEO Spider — test', text: 'It works: Arachnide can send you crawl alerts.', html: '<p>It works: <b>Arachnide SEO Spider</b> can send you crawl alerts.</p>' });
+        return send(res, 200, { ok: true });
+      } catch (e) {
+        return send(res, 400, { error: e.message, key: e.key || 'mail.failed' });
+      }
+    }
     if (p === '/api/result') return lastResult ? send(res, 200, lastResult) : send(res, 404, { error: 'Aucun résultat' });
     if (p === '/api/crawls') return send(res, 200, await listCrawls());
     if (p.startsWith('/api/crawls/')) {
@@ -157,3 +190,6 @@ function listen(port, attempt = 0) {
   });
 }
 listen(PORT);
+
+// Planificateur : crawls planifiés pendant que l'application est ouverte (désactivable avec ARACHNIDE_NO_SCHEDULER=1).
+if (!process.env.ARACHNIDE_NO_SCHEDULER) startScheduler({ log: (m) => console.log(m) });

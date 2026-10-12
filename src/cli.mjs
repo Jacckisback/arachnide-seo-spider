@@ -16,7 +16,7 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file']);
+const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'alert-email', 'alert-score-drop']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -48,6 +48,14 @@ Usage : node src/cli.mjs <url> [options]
   --auth USER:PASS    HTTP authentication (staging sites)
   --header "K: V"     Custom HTTP header (repeatable)
   --extract N=SEL     Custom extraction: CSS selector, or N=/regex/ (repeatable)
+  --psi N             PageSpeed Insights + Core Web Vitals (CrUX) for the N most important pages
+  --psi-key KEY       Google API key (or env ARACHNIDE_PSI_KEY)   --psi-strategy mobile|desktop
+  --gsc-key FILE      Search Console: service account JSON key file
+  --gsc-property P    Search Console property (sc-domain:example.com), auto-detected if omitted
+  --gsc-days N        Search Console period in days (90)
+  --gsc-csv FILE      Import a Search Console "Pages" CSV export instead of the API
+  --alert-email A,B   Email an alert if the crawl got worse than the previous one (for cron jobs)
+  --alert-score-drop N  Alert threshold in score points (5)
   --ignore-robots     Ignore robots.txt (same as --robots ignore)
   --subdomains        Crawl subdomains too
   --no-sitemap        Do not read XML sitemaps
@@ -97,6 +105,9 @@ const opts = toCrawlerOptions({
   }),
 });
 if (!USER_AGENTS[val('ua', 'arachnide')] && val('ua')) opts.userAgent = val('ua');
+if (val('psi')) Object.assign(opts, toCrawlerOptions({ psiMax: val('psi'), psiStrategy: val('psi-strategy', 'mobile') }), { psiKey: val('psi-key', process.env.ARACHNIDE_PSI_KEY || '') });
+if (val('gsc-key')) Object.assign(opts, { gscKeyFile: val('gsc-key'), gscProperty: val('gsc-property', ''), gscDays: Number(val('gsc-days', 90)) });
+if (val('gsc-csv')) opts.gscCsv = await fs.readFile(val('gsc-csv'), 'utf8');
 if (val('custom-robots')) opts.customRobots = await fs.readFile(val('custom-robots'), 'utf8');
 if (flag('list')) {
   opts.mode = 'list';
@@ -132,6 +143,22 @@ await fs.mkdir(outDir, { recursive: true });
 const base = `${new URL(r.meta.startUrl).hostname}_${r.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '')}`;
 await fs.writeFile(path.join(outDir, base + '.json'), JSON.stringify(r));
 console.log(`\n${t('cli.saved')} ${path.join(outDir, base + '.json')}`);
+
+// Alerte e-mail (pour une tâche cron) : comparaison avec le crawl précédent du même site dans le dossier de sortie.
+if (val('alert-email')) {
+  const { evaluateAlerts, alertEmail } = await import('./schedules.mjs');
+  const { sendMail } = await import('./mailer.mjs');
+  const host = new URL(r.meta.startUrl).hostname;
+  const files = (await fs.readdir(outDir)).filter((f) => f.startsWith(host + '_') && f.endsWith('.json') && f !== base + '.json').sort();
+  const prev = files.length ? JSON.parse(await fs.readFile(path.join(outDir, files[files.length - 1]), 'utf8')) : null;
+  const { alerts, compare } = evaluateAlerts(r, prev, { scoreDrop: Number(val('alert-score-drop', 5)), errors: true });
+  if (alerts.length) {
+    const mail = alertEmail({ R: r, prev, alerts, compare, t, schedule: { name: host } });
+    await sendMail({ to: val('alert-email'), ...mail, attachments: [{ filename: `${host}_report.html`, content: buildReport(r, { maxUrls: 10, compare }, t), contentType: 'text/html' }] })
+      .then(() => console.log(`✉  ${t('alert.count', { n: alerts.length })} → ${val('alert-email')}`))
+      .catch((e) => console.error(`✉  ${e.message}`));
+  } else console.log(`✉  ${t('alert.none')}`);
+}
 
 if (flag('csv')) {
   const esc = (v) => {

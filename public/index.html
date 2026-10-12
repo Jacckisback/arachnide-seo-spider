@@ -24,6 +24,7 @@
     <div class="top-actions">
       <button id="reportBtn" class="btn accent" type="button" data-icon="report" disabled><span data-i18n="ui.report">Report</span></button>
       <button id="historyBtn" class="btn icon" type="button" data-icon="history" data-i18n-title="ui.history"></button>
+      <button id="scheduleBtn" class="btn icon" type="button" data-icon="calendar" data-i18n-title="sched.title"></button>
       <label class="btn icon" data-icon="folder" data-i18n-title="ui.open"><input id="importInput" type="file" accept=".json,application/json" hidden></label>
       <button id="exportJsonBtn" class="btn icon" type="button" data-icon="download" data-i18n-title="ui.exportJson" disabled></button>
       <label class="lang" data-icon="globe"><select id="langSel" aria-label="Language"></select></label>
@@ -44,6 +45,7 @@
           <button type="button" data-cfg="scope" data-i18n="cfg.scope">Include / exclude</button>
           <button type="button" data-cfg="extract" data-i18n="cfg.extract">Extraction</button>
           <button type="button" data-cfg="auth" data-i18n="cfg.auth">Authentication</button>
+          <button type="button" data-cfg="google" data-i18n="cfg.google">Google</button>
         </nav>
         <div class="cfg-body">
           <section data-pane="spider">
@@ -124,6 +126,25 @@
             </div>
             <label class="block"><span data-i18n="opt.customHeaders">Custom HTTP headers</span><textarea name="customHeaders" rows="3" class="mono" placeholder="Cookie: session=…&#10;X-Preview-Token: …"></textarea><small data-i18n="opt.customHeadersHelp"></small></label>
           </section>
+          <section data-pane="google" hidden>
+            <h4 data-i18n="cfg.psiTitle">PageSpeed Insights & Core Web Vitals</h4>
+            <p class="cfg-help" data-i18n="cfg.psiHelp"></p>
+            <div class="cfg-grid">
+              <label><span data-i18n="opt.psiMax">Pages to test</span><input name="psiMax" type="number" min="0" max="500" value="0"></label>
+              <label><span data-i18n="opt.psiStrategy">Device</span><select name="psiStrategy"><option value="mobile" data-i18n="opt.mobile">Mobile</option><option value="desktop" data-i18n="opt.desktop">Desktop</option></select></label>
+              <label class="span2"><span data-i18n="opt.psiKey">Google API key</span><input name="psiKey" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…"><small data-i18n="opt.psiKeyHelp"></small></label>
+            </div>
+            <h4 data-i18n="cfg.gscTitle">Google Search Console</h4>
+            <p class="cfg-help" data-i18n="cfg.gscHelp"></p>
+            <div class="cfg-grid">
+              <label class="span2"><span data-i18n="opt.gscKeyFile">Service account key file (path)</span><input name="gscKeyFile" type="text" autocomplete="off" spellcheck="false" class="mono" placeholder="/Users/me/arachnide-gsc.json"></label>
+              <label><span data-i18n="opt.gscProperty">Property (optional)</span><input name="gscProperty" type="text" autocomplete="off" spellcheck="false" placeholder="sc-domain:example.com"></label>
+              <label><span data-i18n="opt.gscDays">Period (days)</span><input name="gscDays" type="number" min="1" max="480" value="90"></label>
+            </div>
+            <div class="gsc-csv"><span data-i18n="cfg.gscCsv">…or import a Search Console CSV export (Performance → Pages)</span>
+              <label class="btn small"><input type="file" id="gscCsvFile" accept=".csv,text/csv" hidden><span data-i18n="cfg.gscCsvChoose">Choose a CSV file</span></label>
+              <span id="gscCsvName" class="muted"></span><button type="button" class="btn small" id="gscCsvClear" hidden data-i18n="cfg.gscCsvClear">Remove</button></div>
+          </section>
         </div>
       </div>
       <div class="dialog-foot"><button type="button" class="btn" id="cfgReset" data-i18n="cfg.reset">Reset</button><span class="spacer"></span><button class="btn primary" value="ok" data-i18n="cfg.done">OK</button></div>
@@ -146,6 +167,11 @@
   <dialog id="historyDialog">
     <form method="dialog" class="dialog-head"><h2 data-i18n="ui.history">History</h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
     <div id="historyList" class="dialog-body"></div>
+  </dialog>
+
+  <dialog id="scheduleDialog" class="wide">
+    <form method="dialog" class="dialog-head"><h2 data-icon="calendar"><span data-i18n="sched.title">Scheduled crawls</span></h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
+    <div id="scheduleBody" class="dialog-body"></div>
   </dialog>
 
   <dialog id="reportDialog" class="wide">
