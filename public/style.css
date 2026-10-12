@@ -277,6 +277,8 @@ pre.errs { margin: 0; white-space: pre-wrap; font-size: 11.5px; color: var(--err
 .detail-tabs button { background: none; border: 0; padding: 5px 10px; border-radius: 7px; cursor: pointer; color: var(--muted); }
 .detail-tabs button.active { background: var(--accent-soft); color: var(--text); font-weight: 650; }
 .detail-tabs .count { font-size: 11px; opacity: .7; }
+.detail-tabs .count.warn { color: var(--warning, #b7791f); opacity: 1; font-weight: 600; }
+.detail-body tr[data-issue] { cursor: pointer; }
 .detail-body { flex: 1; overflow: auto; padding: 10px 14px; }
 .kv { display: grid; grid-template-columns: 220px 1fr; font-size: 13px; }
 .kv > div { padding: 5px 6px; border-bottom: 1px solid var(--line); word-break: break-word; }
@@ -348,6 +350,7 @@ dialog::backdrop { background: rgba(10, 14, 20, .5); backdrop-filter: blur(2px);
 .viz-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .viz-legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .viz-note { position: absolute; right: 10px; top: 8px; font-size: 12px; pointer-events: none; }
+.gtip-issues { color: #b45309; }
 .gtip { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: 12px/1.4 Inter, system-ui, sans-serif; max-width: 420px; word-break: break-all; box-shadow: var(--shadow-lg); }
 
 /* ---------- Configuration ---------- */
