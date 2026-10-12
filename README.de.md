@@ -3,63 +3,90 @@
 </p>
 
 <p align="center">
-  <a href="README.md">🇬🇧 English</a> · <a href="README.fr.md">🇫🇷 Français</a> · <b>🇩🇪 Deutsch</b>
+  <a href="README.md">🇬🇧 English</a> · <a href="README.fr.md">🇫🇷 Français</a> · <b>🇩🇪 Deutsch</b> · <a href="README.es.md">🇪🇸 Español</a> · <a href="README.it.md">🇮🇹 Italiano</a> · <a href="README.pt.md">🇵🇹 Português</a>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/Lizenz-MIT-8cc63f" alt="MIT-Lizenz"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
+  <img src="https://img.shields.io/badge/version-2.0.0-3d5f17" alt="Version 2.0.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
-  <img src="https://img.shields.io/badge/Systeme-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
+  <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
   <a href="https://github.com/Jacckisback/arachnide-seo-spider/actions"><img src="https://github.com/Jacckisback/arachnide-seo-spider/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
 </p>
 
 ---
 
-**Arachnide** ist ein kostenloser Crawler für technisches SEO, der auf Ihrem eigenen Computer läuft. Wie Screaming Frog SEO Spider durchsucht er eine Website so, wie Googlebot es tut, und macht aus dem Crawl ein vollständiges Audit. Sie erhalten einen Health Score, über 50 Prüfungen mit Erklärung und Lösung sowie CSV-Exporte, die Sie direkt an Kunden weitergeben können.
+**Arachnide** ist ein kostenloser Crawler für technisches SEO, der auf Ihrem eigenen Computer läuft, ähnlich wie Screaming Frog SEO Spider. Er durchsucht eine Website so wie der Googlebot, **rendert auf Wunsch JavaScript** und macht aus dem Crawl ein priorisiertes Audit:
 
-Kein Konto, keine Cloud, kein Seitenlimit: Ihre Daten bleiben auf Ihrem Rechner.
+- einen Health Score von 100 Punkten und eine Bewertung für jede Kategorie;
+- **rund 90 Prüfungen**, jeweils mit Erklärung und Lösung;
+- einen Maßnahmenplan, sortiert nach Wirkung und Aufwand;
+- einen **White-Label-PDF-Bericht** für Ihre Kunden, in 6 Sprachen.
+
+Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihrem Rechner.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Dashboard mit SEO-Health-Score, Statuscodes, Klicktiefe und gefundenen Problemen" width="100%">
+  <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO Health Score, Bewertung nach Kategorie, Statuscodes, Klicktiefe und Prioritäten" width="100%">
 </p>
 
-## ✨ Funktionen
+## ✨ Neu in Version 2.0
 
 | | |
 |---|---|
-| 🩺 **Health Score & Probleme** | Über 50 Prüfungen, eingeteilt in Fehler, Warnungen und Hinweise. Zu jedem Problem: Erklärung, Lösung und betroffene URLs. |
-| 🔗 **Statuscodes** | 2xx / 3xx / 4xx / 5xx, Timeouts und durch robots.txt blockierte URLs. |
-| 🏷️ **Titles & Meta Descriptions** | Fehlend, doppelt, zu lang oder zu kurz, mehrfach vorhanden, Title identisch mit H1. Mit Google-SERP-Vorschau. |
-| 📑 **Überschriften** | H1 fehlend, doppelt oder mehrfach; Seiten ohne H2. |
-| 📝 **Inhalt** | Wortanzahl, Thin Content, exakt doppelte Seiten, Text-zu-HTML-Verhältnis, `lang`-Attribut. |
-| 🖼️ **Bilder** | Fehlender Alt-Text, große Bilder, defekte Bilder. |
-| 🧭 **Canonicals & Direktiven** | Selbstreferenzierend, kanonisiert, fehlend, mehrfach oder auf eine nicht indexierbare URL zeigend. `noindex`, `nofollow`, `X-Robots-Tag`. |
-| ↪️ **Weiterleitungen** | Ketten, Schleifen, temporäre 302/307-Weiterleitungen und Weiterleitungen auf die Startseite (Soft 404). |
-| ❌ **Defekte Links** | Quellseite, defekter Link, Ankertext und Statuscode, für interne und (optional) externe Links. |
-| 🗺️ **XML-Sitemaps** | Verwaiste Seiten, nicht indexierbare URLs in der Sitemap, indexierbare Seiten, die in der Sitemap fehlen. |
-| 🕸️ **Interne Verlinkung** | Echte Klicktiefe ab der Startseite, eingehende Links mit Ankertexten, ausgehende Links, schwach verlinkte Seiten. |
-| 🌍 **Hreflang & strukturierte Daten** | Fehlende hreflang-Rückverweise, JSON-LD- und Microdata-Typen, ungültiges JSON-LD. |
-| ⚡ **Performance & URLs** | Langsame Serverantwort, großes HTML; URLs mit Großbuchstaben, Unterstrichen, Parametern, Umlauten oder Überlänge. |
-| 📤 **Export & Verlauf** | Jede Tabelle lässt sich sortieren, filtern und als CSV exportieren (Excel-kompatibel). Jeder Crawl wird gespeichert und kann wieder geöffnet werden. |
-| 🖥️ **Kommandozeile** | Crawlen im Terminal: Sie erhalten den Score, die Problemliste und versandfertige CSV-Dateien. |
+| 🌍 **6 Sprachen** | Die App, die CSV-Exporte und die Berichte gibt es auf Englisch, Französisch, Deutsch, Spanisch, Italienisch und Portugiesisch. Die Sprache wechseln Sie oben in der Kopfzeile. |
+| ⚙️ **JavaScript-Rendering** | Prüft React-, Vue-, Angular- und Next.js-Websites so, wie Google sie sieht. Arachnide nutzt das Chrome oder Edge, das bereits auf Ihrem Computer installiert ist. Es wird also nichts zusätzlich heruntergeladen. Arachnide vergleicht das Roh-HTML mit der gerenderten Seite und misst **LCP und CLS**. |
+| 📄 **Professionelle SEO-Berichte** | Ein White-Label-Auditbericht mit Ihrem Logo, Ihrer Farbe und Ihren Kontaktdaten. Er enthält eine Zusammenfassung für die Geschäftsführung, die wichtigsten Ergebnisse, Bewertungen nach Kategorie, einen priorisierten Maßnahmenplan, eine detaillierte Analyse und den **Fortschritt seit dem letzten Audit**. Mit einem Klick als PDF drucken. [Beispielbericht ansehen (PDF)](docs/sample-report.pdf). |
+| 🎯 **Maßnahmenplan** | Jedes Problem wird nach Schweregrad × Wirkung × Anzahl URLs ÷ Aufwand eingestuft. Quick Wins werden hervorgehoben. |
+| 🧠 **Neue SEO-Analysen** | Interner PageRank (Link Score), nahezu doppelte Inhalte (simhash), Keyword-Kannibalisierung, Breite von Title und Description in Pixeln, Kontextlinks im Vergleich zu Menü- und Footer-Links, generische Ankertexte, Überschriftenhierarchie, unvollständige strukturierte Daten, hreflang-Validierung, Komprimierung, HSTS und mehr. |
+| 🤖 **KI & GEO** | Zeigt, ob ChatGPT, Claude, Perplexity, Google-Extended und andere KI-Crawler auf die Website zugreifen können und ob sie eine `llms.txt`-Datei hat. |
+| 📋 **Listenmodus** | Prüft nur eine eingefügte Liste von URLs, ohne Links zu folgen. |
+| 🔎 **Benutzerdefinierte Suche** | Findet alle Seiten, die einen Text oder einen regulären Ausdruck enthalten, zum Beispiel eine alte Telefonnummer oder einen Tracking-Code. |
+| 🎨 **Neues Design** | Startbildschirm mit den letzten Crawls, Live-Fortschritt mit Geschwindigkeit und Restzeit, ein Detailbereich mit anpassbarer Größe, Tastaturnavigation (↑ ↓ Enter, `/` zum Suchen), Benachrichtigungen und Dunkelmodus. |
+
+## 🔍 Was Arachnide prüft
+
+| Bereich | Prüfungen |
+|---|---|
+| **Statuscodes** | 2xx / 3xx / 4xx / 5xx, Timeouts, durch robots.txt blockierte URLs, defekte interne und externe Links |
+| **Weiterleitungen** | Ketten, Schleifen, temporäre 302/307-Weiterleitungen, Meta-Refresh, Weiterleitungen auf die Startseite (Soft 404), interne Links auf Weiterleitungen |
+| **Titles & Metas** | Fehlend, doppelt, zu lang (in Pixeln), zu kurz oder mehrfach; Title identisch mit H1; Google-SERP-Vorschau |
+| **Überschriften** | H1 fehlend, doppelt oder mehrfach; keine H2; übersprungene Überschriftenebenen |
+| **Inhalt** | Wortanzahl, dünner Inhalt, exakte und nahezu doppelte Inhalte, Keyword-Kannibalisierung, Haupt-Keyword pro Seite, Textanteil |
+| **Bilder** | Fehlender Alt-Text, schwere Bilder, defekte Bilder, fehlende width/height (CLS) |
+| **Indexierung** | Canonicals (fehlend, mehrfach, auf eine nicht indexierbare URL verweisend), noindex, nofollow, X-Robots-Tag |
+| **Architektur** | Klicktiefe, Link Score (interner PageRank), verwaiste Seiten, Seiten mit nur einem eingehenden Link oder ohne Kontextlink, nicht erreichbare Seiten |
+| **Sitemaps** | Fehlende Sitemap, nicht indexierbare URLs in der Sitemap, indexierbare Seiten, die in der Sitemap fehlen |
+| **International** | Ungültige hreflang-Codes, fehlende Rückverweise, fehlender Selbstverweis, fehlendes x-default |
+| **Strukturierte Daten** | Gefundene Typen (JSON-LD, Microdata), ungültiges JSON-LD, fehlende Eigenschaften für Rich Results (Article, Product, FAQPage, LocalBusiness, Course, Event…) |
+| **JavaScript** | Inhalt, Links, Title, H1, Canonical oder noindex durch JavaScript verändert; JS-Fehler; LCP und CLS |
+| **Performance & Sicherheit** | Antwortzeit, HTML-Größe, Komprimierung, HTTPS, HSTS, gemischte Inhalte |
+| **URLs** | Großbuchstaben, Unterstriche, Parameter, Akzente, Länge |
+| **KI & GEO** | Zugriff für Googlebot, Bingbot, GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended…; llms.txt |
 
 ## 📸 Screenshots
 
-| Probleme mit Lösungen | SERP-Vorschau |
+| Probleme mit Lösungen | Priorisierter Maßnahmenplan |
 |---|---|
-| <img src="docs/screenshots/issues.png" alt="Problemliste mit Erklärung und Lösung"> | <img src="docs/screenshots/titles-serp.png" alt="Titles-Tab mit Google-SERP-Vorschau"> |
-| **Interne Verlinkung & eingehende Links** | **Dunkelmodus** |
-| <img src="docs/screenshots/internal-linking.png" alt="Tab Interne Verlinkung mit eingehenden Links"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard im Dunkelmodus"> |
+| <img src="docs/screenshots/issues.png" alt="Problemliste mit Erklärung, Wirkung, Aufwand und Lösung"> | <img src="docs/screenshots/action-plan.png" alt="Maßnahmenplan mit Quick Wins"> |
+| **Google-SERP-Vorschau (Pixelbreite)** | **Interne Verlinkung, Link Score & eingehende Links** |
+| <img src="docs/screenshots/titles-serp.png" alt="Titles-Tab mit Google-Vorschau und Pixelanzeige"> | <img src="docs/screenshots/internal-linking.png" alt="Tab Interne Verlinkung mit Link Score und Bereich für eingehende Links"> |
+| **White-Label-Berichtseinstellungen** | **Professioneller Auditbericht** |
+| <img src="docs/screenshots/report-dialog.png" alt="Berichtsdialog mit Logo, Farbe, Kunde und Vergleich"> | <img src="docs/screenshots/report.png" alt="Zusammenfassung des Auditberichts"> |
+| **Startbildschirm** | **Dunkelmodus** |
+| <img src="docs/screenshots/home.png" alt="Startbildschirm mit den letzten Crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard im Dunkelmodus"> |
 
 ## 🚀 Installation
 
 ### 1. Node.js installieren
 
-Laden Sie die **LTS**-Version von **[nodejs.org](https://nodejs.org)** herunter und installieren Sie sie wie jedes andere Programm. Sie brauchen Version 18.17 oder neuer; empfohlen ist die aktuelle LTS. Ihre Version sehen Sie im Terminal mit `node -v`.
+Laden Sie die **LTS**-Version von **[nodejs.org](https://nodejs.org)** herunter und installieren Sie sie wie jedes andere Programm. Sie benötigen Version 18.17 oder neuer; empfohlen wird die neueste LTS-Version. Um Ihre Version zu prüfen, öffnen Sie ein Terminal und geben Sie `node -v` ein.
+
+Für das **JavaScript-Rendering** muss außerdem Google Chrome, Microsoft Edge, Chromium oder Brave installiert sein. Arachnide findet den Browser automatisch.
 
 ### 2. Arachnide herunterladen
 
-- **Am einfachsten:** Klicken Sie oben auf dieser Seite auf den grünen Button **`<> Code`**, dann auf **Download ZIP**, und entpacken Sie die Datei.
+- **Am einfachsten:** Klicken Sie oben auf dieser Seite auf die grüne Schaltfläche **`<> Code`**, dann auf **Download ZIP**, und entpacken Sie die Datei.
 - **Mit Git:**
   ```bash
   git clone https://github.com/Jacckisback/arachnide-seo-spider.git
@@ -67,11 +94,11 @@ Laden Sie die **LTS**-Version von **[nodejs.org](https://nodejs.org)** herunter 
 
 ### 3. Starten
 
-**Option A: Doppelklick** (installiert beim ersten Start alles und öffnet dann den Browser)
+**Option A: Doppelklick.** Das Startskript installiert oder aktualisiert alles und öffnet dann Ihren Browser.
 
 | System | Datei zum Doppelklicken |
 |---|---|
-| macOS | `start-mac.command`. Beim ersten Mal mit Rechtsklick → **Öffnen** starten, da macOS nicht signierte Skripte blockiert. |
+| macOS | `start-mac.command`. Klicken Sie beim ersten Mal mit der rechten Maustaste darauf und wählen Sie **Öffnen**, da macOS unsignierte Skripte blockiert. |
 | Windows | `start-windows.bat` |
 | Linux | `start-linux.sh` |
 
@@ -83,42 +110,53 @@ npm install
 npm start
 ```
 
-Öffnen Sie dann **http://localhost:4000**, geben Sie eine Website-Adresse ein und klicken Sie auf **Crawler**.
+Öffnen Sie dann **http://localhost:4000**. Geben Sie eine Website-Adresse ein und klicken Sie auf **Crawlen**.
 
-Lassen Sie das Terminalfenster während der Nutzung offen. Mit `Ctrl + C` beenden Sie die App.
+Lassen Sie das Terminalfenster geöffnet, solange Sie die App nutzen. Mit `Ctrl + C` beenden Sie sie. Ist Port 4000 belegt, wählt Arachnide den nächsten freien Port und zeigt ihn im Terminal an.
 
-> ℹ️ Die Oberfläche ist derzeit auf Französisch. Wichtigste Buttons: **Crawler** = Crawl starten, **Arrêter** = stoppen, **Historique** = gespeicherte Crawls, **Problèmes** = Probleme, **Tableau de bord** = Dashboard.
+**Update von 1.x:** Laden Sie die neue Version herunter (oder führen Sie `git pull` aus) und führen Sie dann erneut `npm install` aus. Die Startskripte für den Doppelklick erledigen das für Sie.
+
+## 📄 Einen Kundenbericht erstellen
+
+1. Crawlen Sie die Website.
+2. Klicken Sie auf **Bericht**. Wählen Sie die Sprache des Berichts und fügen Sie dann Ihr Logo, Ihre Markenfarbe, den Kundennamen und Ihre Kontaktdaten hinzu. Ihre Einstellungen werden gespeichert.
+3. Wählen Sie optional einen **früheren Crawl derselben Website**, um den Fortschritt zu zeigen: Veränderung der Bewertung, behobene Probleme und neue Probleme.
+4. Klicken Sie auf **Bericht erstellen** und dann auf **Drucken / Als PDF speichern**.
+
+Mit **Alle Probleme (CSV)** geben Sie Ihrem Kunden oder Entwickler die vollständige Liste der zu korrigierenden URLs.
 
 ## ⚙️ Crawl-Optionen
 
-Klicken Sie vor dem Start auf **⚙ Options**:
+| Gruppe | Optionen |
+|---|---|
+| Crawl | Max. URLs, max. Tiefe, gleichzeitige Anfragen, Pause zwischen Anfragen, Timeout |
+| Rendering | JavaScript-Rendering, User-Agent (Arachnide, Googlebot Desktop/Smartphone, Chrome), Accept-Language |
+| Umfang | URLs per regulärem Ausdruck ein- oder ausschließen, benutzerdefinierte Suche, Subdomains, URL-Parameter ignorieren |
+| Prüfungen | robots.txt beachten, XML-Sitemaps lesen, Canonicals folgen, externe Links prüfen, Bilder prüfen |
 
-- maximale Anzahl an URLs und maximale Tiefe
-- gleichzeitige Anfragen, Pause zwischen Anfragen, Timeout
-- User-Agent: Arachnide, Googlebot Desktop, Googlebot Smartphone oder Chrome
-- URLs per Regex ein- oder ausschließen, z. B. nur `/blog/` oder alles außer `/wp-admin/`
-- robots.txt beachten, XML-Sitemaps lesen, Canonicals folgen, Subdomains einbeziehen, URL-Parameter ignorieren
-- externe Links prüfen und Bilder prüfen (Größe und Status)
+Mit dem Schalter **Website / Liste** neben dem Adressfeld crawlen Sie eine ganze Website oder nur eine Liste von URLs.
 
 ## 🖥️ Kommandozeile
 
 ```bash
-node src/cli.mjs https://www.beispiel.de --max 2000 --csv
-node src/cli.mjs https://www.beispiel.de --ua googlebotMobile --external --images
+node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang de
+node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
+node src/cli.mjs --list urls.txt --lang de --csv
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs --help
 ```
 
-Die CLI zeigt den Health Score und die Probleme an. Sie speichert den vollständigen Crawl als JSON, das Sie in der Oberfläche über **📂 Ouvrir** öffnen können. Mit `--csv` schreibt sie zusätzlich `_pages.csv` und `_problemes.csv`.
+Die CLI gibt die Bewertung und die Probleme in Ihrer Sprache aus. Sie speichert den Crawl als JSON, das Sie in der Oberfläche über **📂** öffnen können. Mit `--csv` exportiert sie außerdem Seiten und Probleme, und mit `--report` erstellt sie einen HTML-Auditbericht in Ihrem Branding, den Sie als PDF drucken können.
 
 ## 🛠️ Fehlerbehebung
 
 | Meldung | Lösung |
 |---|---|
-| `cd: no such file or directory` | Sie sind nicht im richtigen Ordner. Geben Sie `cd` und den Pfad des entpackten Ordners ein, z. B. `cd ~/Downloads/arachnide-seo-spider`. |
+| `cd: no such file or directory` | Sie sind nicht im richtigen Ordner. Geben Sie `cd` gefolgt vom Pfad des entpackten Ordners ein, z. B. `cd ~/Downloads/arachnide-seo-spider`. |
 | `npm ERR! enoent … package.json` | Gleiche Ursache: Führen Sie `npm install` **im** Arachnide-Ordner aus. |
-| `--disable-warning= is not allowed in NODE_OPTIONS` | Ihr Terminal setzt eine Option, die Ihre Node-Version nicht kennt. Führen Sie `unset NODE_OPTIONS` aus (macOS/Linux) oder aktualisieren Sie Node.js auf die aktuelle LTS. |
-| `EADDRINUSE: address already in use :::4000` | Arachnide läuft bereits, oder eine andere App nutzt Port 4000. Starten Sie es auf einem anderen Port: `PORT=4001 npm start`. |
-| Manche Seiten zeigen keine H1 oder keinen Inhalt | Arachnide liest das vom Server gesendete HTML und führt kein JavaScript aus. Seiten, die komplett per JavaScript gebaut werden, wirken für ihn leer. |
+| `--disable-warning= is not allowed in NODE_OPTIONS` | Ihre Shell setzt eine Option, die Ihre Node-Version nicht unterstützt. Führen Sie `unset NODE_OPTIONS` aus (macOS/Linux) oder aktualisieren Sie Node.js auf die neueste LTS-Version. |
+| JavaScript-Rendering ist nicht verfügbar | Installieren Sie Google Chrome. Ist es an einem ungewöhnlichen Ort installiert, starten Sie Arachnide mit `CHROME_PATH="/path/to/chrome" npm start`. |
+| Einige Seiten zeigen keine H1 oder keinen Inhalt | Die Website erzeugt ihren Inhalt wahrscheinlich mit JavaScript. Aktivieren Sie **JavaScript-Rendering** in den Optionen. |
 
 ## 🧪 Entwicklung
 
@@ -126,22 +164,39 @@ Die CLI zeigt den Health Score und die Probleme an. Sie speichert den vollständ
 npm test
 ```
 
-Die Tests crawlen eine kleine lokale Website mit absichtlichen SEO-Fehlern (`test/fixture-site.mjs`). Sie laufen über GitHub Actions auf Node 18, 20 und 22.
+Die Tests crawlen eine kleine lokale Website mit absichtlich eingebauten SEO-Fehlern (`test/fixture-site.mjs`). Sie decken das JavaScript-Rendering, den Listenmodus, die Berichte in allen Sprachen und die Vollständigkeit der Übersetzungen ab. Sie laufen über GitHub Actions auf Node 18, 20 und 22.
+
+```
+src/
+  crawler.mjs    crawl engine (queue, concurrency, robots.txt, sitemaps, redirects, list mode)
+  renderer.mjs   JavaScript rendering with the installed Chrome / Edge (puppeteer-core)
+  parse.mjs      HTML extraction (titles, metas, headings, links, images, schema, hreflang…)
+  analyze.mjs    link graph, click depth, Link Score, duplicates, cannibalisation, SEO checks
+  text.mjs       keywords, multilingual stop words, simhash
+  pixel.mjs      title and description width in pixels
+  server.mjs     local web server and API with live updates
+  cli.mjs        command-line interface
+public/
+  app.js         web interface (no framework)
+  i18n/*.js      translations (en, fr, de, es, it, pt)
+  shared/        report generator, crawl comparison, i18n, icons (used by the UI and the CLI)
+```
+
+**Eine Sprache hinzufügen:** Kopieren Sie `public/i18n/en.js`, übersetzen Sie die Werte und fügen Sie die Sprache zu `LANGS` in `public/shared/i18n.js` hinzu. `npm test` prüft, dass kein Schlüssel und kein Platzhalter fehlt.
 
 ## 🗺️ Roadmap
 
-- [ ] Oberfläche auf Englisch und Deutsch
-- [ ] JavaScript-Rendering (Headless Chrome)
-- [ ] Title-Breite in Pixeln
-- [ ] Erkennung von Near-Duplicate-Inhalten
-- [ ] PDF- / HTML-Auditbericht mit eigenem Branding
-- [ ] Vergleich zweier Crawls
+- [ ] Felddaten aus PageSpeed Insights / CrUX
+- [ ] Integration der Google Search Console (Klicks und Impressionen pro URL)
+- [ ] Benutzerdefinierte Extraktion (CSS-Selektoren / XPath)
+- [ ] Geplante Crawls mit E-Mail-Benachrichtigungen
+- [ ] Interaktive Visualisierung der Website-Architektur
 
-Vorschläge und Pull Requests sind willkommen: siehe [CONTRIBUTING.md](CONTRIBUTING.md).
+Vorschläge und Pull Requests sind willkommen. Siehe [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## ⚖️ Verantwortungsvolle Nutzung
 
-Crawlen Sie nur Websites, die Ihnen gehören oder die Sie prüfen dürfen. Bleiben Sie auf Kundenseiten bei 2 bis 5 gleichzeitigen Anfragen und fügen Sie bei Shared Hosting eine Pause hinzu. Die Oberfläche ist nur auf Ihrem Computer erreichbar (`127.0.0.1`).
+Crawlen Sie nur Websites, die Ihnen gehören oder die Sie prüfen dürfen. Bleiben Sie bei Kunden-Websites bei 2 bis 5 gleichzeitigen Anfragen und fügen Sie bei Shared Hosting eine Pause ein. Die Oberfläche ist nur auf Ihrem Computer erreichbar (`127.0.0.1`).
 
 ---
 
@@ -155,13 +210,13 @@ Crawlen Sie nur Websites, die Ihnen gehören oder die Sie prüfen dürfen. Bleib
     <td>
       <h3>Thierry Gustin</h3>
       <p>Freiberuflicher <b>SEO-Berater</b> und Französischlehrer in <b>Madrid</b> 🇪🇸🇫🇷.<br>
-      Ich habe Arachnide für meine eigenen technischen SEO-Audits entwickelt und teile es kostenlos mit der SEO-Community.</p>
+      Ich habe Arachnide für meine eigenen technischen SEO-Audits entwickelt und stelle es der SEO-Community kostenlos zur Verfügung.</p>
       <p>
         🌐 <a href="https://thierrygustin.com">thierrygustin.com</a> — SEO-Audits & Beratung<br>
         💼 <a href="https://www.linkedin.com/in/thierrygustin">LinkedIn</a><br>
         📚 <a href="https://laclassefrancaise.es">laclassefrancaise.es</a> · <a href="https://delfonline.es">delfonline.es</a> — Französischkurse und Vorbereitung auf DELF / DALF / TCF
       </p>
-      <p><b>Sie brauchen ein vollständiges SEO-Audit oder Hilfe beim Beheben der gefundenen Probleme?</b> <a href="https://thierrygustin.com/contact">Kontakt aufnehmen →</a></p>
+      <p><b>Sie brauchen ein vollständiges SEO-Audit oder Hilfe beim Beheben der Probleme, die Arachnide gefunden hat?</b> <a href="https://thierrygustin.com/contact">Kontakt aufnehmen →</a></p>
     </td>
   </tr>
 </table>
@@ -170,6 +225,6 @@ Wenn Arachnide Ihnen Zeit spart, hilft ein ⭐ auf GitHub sehr!
 
 ## 📄 Lizenz
 
-[MIT](LICENSE) © 2026 Thierry Gustin. Frei nutzbar, veränderbar und teilbar, auch kommerziell.
+[MIT](LICENSE) © 2026 Thierry Gustin. Sie dürfen es frei nutzen, verändern und weitergeben, auch für kommerzielle Arbeiten.
 
-<sub>Arachnide ist ein unabhängiges Projekt ohne Verbindung zu Screaming Frog Ltd. „Screaming Frog“ ist eine Marke ihres Inhabers.</sub>
+<sub>Arachnide ist ein unabhängiges Projekt und steht in keiner Verbindung zu Screaming Frog Ltd. „Screaming Frog“ ist eine Marke ihres Inhabers.</sub>

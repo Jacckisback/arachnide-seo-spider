@@ -2,7 +2,7 @@
 REM Arachnide SEO Spider - double-click launcher for Windows
 cd /d "%~dp0"
 set NODE_OPTIONS=
-where node >nul 2>nul
+where node 1>NUL 2>NUL
 if errorlevel 1 (
   echo Node.js is not installed. Please install the LTS version from https://nodejs.org
   echo Node.js n est pas installe. Installez la version LTS depuis https://nodejs.org
@@ -11,10 +11,11 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if not exist node_modules (
-  call npm install
-  if errorlevel 1 ( pause & exit /b 1 )
+call npm install --no-audit --no-fund --loglevel=error
+if errorlevel 1 (
+  pause
+  exit /b 1
 )
-start "" cmd /c "timeout /t 2 >nul & start http://localhost:4000"
+set ARACHNIDE_OPEN=1
 call npm start
 pause

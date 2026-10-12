@@ -1,15 +1,26 @@
 /* Arachnide SEO Spider — interface */
-'use strict';
+import { LANGS, getT, detailText, detectLang } from './shared/i18n.js';
+import { icon } from './shared/icons.js';
+import { buildReport } from './shared/report.js';
+import { compareResults } from './shared/compare.js';
 
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const fmtN = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('fr-FR'));
-const fmtKb = (b) => (b ? (b / 1024).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Ko' : '');
 const PAGE_SIZE = 100;
+const store = {
+  get(k, d = null) {
+    try { const v = localStorage.getItem('arachnide.' + k); return v === null ? d : JSON.parse(v); } catch { return d; }
+  },
+  set(k, v) {
+    try { localStorage.setItem('arachnide.' + k, JSON.stringify(v)); } catch { /* stockage indisponible */ }
+  },
+};
 
+let t = (k) => k;
 const state = {
-  R: null, // résultat complet
-  live: [], // lignes reçues pendant le crawl
+  R: null,
+  live: [],
   running: false,
   tab: 'dashboard',
   filter: {},
@@ -17,24 +28,48 @@ const state = {
   sort: {},
   page: 0,
   issue: null,
+  sevFilter: 'all',
   selected: null,
   detailTab: 'details',
   graph: null,
+  env: {},
+  progress: null,
+  rateSamples: [],
 };
 
-/* ---------- Helpers données ---------- */
-const html200 = (R) => R.pages.filter((p) => p.isHtml && p.status === 200);
+/* ---------- Formatage ---------- */
+const num = (n) => t.num(n);
+const kb = (b) => (b ? `${t.num(Math.round((b / 1024) * 10) / 10)} KB` : '');
 const statusCls = (s) => 'st s' + String(s || 0)[0];
-const yn = (b) => (b ? '<span class="yes">Oui</span>' : '<span class="no">Non</span>');
-const T = () => state.R?.meta?.thresholds || { titleMax: 60, titleMin: 30, descMax: 155, descMin: 70, thinWords: 200, slowMs: 1000 };
+const yn = (b) => (b ? `<span class="yes">${t('ui.yes')}</span>` : `<span class="no">${t('ui.no')}</span>`);
+const TH = () => state.R?.meta?.thresholds || {};
+const html200 = (R) => R.pages.filter((p) => p.isHtml && p.status === 200);
+const idxLabel = (p) => (p.indexable ? t('idx.indexable') : t('idx.' + (p.indexabilityReason || 'nonIndexable')));
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const urlCell = (u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`;
+
+function toast(msg, kind = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind;
+  el.innerHTML = `${icon(kind === 'error' ? 'error' : kind === 'ok' ? 'check' : 'info')}<span>${esc(msg)}</span>`;
+  $('#toasts').append(el);
+  setTimeout(() => el.classList.add('out'), 4200);
+  setTimeout(() => el.remove(), 4700);
+}
+
+function debounce(fn, ms) {
+  let h;
+  return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); };
+}
 
 function linkGraph() {
   if (state.graph) return state.graph;
   const { urls, edges } = state.R.links;
+  const POS = ['content', 'nav', 'header', 'footer', 'aside'];
   const inl = new Map();
   const out = new Map();
-  for (const [f, t, a, flags] of edges) {
-    const e = { from: urls[f], to: urls[t], anchor: a, nofollow: !!(flags & 1), internal: !!(flags & 2) };
+  for (const [f, to, a, flags, pos] of edges) {
+    const e = { from: urls[f], to: urls[to], anchor: a, nofollow: !!(flags & 1), internal: !!(flags & 2), image: !!(flags & 4), pos: POS[pos || 0] };
     if (!out.has(e.from)) out.set(e.from, []);
     out.get(e.from).push(e);
     if (!inl.has(e.to)) inl.set(e.to, []);
@@ -44,184 +79,195 @@ function linkGraph() {
   return state.graph;
 }
 
-/* ---------- Colonnes réutilisables ---------- */
+/* ---------- Colonnes ---------- */
 const C = {
-  url: { k: 'url', l: 'Adresse', cls: 'trunc', html: (r) => `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>` },
-  status: { k: 'status', l: 'Code', num: true, html: (r) => (r.blockedByRobots ? '<span class="chip muted">robots</span>' : `<span class="${statusCls(r.status)}">${r.status || '—'}</span>`) },
-  statusText: { k: 'statusText', l: 'Statut', v: (r) => r.statusText || r.error || '' },
-  indexability: { k: 'indexabilityReason', l: 'Indexabilité', html: (r) => (r.indexable ? '<span class="chip ok">Indexable</span>' : `<span class="chip muted">${esc(r.indexabilityReason || 'Non indexable')}</span>`), v: (r) => (r.indexable ? 'Indexable' : r.indexabilityReason) },
-  title: { k: 'title', l: 'Titre', cls: 'trunc' },
-  titleLength: { k: 'titleLength', l: 'Long.', num: true },
-  depth: { k: 'depth', l: 'Profondeur', num: true },
-  inlinks: { k: 'uniqueInlinks', l: 'Liens entrants', num: true },
-  outlinks: { k: 'internalOutlinks', l: 'Liens sortants int.', num: true },
-  extOut: { k: 'externalOutlinks', l: 'Liens sortants ext.', num: true },
-  words: { k: 'wordCount', l: 'Mots', num: true },
-  rt: { k: 'responseTime', l: 'Temps (ms)', num: true },
-  size: { k: 'size', l: 'Poids', num: true, v: (r) => r.size, html: (r) => fmtKb(r.size) },
-  type: { k: 'contentType', l: 'Type', cls: 'trunc', v: (r) => (r.contentType || '').split(';')[0] },
-  inSitemap: { k: 'inSitemap', l: 'Sitemap', html: (r) => yn(r.inSitemap), v: (r) => (r.inSitemap ? 'Oui' : 'Non') },
+  url: { k: 'url', l: 'col.url', cls: 'trunc', html: (r) => urlCell(r.url) },
+  type: { k: 'contentType', l: 'col.type', cls: 'trunc', v: (r) => (r.contentType || '').split(';')[0] },
+  status: { k: 'status', l: 'col.status', num: true, html: (r) => (r.blockedByRobots ? `<span class="chip muted">robots.txt</span>` : `<span class="${statusCls(r.status)}">${r.status || '—'}</span>`) },
+  statusText: { k: 'statusText', l: 'col.statusText', v: (r) => r.statusText || r.error || (r.blockedByRobots ? t('idx.blocked') : '') },
+  indexability: { k: 'indexabilityReason', l: 'col.indexability', v: idxLabel, html: (r) => (r.indexable ? `<span class="chip ok">${t('idx.indexable')}</span>` : `<span class="chip muted">${esc(idxLabel(r))}</span>`) },
+  title: { k: 'title', l: 'col.title', cls: 'trunc' },
+  titleLength: { k: 'titleLength', l: 'col.chars', num: true },
+  titlePx: { k: 'titlePx', l: 'col.pixels', num: true, html: (r) => pxCell(r.titlePx, TH().titleMaxPx) },
+  depth: { k: 'depth', l: 'col.depth', num: true },
+  inlinks: { k: 'uniqueInlinks', l: 'col.inlinks', num: true },
+  contentInlinks: { k: 'contentInlinks', l: 'col.contentInlinks', num: true },
+  linkScore: { k: 'linkScore', l: 'col.linkScore', num: true, html: (r) => `<span class="meter"><i style="width:${r.linkScore || 0}%"></i></span> ${num(r.linkScore)}` },
+  outlinks: { k: 'internalOutlinks', l: 'col.outlinks', num: true },
+  extOut: { k: 'externalOutlinks', l: 'col.extOutlinks', num: true },
+  words: { k: 'wordCount', l: 'col.words', num: true },
+  rt: { k: 'responseTime', l: 'col.responseTime', num: true },
+  size: { k: 'size', l: 'col.size', num: true, html: (r) => kb(r.size) },
+  inSitemap: { k: 'inSitemap', l: 'col.inSitemap', v: (r) => (r.inSitemap ? t('ui.yes') : t('ui.no')), html: (r) => yn(r.inSitemap) },
+  focus: { k: 'focusKeyword', l: 'col.focusKeyword', cls: 'trunc' },
+  dup: (k, sev = 'error') => ({ k, l: 'col.duplicate', v: (r) => (r[k] ? t('ui.yes') : ''), html: (r) => (r[k] ? `<span class="chip ${sev}">${t('ui.yes')}</span>` : '') }),
 };
-
-/* ---------- Définition des onglets ---------- */
-const TABS = [
-  { group: 'Vue d’ensemble' },
-  { id: 'dashboard', label: 'Tableau de bord' },
-  { id: 'issues', label: 'Problèmes', count: (R) => R.issues.length },
-  { group: 'Exploration' },
-  {
-    id: 'internal', label: 'Interne', rows: (R) => R.pages,
-    cols: [C.url, C.type, C.status, C.indexability, C.title, C.words, C.depth, C.inlinks, C.rt, C.size],
-    filters: { 'Tout': () => true, 'HTML': (p) => p.isHtml, 'Indexables': (p) => p.indexable && p.isHtml, 'Non indexables': (p) => !p.indexable, 'Autres (PDF, images…)': (p) => !p.isHtml && p.status >= 200 && p.status < 300 },
-  },
-  {
-    id: 'external', label: 'Externe', rows: (R) => R.externals,
-    cols: [C.url, { k: 'status', l: 'Code', num: true, html: (r) => (r.status == null ? '<span class="chip muted">non vérifié</span>' : `<span class="${statusCls(r.status)}">${r.status || '—'}</span>`) }, { k: 'statusText', l: 'Statut' }, { k: 'inlinks', l: 'Liens', num: true }, { k: 'pages', l: 'Pages', num: true }, { k: 'firstPage', l: 'Trouvé sur', cls: 'trunc' }],
-    filters: { 'Tout': () => true, 'En erreur': (e) => e.status === 0 || e.status >= 400, 'Redirigés': (e) => e.status >= 300 && e.status < 400 },
-  },
-  {
-    id: 'codes', label: 'Codes réponse', rows: (R) => R.pages,
-    cols: [C.url, C.status, C.statusText, { k: 'redirectUrl', l: 'Redirige vers', cls: 'trunc' }, C.inlinks, C.rt],
-    filters: { 'Tout': () => true, '2xx Succès': (p) => p.status >= 200 && p.status < 300, '3xx Redirection': (p) => p.status >= 300 && p.status < 400, '4xx Erreur client': (p) => p.status >= 400 && p.status < 500, '5xx Erreur serveur': (p) => p.status >= 500, 'Bloqué par robots.txt': (p) => p.blockedByRobots, 'Sans réponse': (p) => !p.status && !p.blockedByRobots },
-  },
-  { group: 'Contenu' },
-  {
-    id: 'titles', label: 'Titres', rows: html200,
-    cols: [C.url, C.title, C.titleLength, { k: 'titleCount', l: 'Nb', num: true }, { k: 'duplicateTitle', l: 'Dupliqué', html: (r) => (r.duplicateTitle ? '<span class="chip error">Oui</span>' : ''), v: (r) => (r.duplicateTitle ? 'Oui' : '') }, C.indexability],
-    filters: { 'Tout': () => true, 'Manquant': (p) => !p.title, 'Dupliqué': (p) => p.duplicateTitle, 'Trop long': (p) => p.titleLength > T().titleMax, 'Trop court': (p) => p.title && p.titleLength < T().titleMin, 'Multiple': (p) => p.titleCount > 1, 'Identique au H1': (p) => p.title && p.h1?.[0] && p.title.toLowerCase() === p.h1[0].toLowerCase() },
-  },
-  {
-    id: 'desc', label: 'Meta description', rows: html200,
-    cols: [C.url, { k: 'metaDescription', l: 'Meta description', cls: 'wrap' }, { k: 'metaDescriptionLength', l: 'Long.', num: true }, { k: 'duplicateDescription', l: 'Dupliquée', html: (r) => (r.duplicateDescription ? '<span class="chip warning">Oui</span>' : ''), v: (r) => (r.duplicateDescription ? 'Oui' : '') }, C.indexability],
-    filters: { 'Tout': () => true, 'Manquante': (p) => !p.metaDescription, 'Dupliquée': (p) => p.duplicateDescription, 'Trop longue': (p) => p.metaDescriptionLength > T().descMax, 'Trop courte': (p) => p.metaDescription && p.metaDescriptionLength < T().descMin, 'Multiple': (p) => p.metaDescriptionCount > 1 },
-  },
-  {
-    id: 'h1', label: 'H1', rows: html200,
-    cols: [C.url, { k: 'h1first', l: 'H1', cls: 'wrap', v: (r) => r.h1?.[0] || '' }, { k: 'h1len', l: 'Long.', num: true, v: (r) => r.h1?.[0]?.length || 0 }, { k: 'h1Count', l: 'Nb H1', num: true }, { k: 'h1all', l: 'Autres H1', cls: 'wrap', v: (r) => (r.h1 || []).slice(1).join(' | ') }],
-    filters: { 'Tout': () => true, 'Manquant': (p) => !p.h1Count, 'Multiple': (p) => p.h1Count > 1, 'Dupliqué': (p) => p.duplicateH1 },
-  },
-  {
-    id: 'h2', label: 'H2', rows: html200,
-    cols: [C.url, { k: 'h2Count', l: 'Nb H2', num: true }, { k: 'h2list', l: 'H2', cls: 'wrap', v: (r) => (r.h2 || []).join(' | ') }],
-    filters: { 'Tout': () => true, 'Aucun H2': (p) => !p.h2Count },
-  },
-  {
-    id: 'content', label: 'Contenu', rows: html200,
-    cols: [C.url, C.words, { k: 'textRatio', l: 'Ratio texte %', num: true }, { k: 'duplicateContent', l: 'Dupliqué', html: (r) => (r.duplicateContent ? '<span class="chip error">Oui</span>' : ''), v: (r) => (r.duplicateContent ? 'Oui' : '') }, { k: 'lang', l: 'Lang' }, C.size, C.indexability],
-    filters: { 'Tout': () => true, 'Contenu faible': (p) => p.wordCount < T().thinWords, 'Dupliqué': (p) => p.duplicateContent, 'Sans attribut lang': (p) => !p.lang },
-  },
-  {
-    id: 'images', label: 'Images', rows: (R) => R.images,
-    cols: [{ k: 'src', l: 'Image', cls: 'trunc', html: (r) => `<a href="${esc(r.src)}" target="_blank" rel="noopener">${esc(r.src)}</a>` }, { k: 'alt', l: 'Texte alt', cls: 'wrap' }, { k: 'missingAlt', l: 'Alt manquant', html: (r) => (r.missingAlt ? '<span class="chip warning">Oui</span>' : ''), v: (r) => (r.missingAlt ? 'Oui' : '') }, { k: 'size', l: 'Poids', num: true, html: (r) => (r.size == null ? '' : fmtKb(r.size)) }, { k: 'status', l: 'Code', num: true }, { k: 'pages', l: 'Pages', num: true }, { k: 'firstPage', l: 'Trouvée sur', cls: 'trunc' }],
-    filters: { 'Tout': () => true, 'Alt manquant': (i) => i.missingAlt, 'Lourdes (> 150 Ko)': (i) => i.size > 150 * 1024, 'Cassées': (i) => i.status !== null && (i.status === 0 || i.status >= 400) },
-  },
-  { group: 'Technique' },
-  {
-    id: 'canonicals', label: 'Canonicals', rows: html200,
-    cols: [C.url, { k: 'canonical', l: 'Canonical', cls: 'trunc' }, { k: 'canonicalCount', l: 'Nb', num: true }, C.indexability],
-    filters: { 'Tout': () => true, 'Auto-référente': (p) => p.canonical === p.url, 'Canonicalisée': (p) => p.canonical && p.canonical !== p.url, 'Absente': (p) => !p.canonical, 'Multiple': (p) => p.canonicalCount > 1 },
-  },
-  {
-    id: 'directives', label: 'Directives', rows: (R) => R.pages,
-    cols: [C.url, { k: 'metaRobots', l: 'Meta robots' }, { k: 'xRobotsTag', l: 'X-Robots-Tag' }, C.indexability],
-    filters: { 'Tout': () => true, 'Noindex': (p) => /noindex|none/i.test(`${p.metaRobots} ${p.xRobotsTag}`), 'Nofollow': (p) => /nofollow|none/i.test(`${p.metaRobots} ${p.xRobotsTag}`), 'Bloqué robots.txt': (p) => p.blockedByRobots, 'Non indexables': (p) => !p.indexable },
-  },
-  {
-    id: 'redirects', label: 'Redirections', rows: (R) => R.redirects,
-    cols: [C.url, { k: 'status', l: 'Code', num: true }, { k: 'hops', l: 'Sauts', num: true }, { k: 'finalUrl', l: 'URL finale', cls: 'trunc' }, { k: 'finalStatus', l: 'Code final', num: true }, { k: 'chain', l: 'Chaîne', cls: 'wrap', v: (r) => r.chain.join(' → ') }, { k: 'inlinks', l: 'Liens entrants', num: true }],
-    filters: { 'Tout': () => true, 'Chaînes (2+ sauts)': (r) => r.hops > 1, 'Boucles': (r) => r.loop, 'Temporaires (302/307)': (r) => r.status === 302 || r.status === 307 },
-  },
-  {
-    id: 'broken', label: 'Liens cassés', rows: (R) => R.brokenLinks,
-    cols: [{ k: 'from', l: 'Page source', cls: 'trunc', html: (r) => `<a href="${esc(r.from)}" target="_blank" rel="noopener">${esc(r.from)}</a>` }, { k: 'to', l: 'Lien cassé', cls: 'trunc' }, { k: 'anchor', l: 'Ancre', cls: 'trunc' }, { k: 'status', l: 'Code', num: true, html: (r) => `<span class="${statusCls(r.status)}">${r.status || esc(r.statusText) || '—'}</span>` }, { k: 'external', l: 'Type', v: (r) => (r.external ? 'Externe' : 'Interne') }],
-    filters: { 'Tout': () => true, 'Internes': (l) => !l.external, 'Externes': (l) => l.external },
-  },
-  {
-    id: 'hreflang', label: 'Hreflang', rows: (R) => html200(R).filter((p) => p.hreflang?.length),
-    cols: [C.url, { k: 'lang', l: 'Lang' }, { k: 'hrefCount', l: 'Nb', num: true, v: (r) => r.hreflang.length }, { k: 'hreflangs', l: 'Alternates', cls: 'wrap', v: (r) => r.hreflang.map((h) => `${h.lang}: ${h.href}`).join(' | ') }],
-    filters: { 'Tout': () => true, 'Sans x-default': (p) => !p.hreflang.some((h) => h.lang === 'x-default') },
-  },
-  {
-    id: 'schema', label: 'Données structurées', rows: html200,
-    cols: [C.url, { k: 'schemaTypes', l: 'Types', cls: 'wrap', v: (r) => (r.schemaTypes || []).join(', ') }, { k: 'schemaErrors', l: 'JSON-LD invalides', num: true }, C.indexability],
-    filters: { 'Tout': () => true, 'Avec données': (p) => p.schemaTypes?.length, 'Sans données': (p) => !p.schemaTypes?.length, 'JSON invalide': (p) => p.schemaErrors > 0 },
-  },
-  {
-    id: 'sitemap', label: 'Sitemap', rows: (R) => R.pages,
-    cols: [C.url, C.status, C.inSitemap, C.indexability, C.inlinks, C.depth],
-    filters: { 'Dans le sitemap': (p) => p.inSitemap, 'Orphelines': (p) => p.inSitemap && !p.uniqueInlinks && p.depth !== 0, 'Non indexables dans le sitemap': (p) => p.inSitemap && !p.indexable, 'Indexables hors sitemap': (p) => !p.inSitemap && p.indexable && p.isHtml },
-  },
-  {
-    id: 'linking', label: 'Maillage interne', rows: html200,
-    cols: [C.url, C.depth, C.inlinks, { k: 'inlinks', l: 'Liens entrants (total)', num: true }, C.outlinks, C.extOut, C.indexability],
-    filters: { 'Tout': () => true, '0–1 lien entrant': (p) => (p.uniqueInlinks || 0) <= 1, 'Profondeur ≥ 4': (p) => p.depth >= 4, 'Non atteignables': (p) => p.depth === null },
-  },
-  {
-    id: 'perf', label: 'Performance', rows: html200,
-    cols: [C.url, C.rt, { k: 'downloadTime', l: 'Téléchargement (ms)', num: true }, C.size, C.words],
-    filters: { 'Tout': () => true, 'Lentes (> 1 s)': (p) => p.responseTime > T().slowMs, 'HTML lourd (> 500 Ko)': (p) => p.size > 500 * 1024 },
-  },
-  {
-    id: 'urls', label: 'URL', rows: (R) => R.pages,
-    cols: [C.url, { k: 'urlLength', l: 'Longueur', num: true }, C.status, C.indexability],
-    filters: { 'Tout': () => true, 'Majuscules': (p) => /[A-Z]/.test(new URL(p.url).pathname), 'Underscores': (p) => new URL(p.url).pathname.includes('_'), 'Paramètres': (p) => !!new URL(p.url).search, 'Trop longues': (p) => p.urlLength > 115, 'Caractères encodés': (p) => /%[0-9A-F]{2}/i.test(new URL(p.url).pathname) },
-  },
-  { id: 'robots', label: 'Robots & sitemaps' },
-];
-const TAB_BY_ID = Object.fromEntries(TABS.filter((t) => t.id).map((t) => [t.id, t]));
-
-/* ---------- Rendu des onglets latéraux ---------- */
-function renderTabs() {
-  const R = state.R;
-  $('#tabs').innerHTML = TABS.map((t) => {
-    if (t.group) return `<div class="group">${esc(t.group)}</div>`;
-    let count = '';
-    if (R && t.count) count = t.count(R);
-    else if (R && t.rows) count = t.rows(R).length;
-    else if (!R && t.id === 'internal' && state.live.length) count = state.live.length;
-    return `<button data-tab="${t.id}" class="${state.tab === t.id ? 'active' : ''}"><span>${esc(t.label)}</span><span class="count">${fmtN(count)}</span></button>`;
-  }).join('');
+function pxCell(px, max) {
+  if (!px) return '';
+  const pct = Math.min(100, (px / max) * 100);
+  return `<span class="meter ${px > max ? 'over' : ''}"><i style="width:${pct}%"></i></span> ${num(px)}`;
 }
 
+/* ---------- Onglets ---------- */
+const TABS = [
+  { group: 'grp.overview' },
+  { id: 'dashboard', icon: 'dashboard' },
+  { id: 'issues', icon: 'alert', count: (R) => R.issues.length },
+  { id: 'plan', icon: 'target', count: (R) => Math.min(R.issues.length, 20) },
+  { group: 'grp.crawl' },
+  { id: 'internal', icon: 'list', rows: (R) => R.pages, cols: [C.url, C.type, C.status, C.indexability, C.title, C.words, C.depth, C.inlinks, C.linkScore, C.rt, C.size],
+    filters: { all: () => true, html: (p) => p.isHtml, indexable: (p) => p.indexable && p.isHtml, nonIndexable: (p) => !p.indexable, otherFiles: (p) => !p.isHtml && p.status >= 200 && p.status < 300 } },
+  { id: 'external', icon: 'external', rows: (R) => R.externals,
+    cols: [C.url, { k: 'status', l: 'col.status', num: true, html: (r) => (r.status == null ? `<span class="chip muted">${t('ui.notChecked')}</span>` : `<span class="${statusCls(r.status)}">${r.status || '—'}</span>`) }, { k: 'statusText', l: 'col.statusText' }, { k: 'inlinks', l: 'col.links', num: true }, { k: 'pages', l: 'col.pages', num: true }, { k: 'firstPage', l: 'col.foundOn', cls: 'trunc' }],
+    filters: { all: () => true, inError: (e) => e.status === 0 || e.status >= 400, redirected: (e) => e.status >= 300 && e.status < 400 } },
+  { id: 'codes', icon: 'code', rows: (R) => R.pages, cols: [C.url, C.status, C.statusText, { k: 'redirectUrl', l: 'col.redirectsTo', cls: 'trunc' }, C.inlinks, C.rt],
+    filters: { all: () => true, s2xx: (p) => p.status >= 200 && p.status < 300, s3xx: (p) => p.status >= 300 && p.status < 400, s4xx: (p) => p.status >= 400 && p.status < 500, s5xx: (p) => p.status >= 500, blocked: (p) => p.blockedByRobots, noResponse: (p) => !p.status && !p.blockedByRobots } },
+  { id: 'redirects', icon: 'link', rows: (R) => R.redirects,
+    cols: [C.url, { k: 'status', l: 'col.status', num: true }, { k: 'hops', l: 'col.hops', num: true }, { k: 'finalUrl', l: 'col.finalUrl', cls: 'trunc' }, { k: 'finalStatus', l: 'col.finalStatus', num: true }, { k: 'chain', l: 'col.chain', cls: 'wrap', v: (r) => r.chain.join(' → ') }, { k: 'inlinks', l: 'col.inlinks', num: true }],
+    filters: { all: () => true, chains: (r) => r.hops > 1, loops: (r) => r.loop, temporary: (r) => r.status === 302 || r.status === 307 } },
+  { id: 'broken', icon: 'error', rows: (R) => R.brokenLinks,
+    cols: [{ k: 'from', l: 'col.source', cls: 'trunc', html: (r) => urlCell(r.from) }, { k: 'to', l: 'col.brokenLink', cls: 'trunc' }, { k: 'anchor', l: 'col.anchor', cls: 'trunc' }, { k: 'status', l: 'col.status', num: true, html: (r) => `<span class="${statusCls(r.status)}">${r.status || esc(r.statusText) || '—'}</span>` }, { k: 'external', l: 'col.type', v: (r) => (r.external ? t('ui.external') : t('ui.internal')) }],
+    filters: { all: () => true, internal: (l) => !l.external, external: (l) => l.external } },
+  { id: 'urls', icon: 'link', rows: (R) => R.pages, cols: [C.url, { k: 'urlLength', l: 'col.length', num: true }, C.status, C.indexability],
+    filters: { all: () => true, uppercase: (p) => /[A-Z]/.test(new URL(p.url).pathname), underscores: (p) => new URL(p.url).pathname.includes('_'), params: (p) => !!new URL(p.url).search, tooLong: (p) => p.urlLength > (TH().urlMaxLength || 115), encoded: (p) => /%[0-9A-F]{2}/i.test(new URL(p.url).pathname) } },
+  { group: 'grp.content' },
+  { id: 'titles', icon: 'type', rows: html200,
+    cols: [C.url, C.title, C.titleLength, C.titlePx, { k: 'titleCount', l: 'col.count', num: true }, C.dup('duplicateTitle'), C.indexability],
+    filters: { all: () => true, missing: (p) => !p.title, duplicate: (p) => p.duplicateTitle, tooLong: (p) => p.titlePx > TH().titleMaxPx, tooShort: (p) => p.title && p.titleLength < TH().titleMin, multiple: (p) => p.titleCount > 1, sameAsH1: (p) => p.title && p.h1?.[0] && p.title.toLowerCase() === p.h1[0].toLowerCase() } },
+  { id: 'desc', icon: 'file', rows: html200,
+    cols: [C.url, { k: 'metaDescription', l: 'col.metaDescription', cls: 'wrap' }, { k: 'metaDescriptionLength', l: 'col.chars', num: true }, { k: 'metaDescriptionPx', l: 'col.pixels', num: true, html: (r) => pxCell(r.metaDescriptionPx, TH().descMaxPx) }, C.dup('duplicateDescription', 'warning'), C.indexability],
+    filters: { all: () => true, missing: (p) => !p.metaDescription, duplicate: (p) => p.duplicateDescription, tooLong: (p) => p.metaDescriptionPx > TH().descMaxPx, tooShort: (p) => p.metaDescription && p.metaDescriptionLength < TH().descMin, multiple: (p) => p.metaDescriptionCount > 1 } },
+  { id: 'h1', icon: 'type', rows: html200,
+    cols: [C.url, { k: 'h1first', l: 'col.h1', cls: 'wrap', v: (r) => r.h1?.[0] || '' }, { k: 'h1len', l: 'col.chars', num: true, v: (r) => r.h1?.[0]?.length || 0 }, { k: 'h1Count', l: 'col.count', num: true }, { k: 'h1all', l: 'col.otherH1', cls: 'wrap', v: (r) => (r.h1 || []).slice(1).join(' | ') }],
+    filters: { all: () => true, missing: (p) => !p.h1Count, multiple: (p) => p.h1Count > 1, duplicate: (p) => p.duplicateH1, skipped: (p) => p.headingSkips?.length } },
+  { id: 'h2', icon: 'type', rows: html200, cols: [C.url, { k: 'h2Count', l: 'col.count', num: true }, { k: 'h2list', l: 'col.h2', cls: 'wrap', v: (r) => (r.h2 || []).join(' | ') }],
+    filters: { all: () => true, none: (p) => !p.h2Count } },
+  { id: 'content', icon: 'file', rows: html200,
+    cols: [C.url, C.words, { k: 'textRatio', l: 'col.textRatio', num: true }, C.focus, { k: 'keywords', l: 'col.keywords', cls: 'trunc', v: (r) => (r.keywords || []).join(', ') }, C.dup('duplicateContent'), { k: 'closestSimilarity', l: 'col.similarity', num: true, html: (r) => (r.closestSimilarity ? `≈${r.closestSimilarity} %` : '') }, { k: 'lang', l: 'col.lang' }, C.indexability],
+    filters: { all: () => true, thin: (p) => p.wordCount < TH().thinWords, duplicate: (p) => p.duplicateContent, nearDuplicate: (p) => p.nearDuplicates, noLang: (p) => !p.lang } },
+  { id: 'neardup', icon: 'copy', rows: (R) => R.nearDuplicates || [],
+    cols: [{ k: 'a', l: 'col.pageA', cls: 'trunc', html: (r) => urlCell(r.a) }, { k: 'b', l: 'col.pageB', cls: 'trunc', html: (r) => urlCell(r.b) }, { k: 'similarity', l: 'col.similarity', num: true, html: (r) => `<b>${r.similarity} %</b>` }] },
+  { id: 'cannibal', icon: 'target', rows: (R) => (R.cannibalization || []).flatMap((g) => g.urls.map((url) => ({ keyword: g.keyword, url, count: g.urls.length }))),
+    cols: [{ k: 'keyword', l: 'col.keyword' }, { k: 'count', l: 'col.pages', num: true }, C.url, { k: 'title', l: 'col.title', cls: 'trunc', v: (r) => linkGraph().byUrl.get(r.url)?.title || '' }] },
+  { id: 'images', icon: 'image', rows: (R) => R.images,
+    cols: [{ k: 'src', l: 'col.image', cls: 'trunc', html: (r) => urlCell(r.src) }, { k: 'alt', l: 'col.alt', cls: 'wrap' }, { k: 'missingAlt', l: 'col.altMissing', v: (r) => (r.missingAlt ? t('ui.yes') : ''), html: (r) => (r.missingAlt ? `<span class="chip warning">${t('ui.yes')}</span>` : '') }, { k: 'size', l: 'col.size', num: true, html: (r) => (r.size == null ? '' : kb(r.size)) }, { k: 'status', l: 'col.status', num: true }, { k: 'pages', l: 'col.pages', num: true }, { k: 'firstPage', l: 'col.foundOn', cls: 'trunc' }],
+    filters: { all: () => true, altMissing: (i) => i.missingAlt, heavy: (i) => i.size > (TH().largeImageBytes || 153600), broken: (i) => i.status !== null && (i.status === 0 || i.status >= 400) } },
+  { id: 'search', icon: 'search', show: (R) => !!R.meta.options.search, rows: html200,
+    cols: [C.url, { k: 'searchMatches', l: 'col.matches', num: true }, C.title],
+    filters: { withMatches: (p) => p.searchMatches > 0, withoutMatches: (p) => !p.searchMatches } },
+  { group: 'grp.technical' },
+  { id: 'canonicals', icon: 'link', rows: html200, cols: [C.url, { k: 'canonical', l: 'col.canonical', cls: 'trunc' }, { k: 'canonicalCount', l: 'col.count', num: true }, C.indexability],
+    filters: { all: () => true, selfRef: (p) => p.canonical === p.url, canonicalised: (p) => p.canonical && p.canonical !== p.url, missing: (p) => !p.canonical, multiple: (p) => p.canonicalCount > 1 } },
+  { id: 'directives', icon: 'shield', rows: (R) => R.pages, cols: [C.url, { k: 'metaRobots', l: 'col.metaRobots' }, { k: 'xRobotsTag', l: 'col.xRobotsTag' }, C.indexability],
+    filters: { all: () => true, noindex: (p) => /noindex|none/i.test(`${p.metaRobots} ${p.xRobotsTag}`), nofollow: (p) => /nofollow|none/i.test(`${p.metaRobots} ${p.xRobotsTag}`), blocked: (p) => p.blockedByRobots, nonIndexable: (p) => !p.indexable } },
+  { id: 'hreflang', icon: 'globe', rows: (R) => html200(R).filter((p) => p.hreflang?.length),
+    cols: [C.url, { k: 'lang', l: 'col.lang' }, { k: 'hrefCount', l: 'col.count', num: true, v: (r) => r.hreflang.length }, { k: 'hreflangs', l: 'col.alternates', cls: 'wrap', v: (r) => r.hreflang.map((h) => `${h.lang}: ${h.href}`).join(' | ') }],
+    filters: { all: () => true, invalid: (p) => p.hreflangInvalid?.length, noXDefault: (p) => !p.hreflang.some((h) => h.lang.toLowerCase() === 'x-default') } },
+  { id: 'schema', icon: 'code', rows: html200,
+    cols: [C.url, { k: 'schemaTypes', l: 'col.schemaTypes', cls: 'wrap', v: (r) => (r.schemaTypes || []).join(', ') }, { k: 'schemaMissing', l: 'col.missingProps', cls: 'wrap', v: (r) => (r.schemaMissing || []).map((m) => `${m.type}: ${m.missing.join(', ')}`).join(' · ') }, { k: 'schemaErrors', l: 'col.invalidJson', num: true }],
+    filters: { all: () => true, withData: (p) => p.schemaTypes?.length, withoutData: (p) => !p.schemaTypes?.length, incomplete: (p) => p.schemaMissing?.length, invalidJson: (p) => p.schemaErrors > 0 } },
+  { id: 'javascript', icon: 'code', show: (R) => R.meta.rendered, rows: (R) => html200(R).filter((p) => p.js),
+    cols: [C.url, { k: 'rawWords', l: 'col.rawWords', num: true, v: (r) => r.js.rawWordCount }, C.words, { k: 'jsLinks', l: 'col.jsLinks', num: true, v: (r) => r.js.jsOnlyLinks }, { k: 'lcp', l: 'col.lcp', num: true, v: (r) => r.js.lcp, html: (r) => (r.js.lcp ? `<span class="${r.js.lcp > TH().lcpMs ? 'no' : 'yes'}">${(r.js.lcp / 1000).toFixed(2)} s</span>` : '') }, { k: 'cls', l: 'col.cls', num: true, v: (r) => r.js.cls, html: (r) => (r.js.cls != null ? `<span class="${r.js.cls > TH().cls ? 'no' : 'yes'}">${r.js.cls}</span>` : '') }, { k: 'jsErrors', l: 'col.jsErrors', num: true, v: (r) => r.js.consoleErrors?.length || 0 }],
+    filters: { all: () => true, jsContent: (p) => p.wordCount - p.js.rawWordCount > 100, jsTitle: (p) => p.js.rawTitle !== p.title, jsCanonical: (p) => p.js.rawCanonical !== p.canonical, jsErrors: (p) => p.js.consoleErrors?.length, lcpSlow: (p) => p.js.lcp > TH().lcpMs, clsHigh: (p) => p.js.cls > TH().cls } },
+  { id: 'perf', icon: 'bolt', rows: html200,
+    cols: [C.url, C.rt, { k: 'downloadTime', l: 'col.downloadTime', num: true }, C.size, { k: 'encoding', l: 'col.compression', v: (r) => r.headers?.encoding || '' }, { k: 'cache', l: 'col.cacheControl', cls: 'trunc', v: (r) => r.headers?.cacheControl || '' }, C.words],
+    filters: { all: () => true, slow: (p) => p.responseTime > TH().slowMs, heavyHtml: (p) => p.size > (TH().largeHtmlBytes || 512000), noCompression: (p) => p.headers && !p.headers.encoding } },
+  { id: 'security', icon: 'shield', rows: html200,
+    cols: [C.url, { k: 'https', l: 'col.https', v: (r) => (r.url.startsWith('https:') ? t('ui.yes') : t('ui.no')), html: (r) => yn(r.url.startsWith('https:')) }, { k: 'hsts', l: 'col.hsts', v: (r) => (r.headers?.hsts ? t('ui.yes') : t('ui.no')), html: (r) => yn(r.headers?.hsts) }, { k: 'mixedContent', l: 'col.mixedContent', num: true }, { k: 'xcto', l: 'col.xcto', v: (r) => (r.headers?.xcto ? t('ui.yes') : t('ui.no')) }, { k: 'csp', l: 'col.csp', v: (r) => (r.headers?.csp ? t('ui.yes') : t('ui.no')) }],
+    filters: { all: () => true, http: (p) => p.url.startsWith('http:'), noHsts: (p) => !p.headers?.hsts, mixed: (p) => p.mixedContent > 0 } },
+  { group: 'grp.architecture' },
+  { id: 'linking', icon: 'sitemap', rows: html200, cols: [C.url, C.linkScore, C.depth, C.inlinks, C.contentInlinks, C.outlinks, C.extOut, C.indexability],
+    filters: { all: () => true, lowInlinks: (p) => (p.uniqueInlinks || 0) <= 1, noContentInlinks: (p) => !p.contentInlinks, deep: (p) => p.depth >= (TH().deepLevel || 4), unreachable: (p) => p.depth === null } },
+  { id: 'sitemap', icon: 'sitemap', rows: (R) => R.pages, cols: [C.url, C.status, C.inSitemap, C.indexability, C.inlinks, C.depth],
+    filters: { inSitemap: (p) => p.inSitemap, orphans: (p) => p.inSitemap && !p.uniqueInlinks && p.depth !== 0, nonIndexableInSitemap: (p) => p.inSitemap && !p.indexable, indexableNotInSitemap: (p) => !p.inSitemap && p.indexable && p.isHtml } },
+  { id: 'robots', icon: 'robot' },
+];
+const TAB_BY_ID = Object.fromEntries(TABS.filter((x) => x.id).map((x) => [x.id, x]));
+const visibleTabs = () => TABS.filter((x) => x.group || !x.show || (state.R && x.show(state.R)));
+
+/* ---------- Barre latérale ---------- */
+function renderTabs() {
+  const R = state.R;
+  $('#tabs').innerHTML = visibleTabs().map((x) => {
+    if (x.group) return `<div class="group">${esc(t(x.group))}</div>`;
+    let count = '';
+    if (R && x.count) count = x.count(R);
+    else if (R && x.rows) count = x.rows(R).length;
+    else if (!R && x.id === 'internal' && state.live.length) count = state.live.length;
+    return `<button data-tab="${x.id}" class="${state.tab === x.id ? 'active' : ''}" ${!R && !['dashboard', 'internal'].includes(x.id) ? 'disabled' : ''}>${icon(x.icon)}<span class="lbl">${esc(t('tab.' + x.id))}</span><span class="count">${num(count)}</span></button>`;
+  }).join('');
+}
 $('#tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-tab]');
-  if (!b) return;
-  state.tab = b.dataset.tab;
+  if (!b || b.disabled) return;
+  goTab(b.dataset.tab);
+});
+function goTab(id) {
+  state.tab = id;
   state.search = '';
   state.page = 0;
+  store.set('tab', id);
   renderTabs();
   render();
-});
+  $('#view').scrollTop = 0;
+}
 
 /* ---------- Rendu principal ---------- */
 function render() {
   const view = $('#view');
   if (!state.R) {
     if (state.tab === 'internal' && state.live.length) return renderTable(view, liveTab(), state.live);
-    view.innerHTML = state.running
-      ? `<div class="empty"><h2>Crawl en cours…</h2><p>Les URLs apparaissent en direct dans l’onglet <b>Interne</b>. L’analyse complète s’affichera à la fin.</p></div>`
-      : `<div class="empty"><h2>Bienvenue dans Arachnide 🕷️</h2><p>Saisissez l’URL d’un site et cliquez sur <b>Crawler</b>.<br>Vous pouvez aussi rouvrir un crawl depuis l’<b>Historique</b> ou un fichier <b>.json</b>.</p></div>`;
-    return;
+    return state.running ? renderRunning(view) : renderHome(view);
   }
   if (state.tab === 'dashboard') return renderDashboard(view);
   if (state.tab === 'issues') return renderIssues(view);
+  if (state.tab === 'plan') return renderPlan(view);
   if (state.tab === 'robots') return renderRobots(view);
   const tab = TAB_BY_ID[state.tab];
+  if (!tab || (tab.show && !tab.show(state.R))) return goTab('dashboard');
   renderTable(view, tab, tab.rows(state.R));
 }
 
 function liveTab() {
-  return { id: 'internal', label: 'Interne (en direct)', cols: [C.url, C.type, C.status, C.title, C.words, C.rt, C.size] };
+  return { id: 'live', cols: [C.url, C.type, C.status, C.title, C.words, C.rt, C.size] };
+}
+
+async function renderHome(view) {
+  view.innerHTML = `<div class="home">
+    <div class="hero">
+      <div class="hero-logo">${icon('spider')}</div>
+      <h1>${esc(t('home.title'))}</h1>
+      <p>${esc(t('home.subtitle'))}</p>
+      <div class="hero-feats">${['f1', 'f2', 'f3', 'f4'].map((k) => `<div class="feat">${icon(['bolt', 'code', 'report', 'globe'][['f1', 'f2', 'f3', 'f4'].indexOf(k)])}<b>${esc(t('home.' + k + 't'))}</b><span>${esc(t('home.' + k))}</span></div>`).join('')}</div>
+    </div>
+    <h2 class="sec">${esc(t('home.recent'))}</h2>
+    <div id="recent" class="recent"><p class="muted">${esc(t('ui.loading'))}</p></div>
+  </div>`;
+  const items = await fetch('/api/crawls').then((r) => r.json()).catch(() => []);
+  const box = $('#recent');
+  if (!box) return;
+  box.innerHTML = items.length
+    ? items.slice(0, 8).map((i) => `<button class="recent-card" data-open="${esc(i.file)}">
+        <span class="grade g${esc(i.grade || '')}">${esc(i.grade || '?')}</span>
+        <span class="rc-main"><b>${esc(i.host || i.file)}</b><small>${i.finishedAt ? esc(t.date(i.finishedAt)) : ''}</small></span>
+        <span class="rc-meta">${i.score != null ? `${num(i.score)}/100` : ''}<small>${i.totalUrls != null ? esc(t('home.urls', { n: i.totalUrls })) : ''}</small></span>
+      </button>`).join('')
+    : `<p class="muted">${esc(t('home.noCrawls'))}</p>`;
+  box.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openSaved(b.dataset.open)));
+}
+
+function renderRunning(view) {
+  view.innerHTML = `<div class="empty"><div class="spin">${icon('spider')}</div><h2>${esc(t('run.title'))}</h2><p>${esc(t('run.hint'))}</p></div>`;
 }
 
 function cellValue(col, r) {
   return col.v ? col.v(r) : r[col.k];
 }
 
-function renderTable(view, tab, allRows) {
+function renderTable(view, tab, allRows, opts = {}) {
   const filters = tab.filters || {};
-  const filterNames = Object.keys(filters);
-  const fname = filterNames.includes(state.filter[tab.id]) ? state.filter[tab.id] : filterNames[0];
+  const names = Object.keys(filters);
+  const fname = names.includes(state.filter[tab.id]) ? state.filter[tab.id] : names[0];
   let rows = fname ? allRows.filter(filters[fname]) : allRows.slice();
   const q = state.search.trim().toLowerCase();
   if (q) rows = rows.filter((r) => tab.cols.some((c) => String(cellValue(c, r) ?? '').toLowerCase().includes(q)));
@@ -234,44 +280,46 @@ function renderTable(view, tab, allRows) {
       const nx = x == null || x === '';
       const ny = y == null || y === '';
       if (nx || ny) return nx === ny ? 0 : nx ? 1 : -1;
-      const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true });
+      const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), t.locale, { numeric: true });
       return s.desc ? -r : r;
     });
   }
-  state.currentRows = rows;
-  state.currentTab = tab;
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   state.page = Math.min(state.page, pages - 1);
   const slice = rows.slice(state.page * PAGE_SIZE, (state.page + 1) * PAGE_SIZE);
+  const rowKey = (r) => r.url || r.from || r.a || r.src;
+  const title = opts.title ?? t('tab.' + tab.id);
+  const help = opts.help ?? (t.has('help.' + tab.id) ? t('help.' + tab.id) : '');
 
   view.innerHTML = `
     <div class="toolbar">
-      <h2>${esc(tab.label)}</h2>
-      ${filterNames.length ? `<select id="filterSel">${filterNames.map((n) => `<option ${n === fname ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>` : ''}
-      <input id="searchInput" type="text" placeholder="Rechercher…" value="${esc(state.search)}">
-      <span class="muted">${fmtN(rows.length)} ligne(s)</span>
-      <span class="spacer"></span>
-      <button class="btn" id="csvBtn">⬇ Export CSV</button>
+      <div class="tb-title"><h2>${esc(title)}</h2>${help ? `<p class="help">${esc(help)}</p>` : ''}</div>
+      <div class="tb-actions">
+        ${names.length > 1 ? `<div class="seg">${names.map((n) => `<button data-f="${n}" class="${n === fname ? 'on' : ''}">${esc(t('f.' + n))} <span>${num(allRows.filter(filters[n]).length)}</span></button>`).join('')}</div>` : ''}
+        <label class="searchbox">${icon('search')}<input id="searchInput" type="search" placeholder="${esc(t('ui.search'))}" value="${esc(state.search)}"></label>
+        <span class="muted">${esc(t('ui.rows', { n: rows.length }))}</span>
+        <button class="btn" id="copyBtn" title="${esc(t('ui.copyUrls'))}">${icon('copy')}</button>
+        <button class="btn" id="csvBtn">${icon('download')} CSV</button>
+      </div>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr>${tab.cols.map((c) => `<th data-k="${esc(c.k)}" class="${c.num ? 'num' : ''} ${s && s.k === c.k ? 'sorted' + (s.desc ? ' desc' : '') : ''}">${esc(c.l)}</th>`).join('')}</tr></thead>
-      <tbody>${slice.map((r, i) => `<tr data-i="${state.page * PAGE_SIZE + i}" class="${state.selected && (r.url || r.from || r.src) === state.selected ? 'sel' : ''}">${tab.cols.map((c) => `<td class="${c.num ? 'num' : ''} ${c.cls || ''}" title="${esc(cellValue(c, r))}">${c.html ? c.html(r) : esc(c.num ? fmtN(cellValue(c, r)) : cellValue(c, r))}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table>${rows.length ? '' : '<div class="empty">Aucune ligne pour ce filtre 🎉</div>'}</div>
-    ${pages > 1 ? `<div class="pager"><button class="btn small" id="prevPg" ${state.page === 0 ? 'disabled' : ''}>‹ Préc.</button> Page ${state.page + 1} / ${pages} <button class="btn small" id="nextPg" ${state.page >= pages - 1 ? 'disabled' : ''}>Suiv. ›</button></div>` : ''}`;
+      <thead><tr>${tab.cols.map((c) => `<th data-k="${esc(c.k)}" class="${c.num ? 'num' : ''} ${s && s.k === c.k ? 'sorted' + (s.desc ? ' desc' : '') : ''}">${esc(t(c.l))}</th>`).join('')}</tr></thead>
+      <tbody>${slice.map((r, i) => `<tr tabindex="-1" data-i="${state.page * PAGE_SIZE + i}" class="${state.selected && rowKey(r) === state.selected ? 'sel' : ''}">${tab.cols.map((c) => {
+        const v = cellValue(c, r);
+        return `<td class="${c.num ? 'num' : ''} ${c.cls || ''}" title="${esc(v)}">${c.html ? c.html(r) : esc(c.num ? num(v) : v)}</td>`;
+      }).join('')}</tr>`).join('')}</tbody>
+    </table>${rows.length ? '' : `<div class="empty small">${icon('check')} ${esc(t('ui.noRows'))}</div>`}</div>
+    ${pages > 1 ? `<div class="pager"><button class="btn small" id="prevPg" ${state.page === 0 ? 'disabled' : ''}>${icon('chevronLeft')}</button> ${esc(t('ui.page', { n: state.page + 1, total: pages }))} <button class="btn small" id="nextPg" ${state.page >= pages - 1 ? 'disabled' : ''}>${icon('chevronRight')}</button></div>` : ''}`;
 
-  $('#filterSel')?.addEventListener('change', (e) => {
-    state.filter[tab.id] = e.target.value;
-    state.page = 0;
-    render();
-  });
-  const si = $('#searchInput');
+  view.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { state.filter[tab.id] = b.dataset.f; state.page = 0; render(); }));
+  const si = $('#searchInput', view);
   si.addEventListener('input', debounce(() => {
     state.search = si.value;
     state.page = 0;
     render();
     const el = $('#searchInput');
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
+    el?.focus();
+    el?.setSelectionRange(el.value.length, el.value.length);
   }, 250));
   view.querySelectorAll('th').forEach((th) => th.addEventListener('click', () => {
     const k = th.dataset.k;
@@ -279,129 +327,173 @@ function renderTable(view, tab, allRows) {
     state.sort[tab.id] = cur && cur.k === k ? { k, desc: !cur.desc } : { k, desc: !!tab.cols.find((c) => c.k === k)?.num };
     render();
   }));
-  $('#prevPg')?.addEventListener('click', () => { state.page--; render(); });
-  $('#nextPg')?.addEventListener('click', () => { state.page++; render(); });
-  $('#csvBtn').addEventListener('click', () => exportCsv(tab, rows, fname));
-  view.querySelector('tbody').addEventListener('click', (e) => {
-    if (e.target.closest('a')) return;
-    const tr = e.target.closest('tr[data-i]');
+  $('#prevPg', view)?.addEventListener('click', () => { state.page--; render(); });
+  $('#nextPg', view)?.addEventListener('click', () => { state.page++; render(); });
+  $('#csvBtn', view).addEventListener('click', () => exportCsv(tab, rows, fname, title));
+  $('#copyBtn', view).addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText([...new Set(rows.map(rowKey))].join('\n'));
+      toast(t('toast.copied', { n: rows.length }), 'ok');
+    } catch { toast(t('toast.copyFailed'), 'error'); }
+  });
+  const tbody = view.querySelector('tbody');
+  const select = (tr) => {
     if (!tr) return;
     const r = rows[Number(tr.dataset.i)];
-    selectUrl(r.url || r.from || r.firstPage);
     view.querySelectorAll('tr.sel').forEach((x) => x.classList.remove('sel'));
     tr.classList.add('sel');
+    tr.focus({ preventScroll: false });
+    selectUrl(r.url || r.from || r.a || r.firstPage);
+  };
+  tbody.addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    select(e.target.closest('tr[data-i]'));
+  });
+  tbody.addEventListener('keydown', (e) => {
+    const tr = e.target.closest('tr[data-i]');
+    if (e.key === 'ArrowDown') { e.preventDefault(); select(tr?.nextElementSibling); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); select(tr?.previousElementSibling); }
+    if (e.key === 'Enter' && state.selected) window.open(state.selected, '_blank', 'noopener');
   });
 }
 
-function debounce(fn, ms) {
-  let t;
-  return (...a) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...a), ms);
-  };
-}
-
 /* ---------- Tableau de bord ---------- */
-function gauge(score) {
+function gauge(score, grade, size = 150) {
   const r = 60;
   const c = 2 * Math.PI * r;
-  const color = score >= 80 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--err)';
-  return `<svg viewBox="0 0 150 150" role="img" aria-label="Score ${score} sur 100">
-    <circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--panel-2)" stroke-width="14"/>
-    <circle cx="75" cy="75" r="${r}" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"
-      stroke-dasharray="${(c * score) / 100} ${c}" transform="rotate(-90 75 75)"/>
-    <text x="75" y="84" text-anchor="middle" font-size="34" font-weight="700" fill="var(--text)">${score}</text></svg>`;
+  const color = score >= 75 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--err)';
+  return `<svg viewBox="0 0 150 150" width="${size}" height="${size}" role="img" aria-label="${score}/100">
+    <circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--panel-2)" stroke-width="12"/>
+    <circle cx="75" cy="75" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * score) / 100} ${c}" transform="rotate(-90 75 75)"/>
+    <text x="75" y="80" text-anchor="middle" font-size="38" font-weight="800" fill="var(--text)">${score}</text>
+    <text x="75" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="${color}">${grade || ''}</text></svg>`;
 }
 
-function bars(obj, colorFn = () => 'var(--accent)') {
-  const entries = Object.entries(obj).filter(([, v]) => v > 0);
-  const max = Math.max(1, ...entries.map(([, v]) => v));
-  return entries.map(([k, v]) => `<div class="b"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / max) * 100}%;background:${colorFn(k)}"></div></div><span class="n">${fmtN(v)}</span></div>`).join('') || '<p class="muted">—</p>';
+function bars(entries, colorFn = () => 'var(--accent)') {
+  const list = entries.filter(([, v]) => v > 0);
+  const max = Math.max(1, ...list.map(([, v]) => v));
+  return list.map(([k, v]) => `<div class="b"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / max) * 100}%;background:${colorFn(k)}"></div></div><span class="n">${num(v)}</span></div>`).join('') || `<p class="muted">—</p>`;
 }
 
-function issueListHtml(issues, limit = Infinity) {
-  const sevLabel = { error: 'Erreur', warning: 'Avertissement', notice: 'Remarque' };
-  return `<ul class="issue-list">${issues.slice(0, limit).map((i) => `<li data-issue="${i.id}" class="${state.issue === i.id ? 'active' : ''}">
-    <span class="chip ${i.severity}">${sevLabel[i.severity]}</span>
-    <span>${esc(i.label)}<br><span class="cat">${esc(i.category)}</span></span>
-    <span class="num">${fmtN(i.count)}</span></li>`).join('')}</ul>`;
+const sevChip = (s) => `<span class="chip ${s}">${esc(t('sev.' + s))}</span>`;
+const lvlChip = (kind, v) => `<span class="lvl ${kind}-${v}" title="${esc(t(kind + '.label'))}">${esc(t(kind + '.label'))}: ${esc(t('lvl.' + v))}</span>`;
+
+function issueRows(issues) {
+  return `<ul class="issue-list">${issues.map((i) => `<li data-issue="${i.id}" class="${state.issue === i.id ? 'active' : ''}">
+    ${sevChip(i.severity)}<span class="il-main">${esc(t('issue.' + i.id + '.label', i.params))}<small>${esc(t('cat.' + i.category))}</small></span><b class="num">${num(i.count)}</b></li>`).join('')}</ul>`;
 }
 
 function renderDashboard(view) {
   const R = state.R;
   const S = R.summary;
+  const prev = state.compare;
   const statusColor = (k) => ({ '2xx': 'var(--ok)', '3xx': 'var(--warn)', '4xx': 'var(--err)', '5xx': 'var(--err)' })[k] || 'var(--muted)';
-  const depthSorted = Object.fromEntries(Object.entries(S.depthBuckets).sort(([a], [b]) => (a === 'n/a') - (b === 'n/a') || parseInt(a) - parseInt(b)));
+  const depth = Object.entries(S.depthBuckets).sort(([a], [b]) => (a === 'n/a') - (b === 'n/a') || parseInt(a) - parseInt(b)).map(([k, v]) => [k === 'n/a' ? t('dash.notLinked') : t('dash.level', { n: k }), v]);
+  const cats = Object.entries(S.categoryScores || {}).sort((a, b) => a[1] - b[1]);
+  const top = [...R.issues].sort((a, b) => b.priority - a.priority).slice(0, 6);
   view.innerHTML = `
-    <div class="toolbar"><h2>${esc(R.meta.startUrl)}</h2><span class="muted">Crawlé le ${new Date(R.meta.finishedAt).toLocaleString('fr-FR')}${R.meta.stopped ? ' · crawl interrompu' : ''}</span></div>
+    <div class="toolbar"><div class="tb-title"><h2>${esc(R.meta.startUrl)}</h2><p class="help">${esc(t('dash.crawledOn', { date: t.date(R.meta.finishedAt) }))}${R.meta.stopped ? ' · ' + esc(t('dash.interrupted')) : ''}${R.meta.rendered ? ' · ' + esc(t('dash.jsRendered')) : ''}${R.meta.mode === 'list' ? ' · ' + esc(t('opt.modeList')) : ''}</p></div>
+      <div class="tb-actions"><button class="btn primary" id="dashReport">${icon('report')} ${esc(t('ui.report'))}</button></div></div>
+    ${(R.meta.warnings || []).map((w) => `<div class="banner warn">${icon('alert')} ${esc(t(w.key, w.params))}</div>`).join('')}
     <div class="dash-row">
-      <div class="card score"><h3>Score de santé SEO</h3>${gauge(S.score)}<div class="label">${S.score >= 80 ? 'Bon état' : S.score >= 50 ? 'À améliorer' : 'Critique'}</div></div>
-      <div class="card"><h3>Codes réponse</h3><div class="bars">${bars(S.statusBuckets, statusColor)}</div></div>
-      <div class="card"><h3>Profondeur de clic</h3><div class="bars">${bars(Object.fromEntries(Object.entries(depthSorted).map(([k, v]) => [k === 'n/a' ? 'Non lié' : 'Niveau ' + k, v])))}</div></div>
+      <div class="card score"><h3>${esc(t('dash.health'))}</h3>${gauge(S.score, S.grade)}
+        <div class="label">${esc(t('grade.' + S.grade))}</div>
+        ${prev ? `<div class="delta ${prev.scoreDelta >= 0 ? 'up' : 'down'}">${prev.scoreDelta >= 0 ? '▲' : '▼'} ${Math.abs(prev.scoreDelta)} ${esc(t('dash.vsPrevious'))}</div>` : ''}
+      </div>
+      <div class="card"><h3>${esc(t('dash.categories'))}</h3><div class="bars cats">${cats.map(([c, v]) => `<div class="b"><span>${esc(t('cat.' + c))}</span><div class="track"><div class="fill" style="width:${v}%;background:${v >= 80 ? 'var(--ok)' : v >= 50 ? 'var(--warn)' : 'var(--err)'}"></div></div><span class="n">${v}%</span></div>`).join('') || `<p class="muted">—</p>`}</div></div>
+      <div class="card"><h3>${esc(t('dash.status'))}</h3><div class="bars">${bars(Object.entries(S.statusBuckets).map(([k, v]) => [k === 'blocked' ? t('st.blocked') : k === 'none' ? t('st.none') : k, v]), (k) => statusColor(k))}</div>
+        <h3 class="mt">${esc(t('dash.depth'))}</h3><div class="bars">${bars(depth)}</div></div>
     </div>
     <div class="dash-grid">
-      ${[['URLs crawlées', S.totalUrls], ['Pages HTML (200)', S.htmlPages], ['Indexables', S.indexable], ['Non indexables', S.nonIndexable], ['Temps de réponse moyen', S.avgResponseTime + ' ms'], ['Mots / page (moy.)', S.avgWords], ['Liens internes', S.internalLinks], ['Domaines externes liés', S.uniqueExternal], ['URLs dans le sitemap', R.meta.sitemapUrlCount], ['Images', S.images]]
-        .map(([l, v]) => `<div class="card kpi"><div class="v">${typeof v === 'number' ? fmtN(v) : esc(v)}</div><div class="l">${esc(l)}</div></div>`).join('')}
+      ${[['dash.urls', S.totalUrls], ['dash.html', S.htmlPages], ['dash.indexable', S.indexable], ['dash.nonIndexable', S.nonIndexable], ['dash.responseTime', `${num(S.avgResponseTime)} ms`], ['dash.words', S.avgWords], ['dash.internalLinks', S.internalLinks], ['dash.sitemapUrls', R.meta.sitemapUrlCount]]
+        .map(([l, v]) => `<div class="card kpi"><div class="v">${typeof v === 'number' ? num(v) : esc(v)}</div><div class="l">${esc(t(l))}</div></div>`).join('')}
     </div>
-    <div class="card">
-      <h3>Problèmes détectés</h3>
-      <div class="sev-tot"><span class="chip error">${fmtN(S.errors)} erreurs</span><span class="chip warning">${fmtN(S.warnings)} avertissements</span><span class="chip notice">${fmtN(S.notices)} remarques</span></div>
-      ${issueListHtml(R.issues, 15)}
-      ${R.issues.length > 15 ? `<p><a href="#" id="allIssues">Voir les ${R.issues.length} types de problèmes →</a></p>` : ''}
+    <div class="dash-two">
+      <div class="card"><h3>${esc(t('dash.priorities'))}</h3>
+        <ol class="prio">${top.map((i) => `<li data-issue="${i.id}"><span class="il-main">${esc(t('issue.' + i.id + '.label', i.params))}<small>${esc(t('issue.' + i.id + '.fix', i.params))}</small></span><span class="prio-meta">${sevChip(i.severity)}<b>${num(i.count)}</b></span></li>`).join('')}</ol>
+        <p><a href="#" id="toPlan">${esc(t('dash.fullPlan'))} →</a></p>
+      </div>
+      <div class="card"><h3>${esc(t('dash.issues'))}</h3>
+        <div class="sev-tot"><span class="chip error">${num(S.errors)} ${esc(t('sev.errors'))}</span><span class="chip warning">${num(S.warnings)} ${esc(t('sev.warnings'))}</span><span class="chip notice">${num(S.notices)} ${esc(t('sev.notices'))}</span></div>
+        ${issueRows(R.issues.slice(0, 8))}
+        <p><a href="#" id="allIssues">${esc(t('dash.allIssues', { n: R.issues.length }))} →</a></p>
+      </div>
     </div>`;
   view.querySelectorAll('[data-issue]').forEach((li) => li.addEventListener('click', () => openIssue(li.dataset.issue)));
   $('#allIssues')?.addEventListener('click', (e) => { e.preventDefault(); openIssue(null); });
+  $('#toPlan')?.addEventListener('click', (e) => { e.preventDefault(); goTab('plan'); });
+  $('#dashReport').addEventListener('click', openReportDialog);
 }
 
 function openIssue(id) {
-  state.tab = 'issues';
   state.issue = id || state.R.issues[0]?.id || null;
-  state.search = '';
-  state.page = 0;
-  renderTabs();
-  render();
+  goTab('issues');
 }
 
 /* ---------- Problèmes ---------- */
 function renderIssues(view) {
   const R = state.R;
   if (!R.issues.length) {
-    view.innerHTML = '<div class="empty"><h2>Aucun problème détecté 🎉</h2></div>';
+    view.innerHTML = `<div class="empty">${icon('check')}<h2>${esc(t('issues.none'))}</h2></div>`;
     return;
   }
-  if (!R.issues.find((i) => i.id === state.issue)) state.issue = R.issues[0].id;
+  const list = R.issues.filter((i) => state.sevFilter === 'all' || i.severity === state.sevFilter);
+  if (!list.find((i) => i.id === state.issue)) state.issue = list[0]?.id || R.issues[0].id;
   const issue = R.issues.find((i) => i.id === state.issue);
+  const counts = { all: R.issues.length, error: 0, warning: 0, notice: 0 };
+  R.issues.forEach((i) => counts[i.severity]++);
   view.innerHTML = `<div class="issues-layout">
-    <div class="card">${issueListHtml(R.issues)}</div>
-    <div>
+    <div class="card il-col">
+      <div class="seg full">${['all', 'error', 'warning', 'notice'].map((s) => `<button data-sev="${s}" class="${state.sevFilter === s ? 'on' : ''}">${esc(s === 'all' ? t('f.all') : cap(t('sev.' + s + 's')))} <span>${counts[s]}</span></button>`).join('')}</div>
+      ${issueRows(list)}
+    </div>
+    <div class="il-detail">
       <div class="issue-info card">
-        <span class="chip ${issue.severity}">${esc(issue.category)}</span>
-        <h2>${esc(issue.label)} — ${fmtN(issue.count)}</h2>
-        <p>${esc(issue.description)}</p>
-        <p class="fix"><b>Comment corriger :</b> ${esc(issue.fix)}</p>
+        <div class="ii-chips">${sevChip(issue.severity)}<span class="chip muted">${esc(t('cat.' + issue.category))}</span>${lvlChip('impact', issue.impact)}${lvlChip('effort', issue.effort)}</div>
+        <h2>${esc(t('issue.' + issue.id + '.label', issue.params))} <span class="muted">· ${num(issue.count)}</span></h2>
+        <p>${esc(t('issue.' + issue.id + '.desc', issue.params))}</p>
+        <p class="fix"><b>${esc(t('issues.howToFix'))}</b> ${esc(t('issue.' + issue.id + '.fix', issue.params))}</p>
       </div>
       <div id="issueTable"></div>
     </div></div>`;
-  view.querySelectorAll('[data-issue]').forEach((li) => li.addEventListener('click', () => {
-    state.issue = li.dataset.issue;
-    state.search = '';
-    state.page = 0;
-    render();
-  }));
-  const tab = { id: 'issue-' + issue.id, label: 'URLs concernées', cols: [C.url, { k: 'detail', l: 'Détail', cls: 'wrap' }] };
-  renderTable($('#issueTable'), tab, issue.items);
+  view.querySelectorAll('[data-sev]').forEach((b) => b.addEventListener('click', () => { state.sevFilter = b.dataset.sev; render(); }));
+  view.querySelectorAll('[data-issue]').forEach((li) => li.addEventListener('click', () => { state.issue = li.dataset.issue; state.search = ''; state.page = 0; render(); }));
+  const items = issue.items.map((it) => ({ url: it.url, detail: detailText(it.detail, t) }));
+  renderTable($('#issueTable'), { id: 'issue-' + issue.id, cols: [C.url, { k: 'detail', l: 'col.detail', cls: 'wrap' }] }, items, { title: t('issues.affected'), help: '' });
 }
 
-/* ---------- Robots & sitemaps ---------- */
+/* ---------- Plan d'action ---------- */
+function renderPlan(view) {
+  const R = state.R;
+  const plan = [...R.issues].sort((a, b) => b.priority - a.priority);
+  const quick = plan.filter((i) => i.effort === 'low' && i.impact !== 'low' && i.severity !== 'notice');
+  view.innerHTML = `
+    <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.plan'))}</h2><p class="help">${esc(t('help.plan'))}</p></div>
+      <div class="tb-actions"><button class="btn primary" id="planReport">${icon('report')} ${esc(t('ui.report'))}</button></div></div>
+    ${quick.length ? `<div class="card quick"><h3>${icon('bolt')} ${esc(t('plan.quickWins'))}</h3><div class="qw">${quick.slice(0, 6).map((i) => `<button data-issue="${i.id}"><b>${esc(t('issue.' + i.id + '.label', i.params))}</b><span>${num(i.count)} · ${esc(t('cat.' + i.category))}</span></button>`).join('')}</div></div>` : ''}
+    <div class="table-wrap"><table class="plan"><thead><tr><th>#</th><th>${esc(t('col.issue'))}</th><th>${esc(t('col.severity'))}</th><th>${esc(t('impact.label'))}</th><th>${esc(t('effort.label'))}</th><th class="num">${esc(t('col.urls'))}</th><th>${esc(t('col.fix'))}</th></tr></thead>
+    <tbody>${plan.map((i, n) => `<tr data-issue="${i.id}"><td class="num">${n + 1}</td><td><b>${esc(t('issue.' + i.id + '.label', i.params))}</b><br><small class="muted">${esc(t('cat.' + i.category))}</small></td><td>${sevChip(i.severity)}</td><td><span class="lvl impact-${i.impact}">${esc(t('lvl.' + i.impact))}</span></td><td><span class="lvl effort-${i.effort}">${esc(t('lvl.' + i.effort))}</span></td><td class="num">${num(i.count)}</td><td class="wrap">${esc(t('issue.' + i.id + '.fix', i.params))}</td></tr>`).join('')}</tbody></table></div>`;
+  view.querySelectorAll('[data-issue]').forEach((el) => el.addEventListener('click', () => openIssue(el.dataset.issue)));
+  $('#planReport').addEventListener('click', openReportDialog);
+}
+
+/* ---------- Robots, IA & sitemaps ---------- */
 function renderRobots(view) {
   const m = state.R.meta;
   view.innerHTML = `
-    <div class="toolbar"><h2>robots.txt</h2><a href="${esc(m.origin)}/robots.txt" target="_blank" rel="noopener">${esc(m.origin)}/robots.txt</a></div>
-    ${m.robotsTxt ? `<pre class="robots">${esc(m.robotsTxt)}</pre>` : '<p class="muted">Aucun robots.txt trouvé (ou non accessible).</p>'}
-    <div class="toolbar" style="margin-top:16px"><h2>Sitemaps XML</h2><span class="muted">${fmtN(m.sitemapUrlCount)} URL(s) au total</span></div>
-    ${m.sitemapFiles.length ? `<div class="table-wrap"><table><thead><tr><th>Fichier</th><th>Type</th><th class="num">Entrées</th></tr></thead><tbody>${m.sitemapFiles.map((s) => `<tr><td><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></td><td>${s.type === 'index' ? 'Index de sitemaps' : 'Sitemap'}</td><td class="num">${fmtN(s.count)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aucun sitemap trouvé.</p>'}
-    <div class="toolbar" style="margin-top:16px"><h2>Configuration du crawl</h2></div>
-    <div class="kv card">${Object.entries(m.options).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>`;
+    <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.robots'))}</h2><p class="help">${esc(t('help.robots'))}</p></div></div>
+    <div class="dash-two">
+      <div class="card"><h3>${icon('robot')} ${esc(t('robots.bots'))}</h3>
+        <table class="mini"><tbody>${(m.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
+        <p class="mt">${m.llmsTxt ? `<span class="chip ok">llms.txt ✓</span> ${num(m.llmsTxt.size)} ${esc(t('robots.chars'))}` : `<span class="chip muted">llms.txt ✗</span> ${esc(t('robots.noLlms'))}`}</p>
+      </div>
+      <div class="card"><h3>${icon('sitemap')} ${esc(t('robots.sitemaps'))} · ${num(m.sitemapUrlCount)} URLs</h3>
+        ${m.sitemapFiles.length ? `<table class="mini"><tbody>${m.sitemapFiles.map((s) => `<tr><td class="trunc">${urlCell(s.url)}</td><td>${esc(s.type === 'index' ? t('robots.index') : 'urlset')}</td><td class="num">${num(s.count)}</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${esc(t('robots.noSitemap'))}</p>`}
+      </div>
+    </div>
+    <div class="card mt"><h3>robots.txt · <a href="${esc(m.origin)}/robots.txt" target="_blank" rel="noopener">${esc(m.origin)}/robots.txt</a></h3>
+      ${m.robotsTxt ? `<pre class="robots">${esc(m.robotsTxt)}</pre>` : `<p class="muted">${esc(t('robots.noRobots'))}</p>`}</div>
+    <div class="card mt"><h3>${esc(t('robots.config'))}</h3><div class="kv">${Object.entries(m.options).filter(([, v]) => v !== '' && v !== undefined).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div></div>`;
 }
 
 /* ---------- Panneau de détails ---------- */
@@ -417,70 +509,104 @@ function renderDetail() {
   if (!url) { box.hidden = true; return; }
   const p = state.R ? linkGraph().byUrl.get(url) : state.live.find((x) => x.url === url);
   box.hidden = false;
-  const tabs = state.R ? [['details', 'Détails'], ['serp', 'Aperçu SERP'], ['in', 'Liens entrants'], ['out', 'Liens sortants']] : [['details', 'Détails']];
-  if (!tabs.find(([k]) => k === state.detailTab)) state.detailTab = 'details';
+  const tabs = state.R ? ['details', 'serp', 'in', 'out', ...(p?.js ? ['js'] : [])] : ['details'];
+  if (!tabs.includes(state.detailTab)) state.detailTab = 'details';
   let body = '';
-  if (!p) body = '<p class="muted">URL non crawlée (hors périmètre ou limite atteinte).</p>';
+  if (!p) body = `<p class="muted">${esc(t('detail.notCrawled'))}</p>`;
   else if (state.detailTab === 'details') body = detailKv(p);
   else if (state.detailTab === 'serp') body = serpPreview(p);
+  else if (state.detailTab === 'js') body = jsCompare(p);
   else {
     const g = linkGraph();
     const list = (state.detailTab === 'in' ? g.inl.get(url) : g.out.get(url)) || [];
     const other = state.detailTab === 'in' ? 'from' : 'to';
-    body = list.length ? `<div class="table-wrap"><table><thead><tr><th>${state.detailTab === 'in' ? 'Depuis' : 'Vers'}</th><th>Ancre</th><th>Type</th><th>Code</th></tr></thead><tbody>${list.slice(0, 1000).map((e) => {
-      const t = g.byUrl.get(e[other]);
-      return `<tr data-url="${esc(e[other])}"><td class="trunc">${esc(e[other])}</td><td class="trunc">${esc(e.anchor)}</td><td>${e.internal ? 'Interne' : 'Externe'}${e.nofollow ? ' · <span class="chip warning">nofollow</span>' : ''}</td><td>${t ? `<span class="${statusCls(t.status)}">${t.status || '—'}</span>` : ''}</td></tr>`;
-    }).join('')}</tbody></table></div>${list.length > 1000 ? '<p class="muted">1 000 premiers liens affichés.</p>' : ''}` : '<p class="muted">Aucun lien.</p>';
+    body = list.length ? `<div class="table-wrap"><table><thead><tr><th>${esc(t(state.detailTab === 'in' ? 'detail.from' : 'detail.to'))}</th><th>${esc(t('col.anchor'))}</th><th>${esc(t('detail.position'))}</th><th>${esc(t('col.type'))}</th><th>${esc(t('col.status'))}</th></tr></thead><tbody>${list.slice(0, 1000).map((e) => {
+      const target = g.byUrl.get(e[other]);
+      return `<tr data-url="${esc(e[other])}"><td class="trunc">${esc(e[other])}</td><td class="trunc">${e.anchor ? esc(e.anchor) : `<span class="muted">${esc(t(e.image ? 'detail.imageNoAlt' : 'detail.noAnchor'))}</span>`}</td><td>${esc(t('pos.' + e.pos))}</td><td>${esc(e.internal ? t('ui.internal') : t('ui.external'))}${e.nofollow ? ' <span class="chip warning">nofollow</span>' : ''}</td><td>${target ? `<span class="${statusCls(target.status)}">${target.status || '—'}</span>` : ''}</td></tr>`;
+    }).join('')}</tbody></table></div>` : `<p class="muted">${esc(t('detail.noLinks'))}</p>`;
   }
-  box.innerHTML = `<div class="detail-head">
+  const label = (k) => (k === 'in' || k === 'out' ? `${t('detail.' + k)} <span class="count">${num(((k === 'in' ? linkGraph().inl : linkGraph().out).get(url) || []).length)}</span>` : esc(t('detail.' + k)));
+  box.innerHTML = `<div class="resizer" title="${esc(t('detail.resize'))}"></div><div class="detail-head">
       <span class="url" title="${esc(url)}">${esc(url)}</span>
-      <div class="detail-tabs">${tabs.map(([k, l]) => `<button data-dt="${k}" class="${state.detailTab === k ? 'active' : ''}">${l}</button>`).join('')}</div>
-      <a class="btn small" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir ↗</a>
-      <button class="btn small" id="closeDetail" aria-label="Fermer">✕</button>
+      <div class="detail-tabs">${tabs.map((k) => `<button data-dt="${k}" class="${state.detailTab === k ? 'active' : ''}">${label(k)}</button>`).join('')}</div>
+      <a class="btn small" href="${esc(url)}" target="_blank" rel="noopener">${icon('external')}</a>
+      <button class="btn small" id="closeDetail" aria-label="${esc(t('ui.close'))}">${icon('x')}</button>
     </div><div class="detail-body">${body}</div>`;
   box.querySelectorAll('[data-dt]').forEach((b) => b.addEventListener('click', () => { state.detailTab = b.dataset.dt; renderDetail(); }));
   $('#closeDetail').addEventListener('click', () => { state.selected = null; renderDetail(); });
   box.querySelectorAll('tr[data-url]').forEach((tr) => tr.addEventListener('click', () => selectUrl(tr.dataset.url)));
+  initResizer(box);
+}
+
+function initResizer(box) {
+  const h = store.get('detailHeight');
+  if (h) box.style.height = h + 'px';
+  $('.resizer', box).addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = box.offsetHeight;
+    const move = (ev) => { box.style.height = Math.min(window.innerHeight * 0.85, Math.max(140, startH + startY - ev.clientY)) + 'px'; };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); store.set('detailHeight', box.offsetHeight); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  });
 }
 
 function detailKv(p) {
   const rows = [
-    ['Code réponse', `${p.status || '—'} ${p.statusText || ''}`],
-    ['Indexabilité', p.indexable ? 'Indexable' : p.indexabilityReason],
-    ['Type de contenu', p.contentType],
-    ['Redirige vers', p.redirectUrl],
-    ['Titre', p.title], ['Longueur du titre', p.titleLength],
-    ['Meta description', p.metaDescription], ['Longueur meta description', p.metaDescriptionLength],
-    ['H1', (p.h1 || []).join(' | ')], ['H2', (p.h2 || []).slice(0, 15).join(' | ')],
-    ['Canonical', p.canonical], ['Meta robots', p.metaRobots], ['X-Robots-Tag', p.xRobotsTag],
-    ['Lang', p.lang], ['Viewport', p.viewport],
-    ['Mots', p.wordCount], ['Ratio texte/HTML', p.textRatio != null ? p.textRatio + ' %' : ''],
-    ['Profondeur', p.depth], ['Liens entrants (pages uniques)', p.uniqueInlinks], ['Liens sortants internes', p.internalOutlinks], ['Liens sortants externes', p.externalOutlinks],
-    ['Images / sans alt', p.imagesCount != null ? `${p.imagesCount} / ${p.imagesMissingAlt}` : ''],
-    ['Hreflang', (p.hreflang || []).map((h) => `${h.lang}: ${h.href}`).join(' | ')],
-    ['Données structurées', (p.schemaTypes || []).join(', ')],
-    ['Open Graph', p.og ? [p.og.title && 'og:title', p.og.description && 'og:description', p.og.image && 'og:image', p.og.twitterCard && 'twitter:card'].filter(Boolean).join(', ') : ''],
-    ['Dans le sitemap', p.inSitemap ? 'Oui' : 'Non'],
-    ['Temps de réponse', p.responseTime != null ? p.responseTime + ' ms' : ''], ['Poids', fmtKb(p.size)],
-    ['Last-Modified', p.lastModified], ['Découverte via', p.via], ['Erreur', p.error],
+    ['col.status', `${p.status || '—'} ${p.statusText || ''}`],
+    ['col.indexability', idxLabel(p)],
+    ['col.type', p.contentType],
+    ['col.redirectsTo', p.redirectUrl],
+    ['col.title', p.title], ['detail.titleLength', p.title ? `${p.titleLength} · ${p.titlePx} px` : ''],
+    ['col.metaDescription', p.metaDescription], ['detail.descLength', p.metaDescription ? `${p.metaDescriptionLength} · ${p.metaDescriptionPx} px` : ''],
+    ['col.h1', (p.h1 || []).join(' | ')], ['col.h2', (p.h2 || []).slice(0, 15).join(' | ')],
+    ['col.focusKeyword', p.focusKeyword], ['col.keywords', (p.keywords || []).join(', ')],
+    ['col.canonical', p.canonical], ['col.metaRobots', p.metaRobots], ['col.xRobotsTag', p.xRobotsTag],
+    ['col.lang', p.lang], ['detail.viewport', p.viewport],
+    ['col.words', p.wordCount], ['col.textRatio', p.textRatio != null ? p.textRatio + ' %' : ''],
+    ['col.similarity', p.closestMatch ? `≈${p.closestSimilarity} % · ${p.closestMatch}` : ''],
+    ['col.depth', p.depth], ['col.linkScore', p.linkScore], ['col.inlinks', p.uniqueInlinks], ['col.contentInlinks', p.contentInlinks], ['col.outlinks', p.internalOutlinks], ['col.extOutlinks', p.externalOutlinks],
+    ['detail.images', p.imagesCount != null ? `${p.imagesCount} · ${t('col.altMissing')}: ${p.imagesMissingAlt}` : ''],
+    ['col.alternates', (p.hreflang || []).map((h) => `${h.lang}: ${h.href}`).join(' | ')],
+    ['col.schemaTypes', (p.schemaTypes || []).join(', ')],
+    ['detail.og', p.og ? [p.og.title && 'og:title', p.og.description && 'og:description', p.og.image && 'og:image', p.og.twitterCard && 'twitter:card'].filter(Boolean).join(', ') : ''],
+    ['col.inSitemap', p.inSitemap ? t('ui.yes') : t('ui.no')],
+    ['col.responseTime', p.responseTime != null ? p.responseTime + ' ms' : ''], ['col.size', kb(p.size)],
+    ['col.compression', p.headers?.encoding], ['detail.lastModified', p.lastModified], ['detail.via', p.via ? t('via.' + p.via) : ''], ['detail.error', p.error],
   ].filter(([, v]) => v !== undefined && v !== null && v !== '');
-  return `<div class="kv">${rows.map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div>`;
+  return `<div class="kv">${rows.map(([k, v]) => `<div>${esc(t(k))}</div><div>${esc(v)}</div>`).join('')}</div>`;
 }
 
 function serpPreview(p) {
-  const t = T();
-  const title = p.title || '(titre manquant — Google en générera un)';
-  const desc = p.metaDescription || '(meta description manquante — Google extraira un passage de la page)';
+  const T = TH();
+  const title = p.title || t('serp.noTitle');
+  const desc = p.metaDescription || t('serp.noDesc');
   const cut = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const u = new URL(p.url);
-  return `<div class="serp">
-    <div class="s-url">${esc(u.hostname)} ${esc(u.pathname.split('/').filter(Boolean).join(' › ') ? '› ' + u.pathname.split('/').filter(Boolean).join(' › ') : '')}</div>
-    <div class="s-title">${esc(cut(title, t.titleMax + 2))}</div>
-    <div class="s-desc">${esc(cut(desc, t.descMax + 3))}</div></div>
-    <p class="muted">Titre : ${p.titleLength || 0} car. (idéal ${t.titleMin}–${t.titleMax}) · Description : ${p.metaDescriptionLength || 0} car. (idéal ${t.descMin}–${t.descMax}). Approximation : Google tronque en pixels, pas en caractères.</p>`;
+  const crumbs = u.pathname.split('/').filter(Boolean);
+  const meter = (px, max, lbl) => `<div class="pxm"><span>${esc(lbl)}</span><div class="track"><div class="fill ${px > max ? 'over' : ''}" style="width:${Math.min(100, (px / max) * 100)}%"></div></div><b>${num(px)} / ${num(max)} px</b></div>`;
+  return `<div class="serp-wrap"><div class="serp">
+    <div class="s-site"><span class="fav">${esc(u.hostname[0]?.toUpperCase() || '')}</span><div><b>${esc(u.hostname.replace(/^www\./, ''))}</b><small>${esc(u.origin)}${crumbs.length ? ' › ' + esc(crumbs.join(' › ')) : ''}</small></div></div>
+    <div class="s-title">${esc(cut(title, 70))}</div>
+    <div class="s-desc">${esc(cut(desc, 160))}</div></div>
+    <div class="pxms">${meter(p.titlePx || 0, T.titleMaxPx, t('col.title'))}${meter(p.metaDescriptionPx || 0, T.descMaxPx, t('col.metaDescription'))}</div>
+    <p class="muted small">${esc(t('serp.note'))}</p></div>`;
 }
 
-/* ---------- Export ---------- */
+function jsCompare(p) {
+  const j = p.js;
+  if (!j.rendered) return `<p class="muted">${esc(t('detail.renderFailed'))}: ${esc(j.error)}</p>`;
+  const row = (k, raw, ren) => `<tr><td>${esc(t(k))}</td><td>${esc(raw)}</td><td class="${String(raw) !== String(ren) ? 'changed' : ''}">${esc(ren)}</td></tr>`;
+  return `<table class="mini cmp"><thead><tr><th></th><th>${esc(t('js.raw'))}</th><th>${esc(t('js.rendered'))}</th></tr></thead><tbody>
+    ${row('col.title', j.rawTitle, p.title)}${row('col.h1', j.rawH1, p.h1?.[0] || '')}${row('col.canonical', j.rawCanonical, p.canonical)}${row('col.metaRobots', j.rawMetaRobots, p.metaRobots)}
+    ${row('col.words', j.rawWordCount, p.wordCount)}${row('col.links', j.rawLinkCount, p.internalOutlinks + p.externalOutlinks)}
+  </tbody></table>
+  <div class="kv mt"><div>LCP</div><div>${j.lcp ? (j.lcp / 1000).toFixed(2) + ' s' : '—'}</div><div>CLS</div><div>${j.cls ?? '—'}</div><div>${esc(t('js.loadTime'))}</div><div>${num(j.loadTime)} ms</div><div>${esc(t('js.requests'))}</div><div>${num(j.requests)}</div>
+  ${j.consoleErrors?.length ? `<div>${esc(t('col.jsErrors'))}</div><div><pre class="errs">${esc(j.consoleErrors.join('\n'))}</pre></div>` : ''}</div>`;
+}
+
+/* ---------- Exports ---------- */
 function download(name, content, type) {
   const blob = new Blob([content], { type });
   const a = document.createElement('a');
@@ -489,105 +615,206 @@ function download(name, content, type) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+const slug = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+const hostOf = () => (state.R ? new URL(state.R.meta.startUrl).hostname : 'crawl');
 
-function exportCsv(tab, rows, fname) {
+function exportCsv(tab, rows, fname, title) {
   const cell = (v) => {
     const s = Array.isArray(v) ? v.join(' | ') : v == null ? '' : String(v);
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const csv = '﻿' + [tab.cols.map((c) => cell(c.l)).join(';'), ...rows.map((r) => tab.cols.map((c) => cell(cellValue(c, r))).join(';'))].join('\r\n');
-  const host = state.R ? new URL(state.R.meta.startUrl).hostname : 'crawl';
-  const slug = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
-  download(`${host}_${slug(tab.label)}${fname ? '_' + slug(fname) : ''}.csv`, csv, 'text/csv;charset=utf-8');
+  const csv = '﻿' + [tab.cols.map((c) => cell(t(c.l))).join(';'), ...rows.map((r) => tab.cols.map((c) => cell(cellValue(c, r))).join(';'))].join('\r\n');
+  download(`${hostOf()}_${slug(title)}${fname ? '_' + slug(t('f.' + fname)) : ''}.csv`, csv, 'text/csv;charset=utf-8');
 }
 
 $('#exportJsonBtn').addEventListener('click', () => {
   if (!state.R) return;
-  download(`${new URL(state.R.meta.startUrl).hostname}_${state.R.meta.finishedAt.slice(0, 10)}.json`, JSON.stringify(state.R), 'application/json');
+  download(`${hostOf()}_${state.R.meta.finishedAt.slice(0, 10)}.json`, JSON.stringify(state.R), 'application/json');
+});
+$('#exportIssuesBtn')?.addEventListener('click', () => exportAllIssues());
+function exportAllIssues() {
+  if (!state.R) return;
+  const tab = { cols: [{ k: 'sev', l: 'col.severity' }, { k: 'cat', l: 'col.category' }, { k: 'issue', l: 'col.issue' }, { k: 'url', l: 'col.url' }, { k: 'detail', l: 'col.detail' }, { k: 'fix', l: 'col.fix' }] };
+  const rows = state.R.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));
+  exportCsv(tab, rows, null, t('tab.issues'));
+}
+
+/* ---------- Rapport ---------- */
+$('#reportBtn').addEventListener('click', () => openReportDialog());
+async function openReportDialog() {
+  if (!state.R) return;
+  const dlg = $('#reportDialog');
+  const saved = store.get('report', {});
+  const form = $('#reportForm');
+  form.lang.innerHTML = LANGS.map((l) => `<option value="${l.code}" ${l.code === (saved.lang || t.lang) ? 'selected' : ''}>${l.flag} ${l.name}</option>`).join('');
+  for (const k of ['title', 'client', 'author', 'company', 'contact', 'website', 'color', 'intro']) if (saved[k] != null && form[k]) form[k].value = saved[k];
+  if (!form.color.value) form.color.value = '#5b8c1e';
+  form.maxUrls.value = saved.maxUrls || 10;
+  $('#logoPreview').innerHTML = saved.logo ? `<img src="${saved.logo}" alt="">` : '';
+  const crawls = await fetch('/api/crawls').then((r) => r.json()).catch(() => []);
+  const host = hostOf();
+  form.compare.innerHTML = `<option value="">${esc(t('report.noCompare'))}</option>` + crawls.filter((c) => c.host === host && c.finishedAt !== state.R.meta.finishedAt).map((c) => `<option value="${esc(c.file)}">${esc(t.date(c.finishedAt || 0))} · ${c.score ?? '?'}/100</option>`).join('');
+  dlg.showModal();
+}
+
+$('#logoInput').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (f.size > 1024 * 1024) return toast(t('toast.logoTooBig'), 'error');
+  const data = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+  const saved = store.get('report', {});
+  saved.logo = data;
+  store.set('report', saved);
+  $('#logoPreview').innerHTML = `<img src="${data}" alt="">`;
+});
+$('#logoClear').addEventListener('click', () => {
+  const saved = store.get('report', {});
+  delete saved.logo;
+  store.set('report', saved);
+  $('#logoPreview').innerHTML = '';
 });
 
-/* ---------- Chargement d'un résultat ---------- */
-function loadResult(R) {
-  if (!R || !R.pages || !R.summary) throw new Error('Fichier de crawl invalide');
+$('#reportForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  if (e.submitter?.value === 'cancel') return $('#reportDialog').close();
+  const opts = {};
+  for (const k of ['lang', 'title', 'client', 'author', 'company', 'contact', 'website', 'color', 'intro', 'maxUrls']) opts[k] = form[k].value;
+  opts.maxUrls = Number(opts.maxUrls) || 10;
+  const saved = { ...store.get('report', {}), ...opts };
+  store.set('report', saved);
+  let compare = null;
+  if (form.compare.value) {
+    const prev = await fetch('/api/crawls/' + encodeURIComponent(form.compare.value)).then((r) => r.json()).catch(() => null);
+    compare = compareResults(state.R, prev);
+  }
+  const rt = await getT(opts.lang);
+  const html = buildReport(state.R, { ...saved, compare }, rt);
+  $('#reportDialog').close();
+  const w = window.open('', '_blank');
+  if (!w) {
+    download(`audit-seo_${hostOf()}_${state.R.meta.finishedAt.slice(0, 10)}.html`, html, 'text/html');
+    return toast(t('toast.popupBlocked'), 'info');
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+});
+
+/* ---------- Chargement ---------- */
+async function loadResult(R) {
+  if (!R || !R.pages || !R.summary) throw new Error(t('toast.invalidFile'));
+  if (!R.version || R.version < 2) toast(t('toast.oldVersion'), 'info');
   state.R = R;
   state.graph = null;
   state.selected = null;
   state.issue = null;
-  state.tab = 'dashboard';
   state.page = 0;
+  state.compare = null;
   $('#exportJsonBtn').disabled = false;
-  $('#urlInput').value = R.meta.startUrl;
+  $('#reportBtn').disabled = false;
+  $('#urlInput').value = R.meta.mode === 'list' ? '' : R.meta.startUrl;
+  const saved = store.get('tab');
+  state.tab = saved && TAB_BY_ID[saved] && (!TAB_BY_ID[saved].show || TAB_BY_ID[saved].show(R)) ? saved : 'dashboard';
   renderTabs();
   render();
   renderDetail();
+  // Évolution par rapport au crawl précédent du même site
+  fetch('/api/crawls').then((r) => r.json()).then(async (list) => {
+    const host = hostOf();
+    const prevMeta = list.find((c) => c.host === host && c.finishedAt && c.finishedAt < R.meta.finishedAt);
+    if (!prevMeta || state.R !== R) return;
+    const prev = await fetch('/api/crawls/' + encodeURIComponent(prevMeta.file)).then((r) => r.json());
+    state.compare = compareResults(R, prev);
+    if (state.tab === 'dashboard') render();
+  }).catch(() => {});
+}
+
+async function openSaved(file) {
+  try {
+    const R = await fetch('/api/crawls/' + encodeURIComponent(file)).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+    await loadResult(R);
+  } catch (err) {
+    toast(t('toast.openFailed') + ' ' + err.message, 'error');
+  }
 }
 
 $('#importInput').addEventListener('change', async (e) => {
   const f = e.target.files[0];
   if (!f) return;
   try {
-    loadResult(JSON.parse(await f.text()));
+    await loadResult(JSON.parse(await f.text()));
   } catch (err) {
-    alert('Impossible de lire ce fichier : ' + err.message);
+    toast(t('toast.openFailed') + ' ' + err.message, 'error');
   }
   e.target.value = '';
 });
 
-/* ---------- Historique ---------- */
 $('#historyBtn').addEventListener('click', async () => {
   const dlg = $('#historyDialog');
   const list = $('#historyList');
-  list.innerHTML = '<p class="muted">Chargement…</p>';
+  list.innerHTML = `<p class="muted">${esc(t('ui.loading'))}</p>`;
   dlg.showModal();
   const items = await fetch('/api/crawls').then((r) => r.json()).catch(() => []);
-  list.innerHTML = items.length ? items.map((i) => `<div class="hist"><span class="name" title="${esc(i.file)}">${esc(i.file)}</span><span class="muted">${fmtKb(i.size)}</span><button class="btn small" data-open="${esc(i.file)}">Ouvrir</button><button class="btn small" data-del="${esc(i.file)}">Supprimer</button></div>`).join('') : '<p class="muted">Aucun crawl enregistré pour l’instant.</p>';
-  list.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', async () => {
-    b.textContent = '…';
-    const R = await fetch('/api/crawls/' + encodeURIComponent(b.dataset.open)).then((r) => r.json());
-    dlg.close();
-    loadResult(R);
-  }));
+  list.innerHTML = items.length ? items.map((i) => `<div class="hist"><span class="grade g${esc(i.grade || '')}">${esc(i.grade || '?')}</span><span class="name"><b>${esc(i.host || i.file)}</b><small>${i.finishedAt ? esc(t.date(i.finishedAt)) : esc(i.file)} · ${kb(i.size)}</small></span><button class="btn small" data-open="${esc(i.file)}">${esc(t('ui.open'))}</button><button class="btn small" data-del="${esc(i.file)}" aria-label="${esc(t('ui.delete'))}">${icon('x')}</button></div>`).join('') : `<p class="muted">${esc(t('home.noCrawls'))}</p>`;
+  list.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', async () => { dlg.close(); await openSaved(b.dataset.open); }));
   list.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
-    if (!confirm('Supprimer ' + b.dataset.del + ' ?')) return;
+    if (!confirm(t('ui.confirmDelete', { name: b.dataset.del }))) return;
     await fetch('/api/crawls/' + encodeURIComponent(b.dataset.del), { method: 'DELETE' });
     b.closest('.hist').remove();
   }));
 });
 
 /* ---------- Options & lancement ---------- */
-const OPT_KEY = 'arachnide-options';
 const optionsPanel = $('#optionsPanel');
 function readOptions() {
   const o = {};
-  optionsPanel.querySelectorAll('input, select').forEach((el) => { o[el.name] = el.type === 'checkbox' ? el.checked : el.value; });
+  optionsPanel.querySelectorAll('input[name], select[name]').forEach((el) => { o[el.name] = el.type === 'checkbox' ? el.checked : el.value; });
   return o;
 }
-try {
-  const saved = JSON.parse(localStorage.getItem(OPT_KEY) || 'null');
-  if (saved) optionsPanel.querySelectorAll('input, select').forEach((el) => {
+function restoreOptions() {
+  const saved = store.get('options');
+  if (!saved) return;
+  optionsPanel.querySelectorAll('input[name], select[name]').forEach((el) => {
     if (!(el.name in saved)) return;
     if (el.type === 'checkbox') el.checked = !!saved[el.name];
     else el.value = saved[el.name];
   });
-} catch { /* stockage indisponible */ }
-
+}
 $('#optionsBtn').addEventListener('click', () => {
   optionsPanel.hidden = !optionsPanel.hidden;
   $('#optionsBtn').setAttribute('aria-expanded', String(!optionsPanel.hidden));
 });
 
+let mode = store.get('mode', 'spider');
+function setMode(m) {
+  mode = m;
+  store.set('mode', m);
+  $$('#modeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
+  $('#urlInput').hidden = m === 'list';
+  $('#listInput').hidden = m !== 'list';
+  $('#urlInput').required = m !== 'list';
+}
+$$('#modeSeg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
 $('#crawlForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const url = $('#urlInput').value.trim();
-  if (!url) return;
   const options = readOptions();
-  try { localStorage.setItem(OPT_KEY, JSON.stringify(options)); } catch { /* ignore */ }
-  const res = await fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url, options }) });
-  const data = await res.json();
-  if (!res.ok) return alert(data.error || 'Erreur au lancement du crawl');
+  store.set('options', options);
+  const body = { options };
+  if (mode === 'list') {
+    options.mode = 'list';
+    options.urls = $('#listInput').value.split(/\s+/).map((x) => x.trim()).filter(Boolean);
+    if (!options.urls.length) return toast(t('toast.listEmpty'), 'error');
+  } else {
+    body.url = $('#urlInput').value.trim();
+    if (!body.url) return;
+  }
+  const res = await fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return toast(data.key ? t(data.key) : data.error || t('toast.startFailed'), 'error');
   optionsPanel.hidden = true;
 });
-
 $('#stopBtn').addEventListener('click', () => fetch('/api/stop', { method: 'POST' }));
 
 function setRunning(running) {
@@ -598,12 +825,29 @@ function setRunning(running) {
   $('#progress').hidden = !running;
 }
 
-const PHASES = { start: 'Démarrage', robots: 'Lecture du robots.txt', sitemaps: 'Lecture des sitemaps', crawl: 'Crawl', externes: 'Vérification des liens externes', images: 'Vérification des images', analyse: 'Analyse', done: 'Terminé' };
 function showProgress(p) {
   if (!p) return;
-  const pct = Math.min(100, (p.crawled / Math.max(1, Math.min(p.maxPages, p.discovered || 1))) * 100);
-  $('#progressBar').style.width = (p.phase === 'crawl' ? pct : p.phase === 'done' ? 100 : pct) + '%';
-  $('#progressText').textContent = `${PHASES[p.phase] || p.phase} · ${fmtN(p.crawled)} URLs crawlées · ${fmtN(p.queued)} en attente · ${fmtN(p.discovered)} découvertes (max ${fmtN(p.maxPages)}) · ${Math.round(p.elapsed / 1000)} s${p.stopped ? ' · arrêt en cours…' : ''}`;
+  state.progress = p;
+  const now = Date.now();
+  state.rateSamples.push([now, p.crawled]);
+  state.rateSamples = state.rateSamples.filter(([ts]) => now - ts < 10000);
+  const [t0, c0] = state.rateSamples[0];
+  const rate = now - t0 > 1500 ? ((p.crawled - c0) / (now - t0)) * 1000 : 0;
+  const target = Math.min(p.maxPages, Math.max(p.discovered, 1));
+  const left = Math.max(0, target - p.crawled);
+  const eta = rate > 0 ? Math.round(left / rate) : null;
+  const pct = p.phase === 'crawl' ? (p.crawled / target) * 100 : p.phase === 'done' ? 100 : (p.crawled / target) * 100;
+  $('#progressBar').style.width = Math.min(100, pct) + '%';
+  $('#progressText').innerHTML = [
+    `<b>${esc(t('phase.' + p.phase))}</b>`,
+    esc(t('progress.crawled', { n: p.crawled })),
+    esc(t('progress.queued', { n: p.queued })),
+    rate ? esc(t('progress.rate', { n: Math.round(rate * 10) / 10 })) : '',
+    esc(t('progress.elapsed', { s: Math.round(p.elapsed / 1000) })),
+    eta != null && p.phase === 'crawl' ? esc(t('progress.eta', { s: eta })) : '',
+    p.rendering ? `<span class="chip notice">JS</span>` : '',
+    p.stopped ? esc(t('progress.stopping')) : '',
+  ].filter(Boolean).join(' <span class="dot">·</span> ');
 }
 
 /* ---------- Flux temps réel ---------- */
@@ -620,55 +864,82 @@ function connect() {
     showProgress(d.progress);
   });
   es.addEventListener('reset', () => {
-    state.R = null;
-    state.graph = null;
-    state.live = [];
-    state.selected = null;
-    state.tab = 'internal';
+    Object.assign(state, { R: null, graph: null, live: [], selected: null, tab: 'internal', rateSamples: [], compare: null });
     $('#exportJsonBtn').disabled = true;
+    $('#reportBtn').disabled = true;
     setRunning(true);
     renderTabs();
     render();
     renderDetail();
   });
-  es.addEventListener('status', (e) => { $('#progressText').textContent = JSON.parse(e.data).message + '…'; });
+  es.addEventListener('status', (e) => showProgress({ ...(state.progress || { crawled: 0, queued: 0, discovered: 0, maxPages: 1, elapsed: 0 }), phase: JSON.parse(e.data).phase }));
   es.addEventListener('progress', (e) => showProgress(JSON.parse(e.data)));
-  es.addEventListener('pages', (e) => {
-    state.live.push(...JSON.parse(e.data));
-    throttledRender();
-  });
+  es.addEventListener('warning', (e) => { const w = JSON.parse(e.data); toast(t(w.key, w.params), 'error'); });
+  es.addEventListener('pages', (e) => { state.live.push(...JSON.parse(e.data)); throttledRender(); });
   es.addEventListener('done', async () => {
     setRunning(false);
-    const R = await fetch('/api/result').then((r) => r.json());
-    loadResult(R);
+    try {
+      await loadResult(await fetch('/api/result').then((r) => r.json()));
+      toast(t('toast.done'), 'ok');
+    } catch (err) { toast(err.message, 'error'); }
   });
-  es.addEventListener('failed', (e) => {
-    setRunning(false);
-    alert('Le crawl a échoué : ' + JSON.parse(e.data).message);
-  });
-  es.onerror = () => { /* EventSource se reconnecte automatiquement */ };
+  es.addEventListener('failed', (e) => { setRunning(false); toast(t('toast.failed') + ' ' + JSON.parse(e.data).message, 'error'); });
 }
 
-/* ---------- Thème ---------- */
-const THEME_KEY = 'arachnide-theme';
-try {
-  const t = localStorage.getItem(THEME_KEY);
-  if (t) document.documentElement.dataset.theme = t;
-} catch { /* ignore */ }
+/* ---------- Thème & langue ---------- */
+const savedTheme = store.get('theme');
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
 $('#themeBtn').addEventListener('click', () => {
   const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const next = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
-  try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+  store.set('theme', next);
+});
+
+async function setLang(code) {
+  t = await getT(code);
+  store.set('lang', t.lang);
+  document.documentElement.lang = t.lang;
+  $('#langSel').value = t.lang;
+  $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  $$('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); el.setAttribute('aria-label', t(el.dataset.i18nTitle)); });
+  document.title = t('app.title');
+  updateEnvNote();
+  renderTabs();
+  render();
+  renderDetail();
+}
+$('#langSel').innerHTML = LANGS.map((l) => `<option value="${l.code}">${l.flag} ${l.code.toUpperCase()}</option>`).join('');
+$('#langSel').addEventListener('change', (e) => setLang(e.target.value));
+
+function updateEnvNote() {
+  const note = $('#renderNote');
+  if (!note) return;
+  note.textContent = state.env.chrome ? t('opt.renderFound', { path: state.env.chrome }) : t('opt.renderMissing');
+  note.className = 'opt-note ' + (state.env.chrome ? 'ok' : 'warn');
+}
+
+$$('[data-icon]').forEach((el) => el.insertAdjacentHTML('afterbegin', icon(el.dataset.icon)));
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName)) {
+    e.preventDefault();
+    ($('#searchInput') || $('#urlInput')).focus();
+  }
+  if (e.key === 'Escape' && state.selected && !document.querySelector('dialog[open]')) { state.selected = null; renderDetail(); }
 });
 
 /* ---------- Démarrage ---------- */
 (async function init() {
-  renderTabs();
-  render();
+  restoreOptions();
+  setMode(mode);
+  state.env = await fetch('/api/env').then((r) => r.json()).catch(() => ({}));
+  if (state.env.version) $('#version').textContent = 'v' + state.env.version;
+  await setLang(detectLang(store.get('lang')));
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());
-    if (s.hasResult && !s.running) loadResult(await fetch('/api/result').then((r) => r.json()));
+    if (s.hasResult && !s.running) await loadResult(await fetch('/api/result').then((r) => r.json()));
   } catch { /* serveur indisponible */ }
 })();

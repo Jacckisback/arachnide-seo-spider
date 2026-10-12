@@ -1,9 +1,14 @@
-// Post-traitement : indexabilité, graphe de liens, profondeur, doublons, redirections et liste des problèmes SEO.
+// Post-traitement : indexabilité, graphe de liens, profondeur, PageRank interne, doublons,
+// redirections et liste des problèmes SEO. Les textes sont des clés de traduction (public/i18n).
+import { titlePixels, descPixels } from './pixel.mjs';
+import { similarity } from './text.mjs';
 
 export const THRESHOLDS = {
-  titleMax: 60,
+  titleMaxPx: 580,
+  titleMaxChars: 60,
   titleMin: 30,
-  descMax: 155,
+  descMaxPx: 990,
+  descMax: 160,
   descMin: 70,
   thinWords: 200,
   slowMs: 1000,
@@ -12,19 +17,66 @@ export const THRESHOLDS = {
   deepLevel: 4,
   urlMaxLength: 115,
   lowTextRatio: 10,
+  nearDuplicate: 92,
+  maxLinks: 250,
+  lcpMs: 2500,
+  cls: 0.1,
 };
 
+export const SEVERITIES = ['error', 'warning', 'notice'];
 const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
+const SEV_W = { error: 3, warning: 2, notice: 1 };
+const LVL_W = { high: 3, medium: 2, low: 1 };
 
+export const GENERIC_ANCHORS = new Set([
+  'cliquez ici', 'ici', 'en savoir plus', 'lire la suite', 'voir plus', 'plus', 'lien', 'cliquer ici', 'suite', 'découvrir',
+  'click here', 'here', 'read more', 'learn more', 'more', 'more info', 'this', 'link', 'continue reading', 'see more', 'details',
+  'hier', 'mehr', 'weiterlesen', 'mehr erfahren', 'hier klicken', 'weiter',
+  'aquí', 'aqui', 'haga clic aquí', 'haz clic aquí', 'leer más', 'más información', 'ver más', 'más',
+  'qui', 'clicca qui', 'leggi di più', 'scopri di più', 'continua', 'altro',
+  'clique aqui', 'leia mais', 'saiba mais', 'ver mais', 'mais',
+]);
+
+// Clé d'indexabilité (traduite par l'interface : idx.<clé>).
 function indexability(p) {
-  if (p.blockedByRobots) return 'Bloqué par robots.txt';
-  if (!p.status) return 'Aucune réponse';
-  if (p.status >= 300 && p.status < 400) return 'Redirection';
-  if (p.status >= 400 && p.status < 500) return 'Erreur client (4xx)';
-  if (p.status >= 500) return 'Erreur serveur (5xx)';
-  if (/noindex|none/i.test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`)) return 'Noindex';
-  if (p.isHtml && p.canonical && p.canonical !== p.url) return 'Canonicalisée';
+  if (p.blockedByRobots) return 'blocked';
+  if (!p.status) return 'noResponse';
+  if (p.status >= 300 && p.status < 400) return 'redirect';
+  if (p.status >= 400 && p.status < 500) return 'clientError';
+  if (p.status >= 500) return 'serverError';
+  if (/noindex|none/i.test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`)) return 'noindex';
+  if (p.isHtml && p.canonical && p.canonical !== p.url) return 'canonicalised';
   return '';
+}
+
+// Détail traduisible d'un élément de problème : { k: clé i18n, p: paramètres }.
+const D = (k, p = {}) => ({ k, p });
+
+// PageRank interne (Link Score 0-100), comme le « Link Score » de Screaming Frog.
+function pageRank(nodes, adj, iterations = 30, d = 0.85) {
+  const N = nodes.length;
+  if (!N) return new Map();
+  const idx = new Map(nodes.map((u, i) => [u, i]));
+  const out = nodes.map((u) => [...(adj.get(u) || [])].map((v) => idx.get(v)).filter((x) => x !== undefined));
+  let pr = new Float64Array(N).fill(1 / N);
+  for (let it = 0; it < iterations; it++) {
+    const next = new Float64Array(N).fill((1 - d) / N);
+    let dangling = 0;
+    for (let i = 0; i < N; i++) {
+      if (!out[i].length) dangling += pr[i];
+      else for (const j of out[i]) next[j] += (d * pr[i]) / out[i].length;
+    }
+    for (let i = 0; i < N; i++) next[i] += (d * dangling) / N;
+    pr = next;
+  }
+  const logs = [...pr].map((x) => Math.log(x));
+  const min = Math.min(...logs);
+  const max = Math.max(...logs);
+  return new Map(nodes.map((u, i) => [u, max > min ? Math.round(((logs[i] - min) / (max - min)) * 100) : 100]));
+}
+
+export function grade(score) {
+  return score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : score >= 20 ? 'E' : 'F';
 }
 
 export function analyze(crawler) {
@@ -32,21 +84,27 @@ export function analyze(crawler) {
   const pages = [...crawler.pages.values()];
   const byUrl = crawler.pages;
   const start = crawler.startUrl;
+  const homes = new Set([start, crawler.finalStart]);
+  const norm = (u) => crawler.normalize(u) || u;
 
   for (const p of pages) {
     p.indexabilityReason = indexability(p);
     p.indexable = !p.indexabilityReason;
     p.inlinks = 0;
     p.uniqueInlinks = 0;
+    p.contentInlinks = 0;
     p.h1Count = p.h1?.length || 0;
     p.h2Count = p.h2?.length || 0;
     p.titleLength = p.title?.length || 0;
+    p.titlePx = p.title ? titlePixels(p.title) : 0;
     p.metaDescriptionLength = p.metaDescription?.length || 0;
+    p.metaDescriptionPx = p.metaDescription ? descPixels(p.metaDescription) : 0;
     p.urlLength = p.url.length;
   }
 
   // Graphe de liens internes
   const inFrom = new Map();
+  const contentFrom = new Map();
   const adj = new Map();
   for (const l of crawler.links) {
     if (!l.internal) continue;
@@ -54,6 +112,10 @@ export function analyze(crawler) {
     if (t) t.inlinks++;
     if (!inFrom.has(l.to)) inFrom.set(l.to, new Set());
     inFrom.get(l.to).add(l.from);
+    if (l.pos === 'content') {
+      if (!contentFrom.has(l.to)) contentFrom.set(l.to, new Set());
+      contentFrom.get(l.to).add(l.from);
+    }
     if (!l.nofollow) {
       if (!adj.has(l.from)) adj.set(l.from, new Set());
       adj.get(l.from).add(l.to);
@@ -63,22 +125,30 @@ export function analyze(crawler) {
     const t = byUrl.get(to);
     if (t) t.uniqueInlinks = set.size;
   }
+  for (const [to, set] of contentFrom) {
+    const t = byUrl.get(to);
+    if (t) t.contentInlinks = set.size;
+  }
   for (const p of pages) {
     if (p.redirectUrl) {
       if (!adj.has(p.url)) adj.set(p.url, new Set());
-      adj.get(p.url).add(crawler.normalize(p.redirectUrl) || p.redirectUrl);
+      adj.get(p.url).add(norm(p.redirectUrl));
+    }
+    if (p.canonical && p.canonical !== p.url && p.indexabilityReason === 'canonicalised') {
+      if (!adj.has(p.url)) adj.set(p.url, new Set());
+      adj.get(p.url).add(norm(p.canonical));
     }
   }
 
-  // Profondeur réelle (plus court chemin depuis l'accueil)
+  // Profondeur réelle (plus court chemin depuis l'accueil, ou depuis chaque URL en mode liste)
   for (const p of pages) p.depth = null;
-  const q = [start];
-  const dist = new Map([[start, 0]]);
+  const roots = crawler.listUrls ? crawler.listUrls : [start];
+  const q = [...roots];
+  const dist = new Map(roots.map((r) => [r, 0]));
   for (let i = 0; i < q.length; i++) {
-    const u = q[i];
-    for (const v of adj.get(u) || []) {
+    for (const v of adj.get(q[i]) || []) {
       if (!dist.has(v)) {
-        dist.set(v, dist.get(u) + 1);
+        dist.set(v, dist.get(q[i]) + 1);
         q.push(v);
       }
     }
@@ -88,6 +158,13 @@ export function analyze(crawler) {
     if (p) p.depth = d;
   }
 
+  // PageRank interne sur les pages crawlées
+  const nodes = pages.map((p) => p.url);
+  const adjCrawled = new Map();
+  for (const [u, set] of adj) adjCrawled.set(u, new Set([...set].filter((v) => byUrl.has(v))));
+  const pr = pageRank(nodes, adjCrawled);
+  for (const p of pages) p.linkScore = pr.get(p.url) ?? 0;
+
   // Chaînes de redirection
   const redirects = [];
   for (const p of pages) {
@@ -96,7 +173,7 @@ export function analyze(crawler) {
     let cur = p;
     let loop = false;
     while (cur && cur.redirectUrl) {
-      const next = crawler.normalize(cur.redirectUrl) || cur.redirectUrl;
+      const next = norm(cur.redirectUrl);
       if (chain.includes(next)) {
         loop = true;
         chain.push(next);
@@ -109,22 +186,12 @@ export function analyze(crawler) {
     const final = byUrl.get(chain[chain.length - 1]);
     p.redirectHops = chain.length - 1;
     p.finalUrl = chain[chain.length - 1];
-    redirects.push({
-      url: p.url,
-      status: p.status,
-      target: p.redirectUrl,
-      hops: chain.length - 1,
-      chain,
-      loop,
-      finalUrl: p.finalUrl,
-      finalStatus: loop ? null : final?.status ?? null,
-      inlinks: p.inlinks,
-    });
+    redirects.push({ url: p.url, status: p.status, target: p.redirectUrl, hops: chain.length - 1, chain, loop, finalUrl: p.finalUrl, finalStatus: loop ? null : final?.status ?? null, inlinks: p.inlinks });
   }
 
   const html200 = pages.filter((p) => p.isHtml && p.status === 200);
   const indexableHtml = html200.filter((p) => p.indexable);
-  const internalOnly = pages.filter((p) => p.url.startsWith('http'));
+  const isHttps = crawler.origin?.startsWith('https');
 
   const dupMap = (key) => {
     const m = new Map();
@@ -137,7 +204,7 @@ export function analyze(crawler) {
     }
     const dups = new Set();
     for (const arr of m.values()) if (arr.length > 1) arr.forEach((p) => dups.add(p.url));
-    return { m, dups };
+    return { m, dups, count: (p) => m.get((key(p) || '').toLowerCase())?.length || 0 };
   };
   const dupTitle = dupMap((p) => p.title);
   const dupDesc = dupMap((p) => p.metaDescription);
@@ -149,16 +216,58 @@ export function analyze(crawler) {
     p.duplicateH1 = dupH1.dups.has(p.url);
     p.duplicateContent = dupContent.dups.has(p.url);
   }
-  const dupCount = (d, key, p) => d.m.get((key(p) || '').toLowerCase())?.length || 0;
 
-  // Liens cassés / vers redirections
+  // Quasi-doublons (simhash sur le contenu principal)
+  const nearDup = [];
+  const cand = indexableHtml.filter((p) => p.simhash && !p.duplicateContent).slice(0, 5000);
+  for (let i = 0; i < cand.length; i++) {
+    for (let j = i + 1; j < cand.length; j++) {
+      const s = similarity(cand[i].simhash, cand[j].simhash);
+      if (s >= T.nearDuplicate) {
+        nearDup.push({ a: cand[i].url, b: cand[j].url, similarity: s });
+        cand[i].nearDuplicates = (cand[i].nearDuplicates || 0) + 1;
+        cand[j].nearDuplicates = (cand[j].nearDuplicates || 0) + 1;
+        if (!cand[i].closestMatch || s > cand[i].closestSimilarity) Object.assign(cand[i], { closestMatch: cand[j].url, closestSimilarity: s });
+        if (!cand[j].closestMatch || s > cand[j].closestSimilarity) Object.assign(cand[j], { closestMatch: cand[i].url, closestSimilarity: s });
+      }
+    }
+  }
+
+  // Cannibalisation potentielle : même mot-clé principal présent dans le title de plusieurs pages.
+  const titleTermFreq = new Map();
+  for (const p of indexableHtml) {
+    const t = (p.title || '').toLowerCase();
+    for (const k of new Set(p.keywords || [])) if (t.includes(k)) titleTermFreq.set(k, (titleTermFreq.get(k) || 0) + 1);
+  }
+  const siteWide = Math.max(3, indexableHtml.length * 0.3); // termes de marque présents partout : ignorés
+  const focusGroups = new Map();
+  for (const p of indexableHtml) {
+    const t = (p.title || '').toLowerCase();
+    const focus = (p.keywords || []).find((k) => k.includes(' ') && t.includes(k) && titleTermFreq.get(k) < siteWide);
+    p.focusKeyword = focus || (p.keywords || []).find((k) => t.includes(k) && titleTermFreq.get(k) < siteWide) || '';
+    if (focus) {
+      if (!focusGroups.has(focus)) focusGroups.set(focus, []);
+      focusGroups.get(focus).push(p);
+    }
+  }
+  const cannibal = [...focusGroups.entries()].filter(([, arr]) => arr.length > 1);
+
+  // Liens cassés / vers redirections / ancres
   const brokenLinks = [];
   const linksToRedirects = [];
   const nofollowInternal = [];
+  const genericAnchors = new Map();
+  const emptyAnchors = new Map();
   for (const l of crawler.links) {
     if (l.internal) {
       const t = byUrl.get(l.to);
       if (l.nofollow) nofollowInternal.push(l);
+      const a = (l.anchor || '').toLowerCase().replace(/[.…:!»›→>\s]+$/u, '').trim();
+      if (!a) emptyAnchors.set(l.from, (emptyAnchors.get(l.from) || 0) + 1);
+      else if (GENERIC_ANCHORS.has(a)) {
+        if (!genericAnchors.has(l.from)) genericAnchors.set(l.from, new Set());
+        genericAnchors.get(l.from).add(l.anchor);
+      }
       if (!t || t.blockedByRobots) continue;
       if (!t.status || t.status >= 400) brokenLinks.push({ from: l.from, to: l.to, anchor: l.anchor, status: t.status, statusText: t.statusText || t.error });
       else if (t.status >= 300) linksToRedirects.push({ from: l.from, to: l.to, anchor: l.anchor, status: t.status, target: t.redirectUrl });
@@ -170,125 +279,169 @@ export function analyze(crawler) {
     }
   }
 
-  // Hreflang : liens retour manquants
+  // Hreflang
   const hreflangMissingReturn = [];
   for (const p of html200) {
     for (const h of p.hreflang || []) {
-      const n = crawler.normalize(h.href) || h.href;
+      const n = norm(h.href);
       if (n === p.url) continue;
       const t = byUrl.get(n);
       if (!t || !t.isHtml || t.status !== 200) continue;
-      const back = (t.hreflang || []).some((x) => (crawler.normalize(x.href) || x.href) === p.url);
-      if (!back) hreflangMissingReturn.push({ url: p.url, detail: `${h.lang} → ${n}` });
+      if (!(t.hreflang || []).some((x) => norm(x.href) === p.url)) hreflangMissingReturn.push({ url: p.url, detail: `${h.lang} → ${n}` });
     }
   }
 
-  // Problèmes
+  // ---------- Problèmes ----------
   const issues = [];
-  const add = (id, severity, category, label, description, fix, list) => {
-    if (list.length) issues.push({ id, severity, category, label, description, fix, count: list.length, items: list });
+  // impact : importance SEO ; effort : difficulté de correction (pour le plan d'action)
+  const add = (id, severity, category, impact, effort, items, params = {}) => {
+    if (items.length) issues.push({ id, severity, category, impact, effort, params, count: items.length, items });
   };
   const u = (arr, detail = () => '') => arr.map((p) => ({ url: p.url, detail: detail(p) }));
-  const has = (p, s) => new RegExp(s, 'i').test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`);
+  const robotsHas = (p, s) => new RegExp(s, 'i').test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`);
+  const imgs = [...crawler.images.values()];
 
-  // Codes réponse
-  add('4xx', 'error', 'Codes réponse', 'URLs internes en erreur 4xx', 'Pages introuvables ou interdites, liées depuis le site.', 'Corrigez les liens qui pointent vers ces URLs ou redirigez-les (301) vers une page équivalente.', u(pages.filter((p) => p.status >= 400 && p.status < 500), (p) => `${p.status} · ${p.inlinks} lien(s) entrant(s)`));
-  add('5xx', 'error', 'Codes réponse', 'URLs internes en erreur serveur 5xx', 'Le serveur a renvoyé une erreur.', 'Vérifiez les logs serveur, la charge et les plugins. Recrawlez ensuite.', u(pages.filter((p) => p.status >= 500), (p) => String(p.status)));
-  add('no-response', 'error', 'Codes réponse', 'URLs sans réponse (timeout / DNS / connexion)', 'Aucune réponse HTTP reçue.', 'Vérifiez la disponibilité du serveur, le DNS et le certificat SSL ; augmentez le timeout si le site est lent.', u(pages.filter((p) => !p.status && !p.blockedByRobots), (p) => p.error));
-  add('broken-internal', 'error', 'Liens', 'Liens internes cassés', 'Pages contenant des liens vers des URLs internes en erreur.', 'Remplacez ou supprimez ces liens (voir l’onglet « Liens cassés »).', brokenLinks.filter((l) => !l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
-  add('broken-external', 'warning', 'Liens', 'Liens externes cassés', 'Liens sortants vers des pages externes en erreur.', 'Mettez à jour ou supprimez ces liens sortants.', brokenLinks.filter((l) => l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
-  add('redirect-loop', 'error', 'Redirections', 'Boucles de redirection', 'La redirection revient sur une URL déjà visitée.', 'Corrigez la règle de redirection pour pointer vers l’URL finale en 200.', redirects.filter((r) => r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
-  add('redirect-chain', 'warning', 'Redirections', 'Chaînes de redirection (2 sauts ou plus)', 'Plusieurs redirections successives diluent le crawl budget et ralentissent.', 'Redirigez directement vers l’URL finale.', redirects.filter((r) => r.hops > 1 && !r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
-  add('links-to-redirect', 'warning', 'Liens', 'Liens internes vers des redirections', 'Des liens internes pointent vers des URLs 3xx.', 'Mettez à jour les liens pour pointer directement vers l’URL finale.', linksToRedirects.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status} → ${l.target})` })));
-  const homes = new Set([start, crawler.finalStart]);
-  add('redirect-to-home', 'warning', 'Redirections', 'Redirections vers la page d’accueil', 'Des URLs internes sont redirigées vers l’accueil : Google les traite souvent comme des soft 404 et le jus SEO est perdu.', 'Redirigez chaque ancienne URL vers la page la plus proche thématiquement (ou renvoyez une 410 si le contenu n’existe plus).', redirects.filter((r) => !r.loop && homes.has(r.finalUrl) && !homes.has(r.url) && new URL(r.url).pathname !== '/').map((r) => ({ url: r.url, detail: `${r.status} → ${r.finalUrl}` })));
-  add('redirect-3xx', 'notice', 'Redirections', 'URLs internes redirigées (3xx)', 'URLs internes qui redirigent.', 'Normal après une migration, mais évitez de les lier en interne.', u(pages.filter((p) => p.status >= 300 && p.status < 400), (p) => `${p.status} → ${p.redirectUrl}`));
-  add('redirect-302', 'warning', 'Redirections', 'Redirections temporaires (302/307)', 'Une redirection temporaire ne transmet pas les signaux aussi clairement qu’une 301.', 'Utilisez une 301/308 si le déplacement est définitif.', u(pages.filter((p) => p.status === 302 || p.status === 307), (p) => `${p.status} → ${p.redirectUrl}`));
-  add('http-urls', 'warning', 'Sécurité', 'URLs internes en HTTP (non sécurisé)', 'Des URLs http:// sont liées alors que le site est en HTTPS.', 'Forcez le HTTPS et mettez à jour les liens internes.', crawler.origin?.startsWith('https') ? u(pages.filter((p) => p.url.startsWith('http:'))) : []);
-  add('mixed-content', 'warning', 'Sécurité', 'Contenu mixte (ressources HTTP sur page HTTPS)', 'Images, scripts ou CSS chargés en http:// sur une page https://.', 'Passez toutes les ressources en https://.', u(html200.filter((p) => p.mixedContent > 0), (p) => `${p.mixedContent} ressource(s)`));
+  // Codes réponse & liens
+  add('4xx', 'error', 'codes', 'high', 'low', u(pages.filter((p) => p.status >= 400 && p.status < 500), (p) => D('d.statusInlinks', { status: p.status, n: p.uniqueInlinks })));
+  add('5xx', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => p.status >= 500), (p) => String(p.status)));
+  add('no-response', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => !p.status && !p.blockedByRobots), (p) => p.error));
+  add('broken-internal', 'error', 'links', 'high', 'low', brokenLinks.filter((l) => !l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
+  add('broken-external', 'warning', 'links', 'medium', 'low', brokenLinks.filter((l) => l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
+  add('redirect-loop', 'error', 'redirects', 'high', 'low', redirects.filter((r) => r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
+  add('redirect-chain', 'warning', 'redirects', 'medium', 'low', redirects.filter((r) => r.hops > 1 && !r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
+  add('redirect-to-home', 'warning', 'redirects', 'medium', 'medium', redirects.filter((r) => !r.loop && homes.has(r.finalUrl) && !homes.has(r.url) && new URL(r.url).pathname !== '/').map((r) => ({ url: r.url, detail: `${r.status} → ${r.finalUrl}` })));
+  add('links-to-redirect', 'warning', 'links', 'medium', 'medium', linksToRedirects.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status} → ${l.target})` })));
+  add('redirect-302', 'warning', 'redirects', 'low', 'low', u(pages.filter((p) => p.status === 302 || p.status === 307), (p) => `${p.status} → ${p.redirectUrl}`));
+  add('meta-refresh', 'warning', 'redirects', 'medium', 'low', u(html200.filter((p) => p.metaRefresh), (p) => p.metaRefresh));
+  add('redirect-3xx', 'notice', 'redirects', 'low', 'low', u(pages.filter((p) => p.status >= 300 && p.status < 400), (p) => `${p.status} → ${p.redirectUrl}`));
+
+  // Sécurité
+  add('http-urls', 'warning', 'security', 'medium', 'medium', isHttps ? u(pages.filter((p) => p.url.startsWith('http:'))) : []);
+  add('mixed-content', 'warning', 'security', 'medium', 'low', u(html200.filter((p) => p.mixedContent > 0), (p) => D('d.resources', { n: p.mixedContent })));
+  add('no-hsts', 'notice', 'security', 'low', 'low', isHttps ? u(html200.filter((p) => p.url.startsWith('https:') && p.headers && !p.headers.hsts)) : []);
+  add('no-https', 'error', 'security', 'high', 'medium', !isHttps && html200.length ? [{ url: crawler.origin, detail: 'http://' }] : []);
 
   // Titres
-  add('title-missing', 'error', 'Titres', 'Balise title manquante ou vide', 'La page n’a pas de <title>.', 'Rédigez un titre unique de 30 à 60 caractères avec le mot-clé principal.', u(html200.filter((p) => !p.title)));
-  add('title-duplicate', 'error', 'Titres', 'Titres dupliqués', 'Plusieurs pages indexables partagent le même titre.', 'Rendez chaque titre unique et descriptif.', u(html200.filter((p) => p.duplicateTitle), (p) => `${p.title} (×${dupCount(dupTitle, (x) => x.title, p)})`));
-  add('title-long', 'warning', 'Titres', `Titres trop longs (> ${T.titleMax} car.)`, 'Risque de troncature dans Google.', 'Raccourcissez le titre et placez le mot-clé au début.', u(html200.filter((p) => p.titleLength > T.titleMax), (p) => `${p.titleLength} car. · ${p.title}`));
-  add('title-short', 'warning', 'Titres', `Titres trop courts (< ${T.titleMin} car.)`, 'Titre peu descriptif, opportunité manquée.', 'Enrichissez le titre (mot-clé + bénéfice + marque).', u(html200.filter((p) => p.title && p.titleLength < T.titleMin), (p) => `${p.titleLength} car. · ${p.title}`));
-  add('title-multiple', 'warning', 'Titres', 'Plusieurs balises title', 'La page contient plus d’une balise <title>.', 'Ne gardez qu’une seule balise <title> dans le <head>.', u(html200.filter((p) => p.titleCount > 1), (p) => `${p.titleCount} titres`));
-  add('title-eq-h1', 'notice', 'Titres', 'Title identique au H1', 'Le title et le H1 sont strictement identiques.', 'Pas une erreur, mais varier les formulations élargit le champ sémantique.', u(html200.filter((p) => p.title && p.h1?.[0] && p.title.trim().toLowerCase() === p.h1[0].trim().toLowerCase())));
+  add('title-missing', 'error', 'titles', 'high', 'low', u(html200.filter((p) => !p.title)));
+  add('title-duplicate', 'error', 'titles', 'high', 'medium', u(html200.filter((p) => p.duplicateTitle), (p) => `${p.title} (×${dupTitle.count(p)})`));
+  add('title-long', 'warning', 'titles', 'medium', 'low', u(html200.filter((p) => p.titlePx > T.titleMaxPx), (p) => D('d.pxChars', { px: p.titlePx, n: p.titleLength, text: p.title })), { max: T.titleMaxPx });
+  add('title-short', 'warning', 'titles', 'medium', 'low', u(html200.filter((p) => p.title && p.titleLength < T.titleMin), (p) => D('d.chars', { n: p.titleLength, text: p.title })), { min: T.titleMin });
+  add('title-multiple', 'warning', 'titles', 'low', 'low', u(html200.filter((p) => p.titleCount > 1), (p) => `×${p.titleCount}`));
+  add('title-eq-h1', 'notice', 'titles', 'low', 'low', u(html200.filter((p) => p.title && p.h1?.[0] && p.title.trim().toLowerCase() === p.h1[0].trim().toLowerCase())));
 
   // Meta descriptions
-  add('desc-missing', 'warning', 'Meta description', 'Meta description manquante', 'Google générera lui-même un extrait.', 'Rédigez une description incitative de 120 à 155 caractères.', u(html200.filter((p) => p.indexable && !p.metaDescription)));
-  add('desc-duplicate', 'warning', 'Meta description', 'Meta descriptions dupliquées', 'Plusieurs pages partagent la même description.', 'Écrivez une description unique par page.', u(html200.filter((p) => p.duplicateDescription), (p) => `×${dupCount(dupDesc, (x) => x.metaDescription, p)} · ${p.metaDescription.slice(0, 80)}`));
-  add('desc-long', 'notice', 'Meta description', `Meta descriptions trop longues (> ${T.descMax} car.)`, 'Risque de troncature.', 'Raccourcissez à ~155 caractères.', u(html200.filter((p) => p.metaDescriptionLength > T.descMax), (p) => `${p.metaDescriptionLength} car.`));
-  add('desc-short', 'notice', 'Meta description', `Meta descriptions trop courtes (< ${T.descMin} car.)`, 'Description peu incitative.', 'Développez avec un bénéfice et un appel à l’action.', u(html200.filter((p) => p.metaDescription && p.metaDescriptionLength < T.descMin), (p) => `${p.metaDescriptionLength} car.`));
-  add('desc-multiple', 'warning', 'Meta description', 'Plusieurs meta descriptions', 'Plus d’une balise meta description.', 'N’en gardez qu’une.', u(html200.filter((p) => p.metaDescriptionCount > 1)));
+  add('desc-missing', 'warning', 'meta', 'medium', 'low', u(html200.filter((p) => p.indexable && !p.metaDescription)));
+  add('desc-duplicate', 'warning', 'meta', 'medium', 'medium', u(html200.filter((p) => p.duplicateDescription), (p) => `×${dupDesc.count(p)} · ${p.metaDescription.slice(0, 80)}`));
+  add('desc-long', 'notice', 'meta', 'low', 'low', u(html200.filter((p) => p.metaDescriptionPx > T.descMaxPx), (p) => D('d.pxChars', { px: p.metaDescriptionPx, n: p.metaDescriptionLength, text: '' })), { max: T.descMaxPx });
+  add('desc-short', 'notice', 'meta', 'low', 'low', u(html200.filter((p) => p.metaDescription && p.metaDescriptionLength < T.descMin), (p) => D('d.chars', { n: p.metaDescriptionLength, text: '' })), { min: T.descMin });
+  add('desc-multiple', 'warning', 'meta', 'low', 'low', u(html200.filter((p) => p.metaDescriptionCount > 1)));
 
   // Titres Hn
-  add('h1-missing', 'warning', 'H1', 'H1 manquant', 'La page n’a pas de titre H1.', 'Ajoutez un H1 unique décrivant le sujet de la page.', u(html200.filter((p) => p.indexable && !p.h1Count)));
-  add('h1-multiple', 'notice', 'H1', 'Plusieurs H1', 'La page contient plusieurs H1.', 'Gardez un H1 principal et passez les autres en H2.', u(html200.filter((p) => p.h1Count > 1), (p) => p.h1.join(' | ')));
-  add('h1-duplicate', 'warning', 'H1', 'H1 dupliqués', 'Plusieurs pages indexables ont le même H1.', 'Différenciez les H1.', u(html200.filter((p) => p.duplicateH1), (p) => p.h1[0]));
-  add('h2-missing', 'notice', 'H2', 'Pas de H2', 'Aucun sous-titre H2 : structure faible.', 'Structurez le contenu avec des H2 contenant des mots-clés secondaires.', u(indexableHtml.filter((p) => !p.h2Count)));
+  add('h1-missing', 'warning', 'headings', 'medium', 'low', u(html200.filter((p) => p.indexable && !p.h1Count)));
+  add('h1-multiple', 'notice', 'headings', 'low', 'low', u(html200.filter((p) => p.h1Count > 1), (p) => p.h1.join(' | ')));
+  add('h1-duplicate', 'warning', 'headings', 'medium', 'medium', u(html200.filter((p) => p.duplicateH1), (p) => p.h1[0]));
+  add('h2-missing', 'notice', 'headings', 'low', 'low', u(indexableHtml.filter((p) => !p.h2Count)));
+  add('heading-skip', 'notice', 'headings', 'low', 'low', u(indexableHtml.filter((p) => p.headingSkips?.length), (p) => [...new Set(p.headingSkips)].join(', ')));
 
   // Contenu
-  add('thin-content', 'warning', 'Contenu', `Contenu faible (< ${T.thinWords} mots)`, 'Peu de texte : risque de page jugée de faible qualité (Helpful Content).', 'Enrichissez la page ou fusionnez-la / passez-la en noindex.', u(indexableHtml.filter((p) => p.wordCount < T.thinWords), (p) => `${p.wordCount} mots`));
-  add('duplicate-content', 'error', 'Contenu', 'Contenu dupliqué (pages identiques)', 'Plusieurs pages indexables ont exactement le même texte.', 'Ajoutez une canonical vers la version principale ou supprimez les doublons.', u(html200.filter((p) => p.duplicateContent), (p) => `×${dupCount(dupContent, (x) => x.contentHash, p)}`));
-  add('low-text-ratio', 'notice', 'Contenu', `Ratio texte/HTML faible (< ${T.lowTextRatio} %)`, 'Beaucoup de code pour peu de texte.', 'Allégez le HTML (scripts inline, builder) ou ajoutez du contenu.', u(indexableHtml.filter((p) => p.textRatio < T.lowTextRatio), (p) => `${p.textRatio} %`));
+  add('thin-content', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => p.wordCount < T.thinWords), (p) => D('d.words', { n: p.wordCount })), { min: T.thinWords });
+  add('duplicate-content', 'error', 'content', 'high', 'medium', u(html200.filter((p) => p.duplicateContent), (p) => `×${dupContent.count(p)}`));
+  add('near-duplicate', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => p.nearDuplicates), (p) => `≈${p.closestSimilarity} % · ${p.closestMatch}`), { min: T.nearDuplicate });
+  add('cannibalization', 'warning', 'content', 'high', 'medium', cannibal.flatMap(([k, arr]) => arr.map((p) => ({ url: p.url, detail: `« ${k} » ×${arr.length}` }))));
+  add('low-text-ratio', 'notice', 'content', 'low', 'medium', u(indexableHtml.filter((p) => p.textRatio < T.lowTextRatio), (p) => `${p.textRatio} %`), { min: T.lowTextRatio });
 
   // Images
-  const imgs = [...crawler.images.values()];
-  add('img-alt-missing', 'warning', 'Images', 'Images sans attribut alt', 'Pages contenant des images sans texte alternatif.', 'Ajoutez un alt descriptif (accessibilité + Google Images). alt="" seulement pour les images décoratives.', u(html200.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount} image(s)`));
-  add('img-broken', 'error', 'Images', 'Images cassées', 'Images renvoyant une erreur.', 'Corrigez le chemin ou remplacez l’image.', imgs.filter((i) => i.status !== null && (i.status === 0 || i.status >= 400)).map((i) => ({ url: [...i.pages][0], detail: `${i.src} (${i.status})` })));
-  add('img-large', 'warning', 'Images', `Images lourdes (> ${Math.round(T.largeImageBytes / 1024)} Ko)`, 'Images qui ralentissent le chargement (LCP).', 'Compressez, convertissez en WebP/AVIF et redimensionnez.', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} Ko · ${i.pages.size} page(s)` })));
+  add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(html200.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
+  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && (i.status === 0 || i.status >= 400)).map((i) => ({ url: [...i.pages][0], detail: `${i.src} (${i.status})` })));
+  add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.` })), { max: Math.round(T.largeImageBytes / 1024) });
+  add('img-dimensions', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
 
-  // Indexabilité & directives
-  add('noindex', 'notice', 'Directives', 'Pages en noindex', 'Ces pages ne seront pas indexées.', 'Vérifiez que c’est volontaire.', u(html200.filter((p) => has(p, 'noindex|none')), (p) => p.metaRobots || p.xRobotsTag));
-  add('nofollow-page', 'notice', 'Directives', 'Pages en nofollow (meta robots)', 'Les liens de ces pages ne sont pas suivis.', 'Retirez nofollow sauf cas particulier.', u(html200.filter((p) => has(p, 'nofollow|none'))));
-  add('blocked-robots', 'notice', 'Directives', 'URLs bloquées par robots.txt', 'Le crawler n’a pas pu explorer ces URLs.', 'Vérifiez que le blocage est volontaire (et qu’aucune page importante n’est bloquée).', u(pages.filter((p) => p.blockedByRobots)));
-  add('nofollow-internal', 'notice', 'Liens', 'Liens internes en nofollow', 'Liens internes portant rel="nofollow".', 'Évitez le nofollow sur les liens internes : il gaspille le PageRank interne.', nofollowInternal.map((l) => ({ url: l.from, detail: `→ ${l.to}` })));
+  // Directives
+  add('noindex', 'notice', 'directives', 'medium', 'low', u(html200.filter((p) => robotsHas(p, 'noindex|none')), (p) => p.metaRobots || p.xRobotsTag));
+  add('nofollow-page', 'notice', 'directives', 'low', 'low', u(html200.filter((p) => robotsHas(p, 'nofollow|none'))));
+  add('blocked-robots', 'notice', 'directives', 'medium', 'low', u(pages.filter((p) => p.blockedByRobots)));
+
+  // Liens & ancres
+  add('nofollow-internal', 'notice', 'links', 'low', 'low', nofollowInternal.map((l) => ({ url: l.from, detail: `→ ${l.to}` })));
+  add('generic-anchors', 'notice', 'links', 'low', 'low', [...genericAnchors].map(([url, set]) => ({ url, detail: [...set].map((a) => `« ${a} »`).join(', ') })));
+  add('empty-anchors', 'warning', 'links', 'medium', 'low', [...emptyAnchors].map(([url, n]) => ({ url, detail: D('d.links', { n }) })));
+  add('too-many-links', 'notice', 'links', 'low', 'medium', u(html200.filter((p) => p.internalOutlinks + p.externalOutlinks > T.maxLinks), (p) => D('d.links', { n: p.internalOutlinks + p.externalOutlinks })), { max: T.maxLinks });
 
   // Canonicals
-  add('canonical-missing', 'notice', 'Canonicals', 'Canonical absente', 'Pas de balise rel="canonical".', 'Ajoutez une canonical auto-référente sur chaque page indexable.', u(html200.filter((p) => !p.canonical)));
-  add('canonicalised', 'notice', 'Canonicals', 'Pages canonicalisées vers une autre URL', 'La canonical pointe vers une autre URL.', 'Vérifiez que la page cible est la bonne et qu’elle est indexable.', u(html200.filter((p) => p.canonical && p.canonical !== p.url), (p) => `→ ${p.canonical}`));
-  add('canonical-non200', 'error', 'Canonicals', 'Canonical vers une URL non indexable', 'La canonical pointe vers une URL en erreur, redirigée ou non indexable.', 'Faites pointer la canonical vers l’URL finale en 200 et indexable.', u(html200.filter((p) => {
+  add('canonical-missing', 'notice', 'canonicals', 'low', 'low', u(html200.filter((p) => !p.canonical)));
+  add('canonicalised', 'notice', 'canonicals', 'low', 'low', u(html200.filter((p) => p.canonical && p.canonical !== p.url), (p) => `→ ${p.canonical}`));
+  add('canonical-non200', 'error', 'canonicals', 'high', 'low', u(html200.filter((p) => {
     if (!p.canonical || p.canonical === p.url) return false;
-    const t = byUrl.get(crawler.normalize(p.canonical));
+    const t = byUrl.get(norm(p.canonical));
     return t && (t.status !== 200 || !t.indexable);
-  }), (p) => { const t = byUrl.get(crawler.normalize(p.canonical)); return `→ ${p.canonical} (${t.status || '—'} ${t.indexabilityReason})`; }));
-  add('canonical-multiple', 'warning', 'Canonicals', 'Plusieurs canonicals', 'Plusieurs balises canonical : Google peut toutes les ignorer.', 'Ne gardez qu’une seule canonical.', u(html200.filter((p) => p.canonicalCount > 1)));
+  }), (p) => { const t = byUrl.get(norm(p.canonical)); return `→ ${p.canonical} (${t.status || '—'})`; }));
+  add('canonical-multiple', 'warning', 'canonicals', 'medium', 'low', u(html200.filter((p) => p.canonicalCount > 1)));
 
   // Sitemap
   const hasSitemap = crawler.sitemapUrls.size > 0;
-  add('no-sitemap', 'warning', 'Sitemap', 'Aucun sitemap XML trouvé', 'Ni /sitemap.xml ni sitemap déclaré dans robots.txt.', 'Générez un sitemap XML et déclarez-le dans robots.txt et la Search Console.', hasSitemap || !crawler.opts.useSitemaps ? [] : [{ url: crawler.origin + '/sitemap.xml', detail: 'introuvable' }]);
-  add('orphan', 'warning', 'Sitemap', 'Pages orphelines (dans le sitemap, sans lien interne)', 'Présentes dans le sitemap mais aucune page du site ne les lie.', 'Ajoutez des liens internes depuis des pages thématiquement proches (cocon sémantique).', u(pages.filter((p) => p.inSitemap && p.uniqueInlinks === 0 && p.url !== start && p.url !== crawler.finalStart)));
-  add('sitemap-non-indexable', 'warning', 'Sitemap', 'URLs non indexables dans le sitemap', 'Le sitemap doit contenir uniquement des URLs 200 indexables.', 'Retirez du sitemap les redirections, erreurs, noindex et pages canonicalisées.', u(pages.filter((p) => p.inSitemap && !p.indexable), (p) => p.indexabilityReason));
-  add('not-in-sitemap', 'notice', 'Sitemap', 'Pages indexables absentes du sitemap', 'Pages indexables découvertes par les liens mais absentes du sitemap.', 'Ajoutez-les au sitemap si elles sont importantes.', hasSitemap ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
+  const spider = crawler.opts.mode !== 'list';
+  add('no-sitemap', 'warning', 'sitemap', 'medium', 'low', hasSitemap || !crawler.opts.useSitemaps || !spider ? [] : [{ url: crawler.origin + '/sitemap.xml', detail: '404' }]);
+  add('orphan', 'warning', 'sitemap', 'high', 'medium', u(pages.filter((p) => p.inSitemap && p.uniqueInlinks === 0 && !homes.has(p.url))));
+  add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable), (p) => D('idx.' + p.indexabilityReason)));
+  add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
 
   // Architecture
-  add('deep', 'notice', 'Architecture', `Pages profondes (≥ ${T.deepLevel} clics depuis l’accueil)`, 'Pages difficiles d’accès pour les robots et les visiteurs.', 'Rapprochez-les de l’accueil (menus, catégories, liens contextuels).', u(indexableHtml.filter((p) => p.depth !== null && p.depth >= T.deepLevel), (p) => `profondeur ${p.depth}`));
-  add('one-inlink', 'notice', 'Architecture', 'Pages avec un seul lien entrant', 'Peu de PageRank interne.', 'Ajoutez des liens internes contextuels.', u(indexableHtml.filter((p) => p.uniqueInlinks === 1)));
-  add('unreachable', 'notice', 'Architecture', 'Pages non atteignables par les liens', 'Pages trouvées uniquement via le sitemap.', 'Liez-les depuis le site.', u(indexableHtml.filter((p) => p.depth === null)));
+  add('deep', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth !== null && p.depth >= T.deepLevel), (p) => D('d.depth', { n: p.depth })) : [], { min: T.deepLevel });
+  add('one-inlink', 'notice', 'architecture', 'medium', 'low', spider ? u(indexableHtml.filter((p) => p.uniqueInlinks === 1)) : []);
+  add('no-content-inlinks', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.uniqueInlinks > 0 && !p.contentInlinks && !homes.has(p.url))) : []);
+  add('unreachable', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth === null)) : []);
 
   // Performance
-  add('slow', 'warning', 'Performance', `Temps de réponse lent (> ${T.slowMs} ms)`, 'Le serveur met du temps à répondre (TTFB).', 'Activez un cache (page cache, CDN), optimisez la base de données / l’hébergement.', u(html200.filter((p) => p.responseTime > T.slowMs), (p) => `${p.responseTime} ms`));
-  add('large-html', 'notice', 'Performance', `HTML lourd (> ${Math.round(T.largeHtmlBytes / 1024)} Ko)`, 'Document HTML volumineux.', 'Réduisez le DOM, les scripts inline et le contenu caché.', u(html200.filter((p) => p.size > T.largeHtmlBytes), (p) => `${Math.round(p.size / 1024)} Ko`));
+  add('slow', 'warning', 'performance', 'medium', 'high', u(html200.filter((p) => p.responseTime > T.slowMs), (p) => `${p.responseTime} ms`), { max: T.slowMs });
+  add('large-html', 'notice', 'performance', 'low', 'medium', u(html200.filter((p) => p.size > T.largeHtmlBytes), (p) => `${Math.round(p.size / 1024)} KB`), { max: Math.round(T.largeHtmlBytes / 1024) });
+  add('no-compression', 'warning', 'performance', 'medium', 'low', u(html200.filter((p) => p.headers && !p.headers.encoding && p.size > 10 * 1024), (p) => `${Math.round(p.size / 1024)} KB`));
+  add('lcp-slow', 'warning', 'performance', 'high', 'high', u(html200.filter((p) => p.js?.lcp > T.lcpMs), (p) => `LCP ${(p.js.lcp / 1000).toFixed(1)} s`), { max: T.lcpMs / 1000 });
+  add('cls-high', 'warning', 'performance', 'medium', 'medium', u(html200.filter((p) => p.js?.cls > T.cls), (p) => `CLS ${p.js.cls}`), { max: T.cls });
+
+  // JavaScript (mode rendu)
+  const rendered = html200.filter((p) => p.js?.rendered);
+  add('js-noindex-changed', 'error', 'javascript', 'high', 'medium', u(rendered.filter((p) => /noindex/i.test(p.js.rawMetaRobots) !== /noindex/i.test(p.metaRobots)), (p) => `${p.js.rawMetaRobots || '—'} → ${p.metaRobots || '—'}`));
+  add('js-canonical-changed', 'warning', 'javascript', 'high', 'medium', u(rendered.filter((p) => p.js.rawCanonical !== p.canonical), (p) => `${p.js.rawCanonical || '—'} → ${p.canonical || '—'}`));
+  add('js-title-changed', 'notice', 'javascript', 'medium', 'medium', u(rendered.filter((p) => p.js.rawTitle !== p.title), (p) => `${p.js.rawTitle || '—'} → ${p.title || '—'}`));
+  add('js-content', 'warning', 'javascript', 'high', 'high', u(rendered.filter((p) => p.wordCount - p.js.rawWordCount > 100 && p.wordCount > p.js.rawWordCount * 1.5), (p) => D('d.jsWords', { raw: p.js.rawWordCount, n: p.wordCount })));
+  add('js-links', 'warning', 'javascript', 'medium', 'high', u(rendered.filter((p) => p.js.jsOnlyLinks > 5), (p) => D('d.links', { n: p.js.jsOnlyLinks })));
+  add('js-h1-changed', 'notice', 'javascript', 'low', 'medium', u(rendered.filter((p) => (p.js.rawH1 || '') !== (p.h1?.[0] || '')), (p) => `${p.js.rawH1 || '—'} → ${p.h1?.[0] || '—'}`));
+  add('js-errors', 'notice', 'javascript', 'low', 'medium', u(rendered.filter((p) => p.js.consoleErrors?.length), (p) => p.js.consoleErrors[0]));
 
   // URLs
-  add('url-uppercase', 'notice', 'URL', 'URLs avec majuscules', 'Risque de doublons (les URLs sont sensibles à la casse).', 'Utilisez des URLs en minuscules.', u(internalOnly.filter((p) => /[A-Z]/.test(new URL(p.url).pathname))));
-  add('url-underscore', 'notice', 'URL', 'URLs avec underscores', 'Google recommande les tirets.', 'Préférez les tirets (-) aux underscores (_).', u(internalOnly.filter((p) => new URL(p.url).pathname.includes('_'))));
-  add('url-params', 'notice', 'URL', 'URLs avec paramètres', 'Les paramètres peuvent créer du contenu dupliqué.', 'Canonicalisez ou évitez de lier des URLs paramétrées.', u(internalOnly.filter((p) => new URL(p.url).search)));
-  add('url-long', 'notice', 'URL', `URLs trop longues (> ${T.urlMaxLength} car.)`, 'URLs difficiles à lire et à partager.', 'Raccourcissez les slugs.', u(internalOnly.filter((p) => p.urlLength > T.urlMaxLength), (p) => `${p.urlLength} car.`));
-  add('url-non-ascii', 'notice', 'URL', 'URLs avec caractères spéciaux / accents', 'Caractères encodés dans l’URL.', 'Utilisez des slugs sans accents.', u(internalOnly.filter((p) => /%[0-9A-F]{2}/i.test(new URL(p.url).pathname))));
+  const inside = pages.filter((p) => p.url.startsWith('http'));
+  add('url-uppercase', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => /[A-Z]/.test(new URL(p.url).pathname))));
+  add('url-underscore', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => new URL(p.url).pathname.includes('_'))));
+  add('url-params', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => new URL(p.url).search)));
+  add('url-long', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => p.urlLength > T.urlMaxLength), (p) => D('d.chars', { n: p.urlLength, text: '' })), { max: T.urlMaxLength });
+  add('url-non-ascii', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => /%[0-9A-F]{2}/i.test(new URL(p.url).pathname))));
 
-  // Balisage
-  add('lang-missing', 'notice', 'Balisage', 'Attribut lang manquant', '<html> sans attribut lang.', 'Ajoutez <html lang="fr"> (ou la langue de la page).', u(html200.filter((p) => !p.lang)));
-  add('viewport-missing', 'warning', 'Balisage', 'Meta viewport manquante', 'La page n’est pas configurée pour le mobile.', 'Ajoutez <meta name="viewport" content="width=device-width, initial-scale=1">.', u(html200.filter((p) => !p.viewport)));
-  add('og-missing', 'notice', 'Balisage', 'Balises Open Graph manquantes', 'og:title / og:image absents : partages sociaux peu attractifs.', 'Ajoutez og:title, og:description et og:image.', u(indexableHtml.filter((p) => !p.og?.title || !p.og?.image)));
-  add('schema-missing', 'notice', 'Données structurées', 'Pas de données structurées', 'Aucun JSON-LD ni microdata.', 'Ajoutez Organization, Article, FAQPage, Course, Product… selon la page.', u(indexableHtml.filter((p) => !p.schemaTypes?.length)));
-  add('schema-invalid', 'warning', 'Données structurées', 'JSON-LD invalide', 'Bloc JSON-LD impossible à parser.', 'Corrigez la syntaxe JSON (testez dans le Rich Results Test).', u(html200.filter((p) => p.schemaErrors > 0), (p) => `${p.schemaErrors} bloc(s)`));
-  add('hreflang-return', 'warning', 'Hreflang', 'Hreflang sans lien retour', 'La page cible ne renvoie pas vers cette page.', 'Chaque version linguistique doit référencer toutes les autres (et elle-même).', hreflangMissingReturn);
+  // Balisage & données structurées
+  add('lang-missing', 'notice', 'markup', 'low', 'low', u(html200.filter((p) => !p.lang)));
+  add('viewport-missing', 'warning', 'markup', 'high', 'low', u(html200.filter((p) => !p.viewport)));
+  add('og-missing', 'notice', 'markup', 'low', 'low', u(indexableHtml.filter((p) => !p.og?.title || !p.og?.image)));
+  add('schema-missing', 'notice', 'schema', 'medium', 'medium', u(indexableHtml.filter((p) => !p.schemaTypes?.length)));
+  add('schema-invalid', 'warning', 'schema', 'medium', 'low', u(html200.filter((p) => p.schemaErrors > 0), (p) => `JSON-LD ×${p.schemaErrors}`));
+  add('schema-incomplete', 'warning', 'schema', 'medium', 'low', u(html200.filter((p) => p.schemaMissing?.length), (p) => p.schemaMissing.map((m) => `${m.type}: ${m.missing.join(', ')}`).join(' · ')));
 
+  // Hreflang
+  add('hreflang-invalid', 'error', 'hreflang', 'high', 'low', u(html200.filter((p) => p.hreflangInvalid?.length), (p) => p.hreflangInvalid.join(', ')));
+  add('hreflang-return', 'warning', 'hreflang', 'high', 'medium', hreflangMissingReturn);
+  add('hreflang-self', 'warning', 'hreflang', 'medium', 'low', u(html200.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => norm(h.href) === p.url))));
+  add('hreflang-xdefault', 'notice', 'hreflang', 'low', 'low', u(html200.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => h.lang.toLowerCase() === 'x-default'))));
+
+  // IA & moteurs génératifs (GEO)
+  const blockedBots = (crawler.botAccess || []).filter((b) => !b.allowed);
+  add('search-bots-blocked', 'error', 'ai', 'high', 'low', blockedBots.filter((b) => b.bot === 'Googlebot' || b.bot === 'Bingbot').map((b) => ({ url: crawler.origin + '/robots.txt', detail: b.bot })));
+  add('ai-bots-blocked', 'notice', 'ai', 'medium', 'low', blockedBots.filter((b) => b.bot !== 'Googlebot' && b.bot !== 'Bingbot').map((b) => ({ url: crawler.origin + '/robots.txt', detail: b.bot })));
+  add('llms-missing', 'notice', 'ai', 'low', 'low', spider && !crawler.llmsTxt && html200.length ? [{ url: crawler.origin + '/llms.txt', detail: '404' }] : []);
+
+  for (const is of issues) {
+    is.priority = Math.round(((SEV_W[is.severity] * LVL_W[is.impact] * Math.log2(is.count + 1)) / LVL_W[is.effort]) * 10) / 10;
+  }
   issues.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || b.count - a.count);
 
-  // Score de santé : pénalité par page HTML selon le niveau de gravité le plus élevé.
+  // Score de santé : pénalité par page selon le niveau de gravité le plus élevé.
   const worst = new Map();
   for (const is of issues) {
     for (const it of is.items) {
@@ -304,11 +457,21 @@ export function analyze(crawler) {
   }
   const score = scored.length ? Math.max(0, Math.round(100 * (1 - penalty / scored.length))) : 0;
 
-  const statusBuckets = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, 'Bloqué': 0, 'Sans réponse': 0 };
+  // Score par catégorie (part des pages HTML sans erreur ni avertissement dans la catégorie)
+  const categories = [...new Set(issues.map((i) => i.category))];
+  const categoryScores = {};
+  const htmlCount = Math.max(1, html200.length);
+  for (const c of categories) {
+    const hit = new Set();
+    for (const is of issues) if (is.category === c && is.severity !== 'notice') is.items.forEach((it) => hit.add(it.url));
+    categoryScores[c] = Math.max(0, Math.round(100 * (1 - Math.min(hit.size, htmlCount) / htmlCount)));
+  }
+
+  const statusBuckets = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, blocked: 0, none: 0 };
   for (const p of pages) {
-    if (p.blockedByRobots) statusBuckets['Bloqué']++;
-    else if (!p.status) statusBuckets['Sans réponse']++;
-    else statusBuckets[`${String(p.status)[0]}xx`]++;
+    if (p.blockedByRobots) statusBuckets.blocked++;
+    else if (!p.status) statusBuckets.none++;
+    else statusBuckets[`${String(p.status)[0]}xx`] = (statusBuckets[`${String(p.status)[0]}xx`] || 0) + 1;
   }
   const depthBuckets = {};
   for (const p of pages) {
@@ -317,7 +480,7 @@ export function analyze(crawler) {
   }
   const rt = html200.map((p) => p.responseTime).filter((x) => x != null).sort((a, b) => a - b);
 
-  // Sérialisation compacte des liens
+  // Sérialisation compacte des liens : [from, to, ancre, drapeaux, position]
   const urlIndex = new Map();
   const urls = [];
   const idx = (x) => {
@@ -327,25 +490,35 @@ export function analyze(crawler) {
     }
     return urlIndex.get(x);
   };
-  const edges = crawler.links.map((l) => [idx(l.from), idx(l.to), l.anchor, (l.nofollow ? 1 : 0) | (l.internal ? 2 : 0)]);
+  const POS = { content: 0, nav: 1, header: 2, footer: 3, aside: 4 };
+  const edges = crawler.links.map((l) => [idx(l.from), idx(l.to), l.anchor, (l.nofollow ? 1 : 0) | (l.internal ? 2 : 0) | (l.imageLink ? 4 : 0), POS[l.pos] ?? 0]);
+  for (const p of pages) delete p.simhash;
 
   return {
-    version: 1,
+    version: 2,
     meta: {
+      app: 'Arachnide SEO Spider',
       startUrl: crawler.startUrl,
       finalStart: crawler.finalStart,
       origin: crawler.origin,
+      mode: crawler.opts.mode,
       startedAt: crawler.startedAt,
       finishedAt: crawler.finishedAt,
       stopped: crawler.stopped,
-      options: crawler.opts,
+      rendered: !!crawler.renderer,
+      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined },
       robotsTxt: crawler.robotsTxt,
+      llmsTxt: crawler.llmsTxt,
+      botAccess: crawler.botAccess,
       sitemapFiles: crawler.sitemapFiles,
       sitemapUrlCount: crawler.sitemapUrls.size,
+      warnings: crawler.warnings,
       thresholds: T,
     },
     summary: {
       score,
+      grade: grade(score),
+      categoryScores,
       totalUrls: pages.length,
       htmlPages: html200.length,
       indexable: indexableHtml.length,
@@ -367,6 +540,8 @@ export function analyze(crawler) {
     pages,
     redirects,
     brokenLinks,
+    nearDuplicates: nearDup.sort((a, b) => b.similarity - a.similarity).slice(0, 5000),
+    cannibalization: cannibal.map(([keyword, arr]) => ({ keyword, urls: arr.map((p) => p.url) })),
     images: imgs.map((i) => ({ src: i.src, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
     links: { urls, edges },

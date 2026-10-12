@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startFixture } from './fixture-site.mjs';
 import { Crawler } from '../src/crawler.mjs';
+import { findChrome } from '../src/renderer.mjs';
 import { parseRobots, rulesFor, isAllowed } from '../src/robots.mjs';
+import { titlePixels } from '../src/pixel.mjs';
+import { simhash, similarity, tokenize, topKeywords } from '../src/text.mjs';
 
 test('robots.txt : règle la plus longue, wildcards', () => {
   const r = parseRobots('User-agent: *\nDisallow: /a\nAllow: /a/b\nDisallow: /*.pdf$\n\nUser-agent: Googlebot\nDisallow: /g');
@@ -16,41 +19,82 @@ test('robots.txt : règle la plus longue, wildcards', () => {
   assert.equal(isAllowed(g, '/g'), false);
 });
 
-test('crawl complet du site de test', async () => {
+test('largeur en pixels et simhash', () => {
+  assert.ok(titlePixels('WWWWWWWWWW') > titlePixels('iiiiiiiiii') * 3);
+  assert.ok(Math.abs(titlePixels('Cours de français en ligne avec un professeur natif') - 470) < 60);
+  const a = tokenize('le chat mange la souris dans la cuisine '.repeat(20) + 'fin');
+  const b = tokenize('le chat mange la souris dans la cuisine '.repeat(20) + 'autre');
+  const c = tokenize('un texte totalement différent sur la grammaire allemande et ses déclinaisons '.repeat(10));
+  assert.ok(similarity(simhash(a), simhash(b)) >= 90);
+  assert.ok(similarity(simhash(a), simhash(c)) < 80);
+  assert.equal(topKeywords('', 'Préparation DELF B2', '')[0], 'préparation delf');
+});
+
+async function crawlFixture(options = {}) {
   const server = await startFixture();
   const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    const c = new Crawler(base + '/', { checkExternal: false, checkImages: true, concurrency: 3 });
-    const r = await c.start();
-    const page = (p) => r.pages.find((x) => x.url === base + p);
-    const issue = (id) => r.issues.find((i) => i.id === id);
-
-    assert.equal(page('/').status, 200);
-    assert.equal(page('/').depth, 0);
-    assert.equal(page('/cassee').status, 404);
-    assert.equal(page('/admin').blockedByRobots, true);
-    assert.equal(page('/ancienne').status, 301);
-    assert.equal(page('/orpheline').inSitemap, true);
-    assert.equal(page('/orpheline').depth, null);
-    assert.equal(page('/blog/Article_Un').indexabilityReason, 'Noindex');
-    assert.equal(page('/cours?page=2').indexabilityReason, 'Canonicalisée');
-
-    assert.ok(issue('4xx'));
-    assert.ok(issue('broken-internal').items.length >= 1);
-    assert.ok(issue('redirect-chain').items.some((i) => i.url === base + '/ancienne'));
-    assert.ok(issue('orphan').items.some((i) => i.url === base + '/orpheline'));
-    assert.ok(issue('title-duplicate'));
-    assert.ok(issue('desc-duplicate'));
-    assert.ok(issue('h1-multiple'));
-    assert.ok(issue('img-alt-missing'));
-    assert.ok(issue('img-large'));
-    assert.ok(issue('url-underscore'));
-    assert.ok(issue('sitemap-non-indexable'));
-    assert.ok(issue('nofollow-internal'));
-    assert.ok(issue('thin-content'));
-    assert.ok(r.summary.score > 0 && r.summary.score < 100);
-    assert.ok(r.links.edges.length > 10);
+    const c = new Crawler(base + '/', { concurrency: 3, ...options });
+    return { r: await c.start(), base };
   } finally {
     server.close();
   }
+}
+
+test('crawl complet du site de test', async () => {
+  const { r, base } = await crawlFixture({ checkImages: true, search: 'DELF' });
+  const page = (p) => r.pages.find((x) => x.url === base + p);
+  const issue = (id) => r.issues.find((i) => i.id === id);
+  const ids = (id) => issue(id)?.items.map((i) => i.url.replace(base, '')) || [];
+
+  assert.equal(page('/').status, 200);
+  assert.equal(page('/').depth, 0);
+  assert.equal(page('/cassee').status, 404);
+  assert.equal(page('/admin').blockedByRobots, true);
+  assert.equal(page('/ancienne').status, 301);
+  assert.equal(page('/orpheline').inSitemap, true);
+  assert.equal(page('/orpheline').depth, null);
+  assert.equal(page('/blog/Article_Un').indexabilityReason, 'noindex');
+  assert.equal(page('/cours?page=2').indexabilityReason, 'canonicalised');
+  assert.ok(page('/').linkScore >= page('/orpheline').linkScore);
+  assert.ok(page('/guide-delf').searchMatches > 0);
+
+  for (const id of ['4xx', 'broken-internal', 'redirect-chain', 'orphan', 'title-duplicate', 'desc-duplicate', 'h1-multiple',
+    'img-alt-missing', 'img-large', 'url-underscore', 'sitemap-non-indexable', 'nofollow-internal', 'thin-content',
+    'meta-refresh', 'heading-skip', 'hreflang-invalid', 'hreflang-return', 'schema-incomplete', 'generic-anchors',
+    'empty-anchors', 'near-duplicate', 'cannibalization', 'ai-bots-blocked', 'llms-missing']) {
+    assert.ok(issue(id), `problème attendu : ${id}`);
+  }
+  assert.ok(ids('near-duplicate').includes('/guide-delf') && ids('near-duplicate').includes('/guide-delf-2'));
+  assert.ok(!ids('near-duplicate').includes('/es/guia-delf'));
+  assert.ok(ids('cannibalization').includes('/guide-delf'));
+  assert.ok(issue('ai-bots-blocked').items.some((i) => i.detail === 'GPTBot'));
+  assert.ok(!issue('search-bots-blocked'));
+  for (const i of r.issues) assert.ok(i.priority > 0 && ['high', 'medium', 'low'].includes(i.impact));
+  assert.ok(r.summary.score > 0 && r.summary.score < 100);
+  assert.match(r.summary.grade, /^[A-F]$/);
+  assert.ok(r.links.edges.length > 10);
+});
+
+test('mode liste : ne suit pas les liens', async () => {
+  const server = await startFixture();
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const c = new Crawler('', { mode: 'list', urls: [base + '/contact', base + '/cours', base + '/cassee'] });
+    const r = await c.start();
+    assert.deepEqual(r.pages.map((p) => p.url.replace(base, '')).sort(), ['/cassee', '/contact', '/cours']);
+  } finally {
+    server.close();
+  }
+});
+
+test('rendu JavaScript (si Chrome est installé)', { skip: !findChrome() && 'Chrome introuvable' }, async () => {
+  const { r, base } = await crawlFixture({ render: true, include: '/js$|127.0.0.1:\\d+/$' });
+  const p = r.pages.find((x) => x.url === base + '/js');
+  assert.ok(p.js?.rendered, JSON.stringify(p.js));
+  assert.equal(p.title, 'Titre modifié par JavaScript');
+  assert.equal(p.h1[0], 'Rendu JS');
+  assert.ok(p.wordCount > 250);
+  const ids = r.issues.map((i) => i.id);
+  for (const id of ['js-content', 'js-title-changed', 'js-links']) assert.ok(ids.includes(id), id);
 });
