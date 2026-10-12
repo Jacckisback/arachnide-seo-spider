@@ -506,8 +506,26 @@ function renderPlan(view) {
 }
 
 /* ---------- Visualisations 2D / 3D ---------- */
+// Export PDF : page imprimable (image du graphe, légende, site et date) ; « Enregistrer au format PDF » à l'impression.
+function vizPdf({ img, title, legend, notes }) {
+  const w = window.open('', '_blank');
+  if (!w) return toast(t('viz.popupBlocked'), 'error');
+  const site = state.R.meta.startUrl;
+  const date = new Date(state.R.meta.finishedAt).toLocaleString(t.lang);
+  w.document.write(`<!doctype html><html lang="${t.lang}"><head><meta charset="utf-8"><title>${esc(hostOf())} — ${esc(title)}</title>
+<style>@page{size:A4 landscape;margin:12mm}body{font:12px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;color:#1b1f27;margin:0}
+h1{font-size:18px;margin:0 0 2px}.meta{color:#5b6578;margin-bottom:8px}img{width:100%;max-height:150mm;object-fit:contain;border:1px solid #e2e5eb;border-radius:6px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.notes{color:#5b6578;margin-top:6px}footer{margin-top:8px;color:#8a93a6;font-size:10px}</style></head><body>
+<h1>${esc(title)}</h1><div class="meta">${esc(site)} · ${esc(date)}</div><img src="${img}" alt="">
+<div class="legend">${legend.map(([c, l]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join('')}</div>
+<div class="notes">${notes.filter(Boolean).map(esc).join(' · ')}</div><footer>Arachnide SEO Spider</footer>
+<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  w.document.close();
+}
+
 async function renderViz(view) {
-  const o = { view: 'crawl', dim: '2d', colorBy: 'status', maxNodes: 1500, ...store.get('viz', {}) };
+  const o = { view: 'crawl', dim: '2d', colorBy: 'status', sizeBy: 'linkScore', maxNodes: 1500, ...store.get('viz', {}) };
   const seg = (name, values) => `<div class="seg">${values.map((v) => `<button data-${name}="${v}" class="${o[name] === v ? 'on' : ''}">${esc(t(`viz.${name}.${v}`))}</button>`).join('')}</div>`;
   const legend = o.colorBy === 'issues'
     ? [['sevError', 'sev.error'], ['sevWarning', 'sev.warning'], ['sevNotice', 'sev.notice'], ['sevNone', 'viz.noIssue']]
@@ -521,26 +539,35 @@ async function renderViz(view) {
         ${seg('view', ['crawl', 'dir', 'links'])}
         ${seg('dim', ['2d', '3d'])}
         <select id="vizColor" aria-label="${esc(t('viz.colorBy'))}">${['status', 'issues', 'depth'].map((c) => `<option value="${c}" ${o.colorBy === c ? 'selected' : ''}>${esc(t('viz.color.' + c))}</option>`).join('')}</select>
+ <select id="vizSize" aria-label="${esc(t('viz.sizeBy'))}">${['linkScore', 'weight', 'inlinks', 'responseTime'].map((c) => `<option value="${c}" ${o.sizeBy === c ? 'selected' : ''}>${esc(t('viz.size.' + c))}</option>`).join('')}</select>
         <select id="vizMax" aria-label="${esc(t('viz.maxNodes'))}">${[500, 1500, 3000, 6000].map((n) => `<option value="${n}" ${o.maxNodes === n ? 'selected' : ''}>${esc(t('viz.nodes', { n }))}</option>`).join('')}</select>
         <button class="btn" id="vizFit" title="${esc(t('viz.fit'))}">${icon('target')}</button>
         <button class="btn" id="vizPng">${icon('download')} PNG</button>
+        <button class="btn" id="vizPdf">${icon('file')} PDF</button>
       </div></div>
     <div class="viz-wrap"><div id="vizCanvas" class="viz-canvas"><div class="empty">${icon('spider')} ${esc(t('ui.loading'))}</div></div>
-      <div class="viz-legend">${legend.map(([k, l]) => `<span><i style="background:${swatch(k)}"></i>${esc(t(l))}</span>`).join('')}<span class="muted">${esc(t('viz.sizeHint'))}</span></div>
+      <div class="viz-legend">${legend.map(([k, l]) => `<span><i style="background:${swatch(k)}"></i>${esc(t(l))}</span>`).join('')}<span class="muted">${esc(t('viz.sizeHint.' + o.sizeBy))}</span>${o.colorBy === 'issues' ? `<span class="muted">${esc(t('viz.issuesHint'))}</span>` : ''}</div>
       <div id="vizNote" class="viz-note muted"></div></div>`;
   const update = (patch) => { store.set('viz', { ...o, ...patch }); render(); };
   view.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => update({ view: b.dataset.view })));
   view.querySelectorAll('[data-dim]').forEach((b) => b.addEventListener('click', () => update({ dim: b.dataset.dim })));
   $('#vizColor').addEventListener('change', (e) => update({ colorBy: e.target.value }));
   $('#vizMax').addEventListener('change', (e) => update({ maxNodes: Number(e.target.value) }));
+  $('#vizSize').addEventListener('change', (e) => update({ sizeBy: e.target.value }));
   if (state.vizHandle) { state.vizHandle.destroy(); state.vizHandle = null; }
   const el = $('#vizCanvas');
   const data = buildGraph(state.R, linkGraph(), o);
-  $('#vizNote').textContent = t('viz.stats', { nodes: data.nodes.length, links: data.links.length }) + (data.truncated ? ' · ' + t('viz.truncated', { n: o.maxNodes }) : '');
+  const note = t('viz.stats', { nodes: data.nodes.length, links: data.links.length }) + (data.truncated ? ' · ' + t('viz.truncated', { n: o.maxNodes }) : '') + (data.resources ? ' · ' + t('viz.resourcesHidden', { n: data.resources }) : '');
+  $('#vizNote').textContent = note;
   try {
     el.innerHTML = '';
     const R = state.R;
-    const handle = await renderGraph(el, data, { view: o.view, dim: o.dim, t, onSelect: (url) => selectUrl(url) });
+    // Clic sur un nœud : détails de la page, ou directement ses problèmes quand la couleur montre les problèmes.
+    const onSelect = (url, n) => {
+      if (o.colorBy === 'issues' && n?.issues?.length) state.detailTab = 'issues';
+      selectUrl(url);
+    };
+    const handle = await renderGraph(el, data, { view: o.view, dim: o.dim, t, onSelect });
     if (state.R !== R || state.tab !== 'viz' || !document.body.contains(el)) return handle.destroy();
     state.vizHandle = handle;
     $('#vizFit').addEventListener('click', () => handle.graph.zoomToFit(500, 30));
@@ -551,6 +578,11 @@ async function renderViz(view) {
       a.href = url;
       a.download = `${hostOf()}_${o.view}_${o.dim}.png`;
       a.click();
+    });
+    $('#vizPdf').addEventListener('click', () => {
+      const img = handle.png();
+      if (!img) return toast(t('toast.copyFailed'), 'error');
+      vizPdf({ img, title: `${t('tab.viz')} — ${t('viz.view.' + o.view)} (${o.dim.toUpperCase()})`, legend: legend.map(([k, l]) => [swatch(k), t(l)]), notes: [t('viz.color.' + o.colorBy), t('viz.sizeHint.' + o.sizeBy), note] });
     });
   } catch (err) {
     el.innerHTML = `<div class="empty">${icon('error')} ${esc(t('viz.loadFailed'))}<br><small>${esc(err.message)}</small></div>`;
@@ -590,11 +622,13 @@ function renderDetail() {
   if (!url) { box.hidden = true; return; }
   const p = state.R ? linkGraph().byUrl.get(url) : state.live.find((x) => x.url === url);
   box.hidden = false;
-  const tabs = state.R ? ['details', 'serp', 'in', 'out', ...(p?.js ? ['js'] : [])] : ['details'];
+  const pageIssues = state.R ? state.R.issues.filter((i) => i.items.some((it) => it.url === url)) : [];
+  const tabs = state.R ? ['details', 'issues', 'serp', 'in', 'out', ...(p?.js ? ['js'] : [])] : ['details'];
   if (!tabs.includes(state.detailTab)) state.detailTab = 'details';
   let body = '';
   if (!p) body = `<p class="muted">${esc(t('detail.notCrawled'))}</p>`;
   else if (state.detailTab === 'details') body = detailKv(p);
+  else if (state.detailTab === 'issues') body = pageIssuesTable(url, pageIssues);
   else if (state.detailTab === 'serp') body = serpPreview(p);
   else if (state.detailTab === 'js') body = jsCompare(p);
   else {
@@ -606,7 +640,7 @@ function renderDetail() {
       return `<tr data-url="${esc(e[other])}"><td class="trunc">${esc(e[other])}</td><td class="trunc">${e.anchor ? esc(e.anchor) : `<span class="muted">${esc(t(e.image ? 'detail.imageNoAlt' : 'detail.noAnchor'))}</span>`}</td><td>${esc(t('pos.' + e.pos))}</td><td>${esc(e.internal ? t('ui.internal') : t('ui.external'))}${e.nofollow ? ' <span class="chip warning">nofollow</span>' : ''}</td><td>${target ? `<span class="${statusCls(target.status)}">${target.status || '—'}</span>` : ''}</td></tr>`;
     }).join('')}</tbody></table></div>` : `<p class="muted">${esc(t('detail.noLinks'))}</p>`;
   }
-  const label = (k) => (k === 'in' || k === 'out' ? `${t('detail.' + k)} <span class="count">${num(((k === 'in' ? linkGraph().inl : linkGraph().out).get(url) || []).length)}</span>` : esc(t('detail.' + k)));
+  const label = (k) => (k === 'in' || k === 'out' ? `${t('detail.' + k)} <span class="count">${num(((k === 'in' ? linkGraph().inl : linkGraph().out).get(url) || []).length)}</span>` : k === 'issues' ? `${esc(t('detail.issues'))} <span class="count${pageIssues.length ? ' warn' : ''}">${num(pageIssues.length)}</span>` : esc(t('detail.' + k)));
   box.innerHTML = `<div class="resizer" title="${esc(t('detail.resize'))}"></div><div class="detail-head">
       <span class="url" title="${esc(url)}">${esc(url)}</span>
       <div class="detail-tabs">${tabs.map((k) => `<button data-dt="${k}" class="${state.detailTab === k ? 'active' : ''}">${label(k)}</button>`).join('')}</div>
@@ -616,7 +650,17 @@ function renderDetail() {
   box.querySelectorAll('[data-dt]').forEach((b) => b.addEventListener('click', () => { state.detailTab = b.dataset.dt; renderDetail(); }));
   $('#closeDetail').addEventListener('click', () => { state.selected = null; renderDetail(); });
   box.querySelectorAll('tr[data-url]').forEach((tr) => tr.addEventListener('click', () => selectUrl(tr.dataset.url)));
+  box.querySelectorAll('tr[data-issue]').forEach((tr) => tr.addEventListener('click', () => openIssue(tr.dataset.issue)));
   initResizer(box);
+}
+
+// Problèmes d'une page : gravité, libellé, détail et correction, avec un lien vers la liste complète.
+function pageIssuesTable(url, issues) {
+  if (!issues.length) return `<p class="muted">${esc(t('detail.noIssues'))}</p>`;
+  return `<div class="table-wrap"><table><thead><tr><th>${esc(t('col.severity'))}</th><th>${esc(t('col.issue'))}</th><th>${esc(t('col.detail'))}</th><th>${esc(t('col.fix'))}</th></tr></thead><tbody>${issues.map((i) => {
+    const it = i.items.find((x) => x.url === url);
+    return `<tr data-issue="${esc(i.id)}"><td>${sevChip(i.severity)}</td><td><b>${esc(t('issue.' + i.id + '.label', i.params))}</b></td><td class="wrap">${esc(detailText(it?.detail, t))}</td><td class="wrap muted">${esc(t('issue.' + i.id + '.fix', i.params))}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
 }
 
 function initResizer(box) {

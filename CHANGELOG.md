@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.1.0 — 2026-10-12
+
+### Visualisations (user feedback)
+- **Pages only**: images, PDF, CSS, JS and other resources are no longer drawn as nodes. The note under the graph says how many were hidden.
+- **Issues at a glance**:
+  - In "Colour: issues" mode, the tooltip lists the page's issues.
+  - Clicking a node opens the new **Issues** tab of the detail pane: severity, issue, detail and how to fix it. Click a row to open the full issue.
+- **Node size**: Link Score (default), page weight (HTML), inlinks or response time.
+- **Darker and slightly thicker links**, in 2D and 3D, so the structure is easier to follow.
+- **PDF export**: a printable A4 landscape page with the graph, legend, site and date.
+- The page detail pane now has an **Issues** tab for every page, not only in the visualisations.
+
 ## 3.0.0 — 2026-10-12
 
 ### New: MCP server — Claude audits and fixes your site

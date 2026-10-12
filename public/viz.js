@@ -46,22 +46,47 @@ function depthColor(d, max) {
   return `hsl(${h} 65% 45%)`;
 }
 
-// Gravité la plus élevée des problèmes qui touchent chaque URL.
-function severityMap(R) {
+// Problèmes qui touchent chaque URL (gravité la plus élevée en premier).
+function issuesByUrl(R) {
   const order = { error: 0, warning: 1, notice: 2 };
   const m = new Map();
   for (const is of R.issues) {
     for (const it of is.items) {
-      const prev = m.get(it.url);
-      if (prev === undefined || order[is.severity] < order[prev]) m.set(it.url, is.severity);
+      if (!m.has(it.url)) m.set(it.url, []);
+      m.get(it.url).push({ id: is.id, severity: is.severity, params: is.params });
     }
   }
+  for (const list of m.values()) list.sort((a, b) => order[a.severity] - order[b.severity]);
   return m;
 }
 
+// Ressources (images, PDF, CSS, JS…) : ce ne sont pas des pages, elles n'ont pas leur place dans les graphes.
+const RESOURCE_EXT = /\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|mp4|webm|mov|mp3|wav|css|js|mjs|json|xml|txt|woff2?|ttf|eot|otf|docx?|xlsx?|pptx?|csv)$/i;
+export function isPageNode(p) {
+  if (!p.url.startsWith('http')) return false;
+  if (p.isHtml) return true;
+  try {
+    if (RESOURCE_EXT.test(new URL(p.url).pathname)) return false;
+  } catch {
+    return false;
+  }
+  if (p.status >= 300 && p.status < 400) return true; // redirection : une ancienne URL de page
+  if (p.status >= 200 && p.status < 300) return false; // 2xx non HTML : une ressource
+  // Erreur ou absence de réponse : gardée sauf si le serveur annonce un autre type que HTML.
+  return !p.contentType || /html/i.test(p.contentType);
+}
+
+// Taille d'un nœud selon le critère choisi (rayon ∝ racine de val).
+const SIZE = {
+  linkScore: (p) => 1 + (p.linkScore || 0) / 12,
+  weight: (p) => 1 + Math.min(40, (p.size || 0) / 25000),
+  inlinks: (p) => 1 + Math.min(40, (p.uniqueInlinks || 0) / 3),
+  responseTime: (p) => 1 + Math.min(40, (p.responseTime || 0) / 150),
+};
+
 function pickPages(R, maxNodes) {
   const home = R.meta.finalStart || R.meta.startUrl;
-  const pages = R.pages.filter((p) => p.url.startsWith('http'));
+  const pages = R.pages.filter(isPageNode);
   if (pages.length <= maxNodes) return pages;
   // On garde les pages les plus importantes (Link Score, puis faible profondeur).
   const sorted = [...pages].sort((a, b) => (b.url === home) - (a.url === home) || (b.linkScore || 0) - (a.linkScore || 0) || (a.depth ?? 99) - (b.depth ?? 99));
@@ -69,18 +94,20 @@ function pickPages(R, maxNodes) {
 }
 
 // Construit les nœuds et liens pour la vue demandée.
-export function buildGraph(R, graph, { view, colorBy, maxNodes }) {
+export function buildGraph(R, graph, { view, colorBy, maxNodes, sizeBy = 'linkScore' }) {
   const pages = pickPages(R, maxNodes);
   const byUrl = new Map(pages.map((p) => [p.url, p]));
-  const sev = colorBy === 'issues' ? severityMap(R) : null;
+  const issues = issuesByUrl(R);
+  const sizeOf = SIZE[sizeBy] || SIZE.linkScore;
+  const resources = R.pages.filter((p) => p.url.startsWith('http') && !isPageNode(p)).length;
   const maxDepth = Math.max(1, ...pages.map((p) => p.depth ?? 0));
   const color = (p) => {
     if (!p) return PALETTE.folder;
     if (colorBy === 'depth') return depthColor(p.depth, maxDepth);
-    if (colorBy === 'issues') return { error: PALETTE.sevError, warning: PALETTE.sevWarning, notice: PALETTE.sevNotice }[sev.get(p.url)] || PALETTE.sevNone;
+    if (colorBy === 'issues') return { error: PALETTE.sevError, warning: PALETTE.sevWarning, notice: PALETTE.sevNotice }[issues.get(p.url)?.[0]?.severity] || PALETTE.sevNone;
     return statusColor(p);
   };
-  const pageNode = (p) => ({ id: p.url, url: p.url, page: p, val: 1 + (p.linkScore || 0) / 12, color: color(p), label: p.url });
+  const pageNode = (p) => ({ id: p.url, url: p.url, page: p, val: sizeOf(p), color: color(p), label: p.url, issues: issues.get(p.url) || [] });
   const nodes = [];
   const links = [];
   const home = R.meta.finalStart || R.meta.startUrl;
@@ -99,7 +126,7 @@ export function buildGraph(R, graph, { view, colorBy, maxNodes }) {
         if (links.length >= 8000) break;
       }
     }
-    return { nodes, links, truncated: R.pages.length > pages.length };
+    return { nodes, links, truncated: R.pages.length - resources > pages.length, resources };
   }
 
   if (view === 'crawl') {
@@ -116,7 +143,7 @@ export function buildGraph(R, graph, { view, colorBy, maxNodes }) {
       if (parent && parent.url !== p.url) links.push({ source: parent.url, target: p.url });
       else if (byUrl.has(home) && p.url !== home) links.push({ source: home, target: p.url, orphan: true });
     }
-    return { nodes, links, truncated: R.pages.length > pages.length };
+    return { nodes, links, truncated: R.pages.length - resources > pages.length, resources };
   }
 
   // Arbre des répertoires : un nœud par dossier de l'URL, les pages en feuilles.
@@ -152,8 +179,8 @@ export function buildGraph(R, graph, { view, colorBy, maxNodes }) {
     links.push({ source: parent, target: p.url });
   }
   for (const n of nodes) if (n.folder && n.id.startsWith('dir:')) n.count = links.filter((l) => l.source === n.id).length;
-  if (homePage) Object.assign(nodes[0], { page: homePage, url: homePage.url, color: color(homePage), val: 6 });
-  return { nodes, links, truncated: R.pages.length > pages.length };
+  if (homePage) Object.assign(nodes[0], { page: homePage, url: homePage.url, color: color(homePage), val: Math.max(6, sizeOf(homePage)), issues: issues.get(homePage.url) || [] });
+  return { nodes, links, truncated: R.pages.length - resources > pages.length, resources };
 }
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -164,11 +191,17 @@ export async function renderGraph(el, data, { view, dim, t, onSelect }) {
   await loadScript(is3d ? 'vendor/3d-force-graph.min.js' : 'vendor/force-graph.min.js');
   const Factory = is3d ? window.ForceGraph3D : window.ForceGraph;
   const bg = css('--panel') || '#ffffff';
-  const linkCol = css('--line') || '#d0d4dc';
+  // Traits assez contrastés pour suivre l'arborescence, sans masquer les nœuds.
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light' || document.documentElement.dataset.theme === 'dark';
+  const linkCol = is3d ? (dark ? '#a9b2c3' : '#5b6578') : dark ? 'rgba(200,208,222,.42)' : 'rgba(70,80,100,.38)';
   const label = (n) => {
     const p = n.page;
     if (!p) return `<div class="gtip"><b>${esc(n.label)}</b>${n.count ? `<br>${esc(t('viz.children', { n: n.count }))}` : ''}</div>`;
-    return `<div class="gtip"><b>${esc(p.url)}</b>${p.title ? `<br>${esc(p.title)}` : ''}<br>${esc(t('col.status'))} ${p.status || '—'} · ${esc(t('col.depth'))} ${p.depth ?? '—'} · Link Score ${p.linkScore ?? 0} · ${esc(t('col.inlinks'))} ${p.uniqueInlinks ?? 0}</div>`;
+    const kb = p.size ? ` · ${esc(t('col.size'))} ${Math.round(p.size / 1024)} KB` : '';
+    const iss = n.issues?.length
+      ? `<br><span class="gtip-issues">${esc(t('viz.issuesCount', { n: n.issues.length }))} : ${n.issues.slice(0, 3).map((i) => esc(t('issue.' + i.id + '.label', i.params))).join(' · ')}${n.issues.length > 3 ? ' …' : ''}</span>`
+      : '';
+    return `<div class="gtip"><b>${esc(p.url)}</b>${p.title ? `<br>${esc(p.title)}` : ''}<br>${esc(t('col.status'))} ${p.status || '—'} · ${esc(t('col.depth'))} ${p.depth ?? '—'} · Link Score ${p.linkScore ?? 0} · ${esc(t('col.inlinks'))} ${p.uniqueInlinks ?? 0}${kb}${iss}</div>`;
   };
   const tree = view !== 'links';
   const g = Factory(is3d ? { rendererConfig: { preserveDrawingBuffer: true, antialias: true } } : undefined)(el)
@@ -181,7 +214,7 @@ export async function renderGraph(el, data, { view, dim, t, onSelect }) {
     .nodeColor('color')
     .nodeLabel(label)
     .linkColor((l) => (l.orphan ? 'rgba(229,72,77,.35)' : linkCol))
-    .onNodeClick((n) => n.url && onSelect(n.url))
+    .onNodeClick((n) => n.url && onSelect(n.url, n))
     .cooldownTicks(tree ? 200 : 120)
     .cooldownTime(4000)
     .warmupTicks(tree ? 30 : 10);
@@ -192,10 +225,10 @@ export async function renderGraph(el, data, { view, dim, t, onSelect }) {
     g.d3Force('charge')?.strength(-30);
   }
   if (is3d) {
-    g.nodeOpacity(0.95).linkOpacity(0.35).linkWidth(0.4).nodeRelSize(data.nodes.length > 400 ? 3 : 4);
+    g.nodeOpacity(0.95).linkOpacity(0.55).linkWidth(0.7).nodeRelSize(data.nodes.length > 400 ? 3 : 4);
   } else {
     const n = data.nodes.length;
-    g.linkWidth(0.6).nodeRelSize(n > 1500 ? 1.6 : n > 400 ? 2.2 : n > 100 ? 3 : 4);
+    g.linkWidth(n > 1500 ? 0.7 : 1.1).nodeRelSize(n > 1500 ? 1.6 : n > 400 ? 2.2 : n > 100 ? 3 : 4);
     if (!tree) g.linkDirectionalArrowLength(2.5).linkDirectionalArrowRelPos(1);
   }
   // Cadrage : une première fois pendant la mise en place, puis quand la simulation s'arrête.

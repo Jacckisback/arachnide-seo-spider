@@ -6,7 +6,7 @@ import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 
-export const VERSION = '3.0.0';
+export const VERSION = '3.1.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
