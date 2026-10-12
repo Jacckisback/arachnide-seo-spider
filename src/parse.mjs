@@ -76,8 +76,38 @@ function linkPosition($el) {
   return 'content';
 }
 
-export function parseHtml(html, pageUrl) {
+// Extraction personnalisée : sélecteur CSS ou expression régulière, comme « Custom Extraction » de Screaming Frog.
+function runExtractors($, html, extractors) {
+  const out = {};
+  for (const ex of extractors || []) {
+    if (!ex || !ex.name || !ex.selector) continue;
+    let values = [];
+    try {
+      if (ex.type === 'regex') {
+        const re = new RegExp(ex.selector, 'gi');
+        for (const m of html.matchAll(re)) {
+          values.push(m[1] ?? m[0]);
+          if (values.length >= 50) break;
+        }
+      } else {
+        const $els = $(ex.selector);
+        if (ex.target === 'count') values = [$els.length];
+        else $els.slice(0, 50).each((_, el) => {
+          const $el = $(el);
+          values.push(ex.target === 'html' ? $.html(el) : ex.target === 'attr' ? $el.attr(ex.attr || 'href') ?? '' : $el.text().replace(/\s+/g, ' ').trim());
+        });
+      }
+    } catch {
+      values = ['⚠ invalid'];
+    }
+    out[ex.name] = values.map((v) => (typeof v === 'string' ? v.slice(0, 500) : v));
+  }
+  return out;
+}
+
+export function parseHtml(html, pageUrl, { extractors } = {}) {
   const $ = cheerio.load(html);
+  const extracted = extractors?.length ? runExtractors($, html, extractors) : undefined;
   const baseHref = $('base[href]').attr('href');
   const base = (baseHref && resolveUrl(baseHref, pageUrl)) || pageUrl;
 
@@ -231,5 +261,6 @@ export function parseHtml(html, pageUrl) {
     contentHash,
     simhash: mainTokens.length >= 50 ? simhash(mainTokens) : null,
     keywords: topKeywords(mainText, titles[0] || '', h1[0] || ''),
+    extracted,
   };
 }

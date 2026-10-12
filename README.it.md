@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-2.0.0-3d5f17" alt="Versione 2.0.0">
+  <img src="https://img.shields.io/badge/version-2.1.0-3d5f17" alt="Versione 2.1.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -28,6 +28,22 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: punteggio di salute SEO, punteggio per categoria, codici di risposta, profondità di clic e priorità" width="100%">
+</p>
+
+## 🆕 Novità della versione 2.1
+
+| | |
+|---|---|
+| 🕸️ **Visualizzazioni 2D e 3D** | Osserva l’architettura del sito in 2D o in 3D, con tre viste: **albero di crawl** (il percorso di clic più breve dalla homepage), **directory** (la struttura degli URL) e **link** (tutti i link interni seguiti). Colora i nodi in base all’indicizzabilità, ai problemi SEO o alla profondità; la dimensione dei nodi indica il Link Score. Clicca su un nodo per vedere i dettagli della pagina ed esporta la vista in PNG per i tuoi report. |
+| ⚙️ **Configurazione del crawler, come in Screaming Frog** | Una finestra **Configurazione** a schede: Spider, **Limiti**, **Velocità**, **robots.txt**, Rendering, Includi / escludi, Estrazione, Autenticazione. Contiene solo le impostazioni che contano davvero. |
+| 🚧 **Spider › Limiti** | Totale del crawl, profondità di crawl, URL per livello di profondità, profondità delle cartelle, numero di query string, redirect da seguire, lunghezza degli URL, link per pagina, dimensione della pagina e **limiti per percorso URL** (`/blog/ = 200`). La dashboard mostra quanti URL ha escluso ciascun limite. |
+| 🤖 **robots.txt** | Tre modalità: **Rispetta robots.txt**, **Ignora robots.txt ma segnala lo stato** (gli URL bloccati vengono scansionati ma restano segnalati) e **Ignora robots.txt**. Incolla un **robots.txt personalizzato** per testare un nuovo file prima di pubblicarlo e usa il **tester** integrato per vedere se un URL è consentito e quale regola si applica. |
+| 🐢 **Velocità** | Numero massimo di thread e un limite globale di **URL al secondo**, per proteggere i server fragili. |
+| 🧲 **Estrazione personalizzata** | Raccogli qualsiasi dato da ogni pagina con un selettore CSS o una regex: prezzo, autore, data, SKU, codice di tracciamento… I risultati compaiono in una scheda **Estrazione** e nell’export CSV. |
+| 🔐 **Autenticazione e pulizia degli URL** | Autenticazione HTTP e header o cookie personalizzati per i siti di staging. Vengono inviati solo al sito analizzato e la password non viene mai salvata. **Rimuovi i parametri degli URL** come `utm_*`, `gclid` o `fbclid` per evitare URL duplicati. |
+
+<p align="center">
+  <img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Albero di crawl in 3D colorato in base ai problemi SEO" width="100%">
 </p>
 
 ## ✨ Novità della versione 2.0
@@ -73,6 +89,12 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 | <img src="docs/screenshots/titles-serp.png" alt="Scheda Title con anteprima Google e misuratori in pixel"> | <img src="docs/screenshots/internal-linking.png" alt="Scheda Linking interno con Link Score e pannello dei link in entrata"> |
 | **Impostazioni del report white label** | **Report di audit professionale** |
 | <img src="docs/screenshots/report-dialog.png" alt="Finestra del report con logo, colore, cliente e confronto"> | <img src="docs/screenshots/report.png" alt="Sintesi per la direzione del report di audit"> |
+| **Albero di crawl (2D)** | **Grafo dei link (2D)** |
+| <img src="docs/screenshots/viz-crawl-tree-2d.png" alt="Albero di crawl in 2D"> | <img src="docs/screenshots/viz-link-graph.png" alt="Grafo dei link interni con layout a forze"> |
+| **Directory** | **Estrazione personalizzata** |
+| <img src="docs/screenshots/viz-directory-tree.png" alt="Visualizzazione dell’albero delle directory"> | <img src="docs/screenshots/custom-extraction.png" alt="Scheda Estrazione con prezzi estratti tramite selettore CSS"> |
+| **Configurazione › Limiti** | **Configurazione › robots.txt (con tester)** |
+| <img src="docs/screenshots/config-limits.png" alt="Impostazioni dei limiti dello spider"> | <img src="docs/screenshots/config-robots.png" alt="Modalità robots.txt, robots.txt personalizzato e tester"> |
 | **Schermata iniziale** | **Modalità scura** |
 | <img src="docs/screenshots/home.png" alt="Schermata iniziale con i crawl recenti"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard in modalità scura"> |
 
@@ -125,16 +147,32 @@ Tieni aperta la finestra del terminale mentre usi l’app, e premi `Ctrl + C` pe
 
 Usa **Tutti i problemi (CSV)** per dare al tuo cliente o al tuo sviluppatore l’elenco completo degli URL da correggere.
 
-## ⚙️ Opzioni di crawl
+## ⚙️ Configurazione
 
-| Gruppo | Opzioni |
+Clicca su **⚙ Opzioni** per aprire la finestra **Configurazione**. Le impostazioni vengono memorizzate, tranne la password.
+
+| Scheda | Impostazioni |
 |---|---|
-| Crawl | Numero massimo di URL, profondità massima, richieste simultanee, pausa tra le richieste, timeout |
+| Spider | Leggere le sitemap XML, seguire i canonical, includere i sottodomini, controllare i link esterni e le immagini |
+| Limiti | Totale del crawl, profondità di crawl, URL per livello di profondità, profondità delle cartelle, query string, redirect da seguire, lunghezza degli URL, link per pagina, dimensione della pagina, limiti per percorso URL (`/blog/ = 200`, uno per riga) |
+| Velocità | Numero massimo di thread, numero massimo di URL al secondo, timeout |
+| robots.txt | Rispetta / ignora ma segnala lo stato / ignora, robots.txt personalizzato, tester di URL |
 | Rendering | Rendering JavaScript, user-agent (Arachnide, Googlebot desktop/smartphone, Chrome), Accept-Language |
-| Perimetro | Includere / escludere URL con una regex, ricerca personalizzata, sottodomini, ignorare i parametri degli URL |
-| Controlli | Rispettare robots.txt, leggere le sitemap XML, seguire i canonical, controllare i link esterni, controllare le immagini |
+| Includi / escludi | Regex di inclusione / esclusione, rimozione dei parametri degli URL (`utm_*, gclid`), ignorare tutti i parametri, ricerca personalizzata |
+| Estrazione | Fino a 20 estrattori: selettore CSS (testo, attributo, HTML o conteggio) o regex |
+| Autenticazione | Utente e password HTTP, header personalizzati (cookie, token) |
 
 Usa il selettore **Sito / Elenco** accanto al campo dell’indirizzo per analizzare un intero sito o solo un elenco di URL.
+
+## 🕸️ Visualizzazioni
+
+Dopo un crawl, apri **Visualizzazioni** nella barra laterale:
+
+- **Albero di crawl:** ogni pagina è collegata alla pagina che vi ha condotto al livello di clic precedente. I rami lunghi indicano pagine profonde.
+- **Directory:** la struttura degli URL, cartella per cartella. Mette in evidenza le sezioni sbilanciate o troppo profonde.
+- **Link:** il grafo completo dei link interni. Le pagine ben collegate si raggruppano al centro, mentre quelle isolate si spostano ai margini.
+
+Passa dal **2D** al **3D** e viceversa, colora in base all’indicizzabilità, ai problemi o alla profondità, scegli quanti nodi mostrare (fino a 6.000), clicca su un nodo per aprirne i dettagli ed esporta un PNG per i tuoi report.
 
 ## 🖥️ Riga di comando
 
@@ -143,6 +181,7 @@ node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang it
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```
 
@@ -174,12 +213,14 @@ src/
   analyze.mjs    link graph, click depth, Link Score, duplicates, cannibalisation, SEO checks
   text.mjs       keywords, multilingual stop words, simhash
   pixel.mjs      title and description width in pixels
+  options.mjs    validation of the crawl configuration (UI and CLI)
   server.mjs     local web server and API with live updates
   cli.mjs        command-line interface
 public/
   app.js         web interface (no framework)
+  viz.js         2D / 3D visualisations (force-graph, 3d-force-graph, served locally)
   i18n/*.js      translations (en, fr, de, es, it, pt)
-  shared/        report generator, crawl comparison, i18n, icons (used by the UI and the CLI)
+  shared/        report generator, crawl comparison, robots.txt parser, i18n, icons (used by the UI and the CLI)
 ```
 
 **Aggiungere una lingua:** copia `public/i18n/en.js`, traduci i valori e aggiungi la lingua a `LANGS` in `public/shared/i18n.js`. `npm test` verifica che non manchi nessuna chiave né alcun segnaposto.
@@ -188,9 +229,10 @@ public/
 
 - [ ] Dati reali PageSpeed Insights / CrUX
 - [ ] Integrazione con Google Search Console (clic e impressioni per URL)
-- [ ] Estrazione personalizzata (selettori CSS / XPath)
 - [ ] Crawl pianificati con avvisi via email
-- [ ] Visualizzazione interattiva dell’architettura del sito
+- [ ] Importazione di un export CSV di Google Search Console (pagine orfane presenti solo in GSC)
+- [x] Estrazione personalizzata (2.1)
+- [x] Visualizzazioni 2D / 3D dell’architettura del sito (2.1)
 
 Suggerimenti e pull request sono benvenuti. Consulta [CONTRIBUTING.md](CONTRIBUTING.md).
 

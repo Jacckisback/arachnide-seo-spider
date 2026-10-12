@@ -7,6 +7,7 @@ import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { getT, detailText, LANGS } from '../public/shared/i18n.js';
 import { buildReport } from '../public/shared/report.js';
 import { compareResults } from '../public/shared/compare.js';
+import { toCrawlerOptions } from './options.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes('--' + name);
@@ -14,7 +15,8 @@ const val = (name, def) => {
   const i = args.indexOf('--' + name);
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
-const VALUE_FLAGS = new Set(['max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file']);
+const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
+const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -34,7 +36,19 @@ Usage : node src/cli.mjs <url> [options]
   --list FILE         List mode: crawl only the URLs of a text file (one per line)
   --external          Check external links
   --images            Check image size and status
-  --ignore-robots     Ignore robots.txt
+  --rate N            Max URLs per second (global cap)
+  --robots MODE       respect | report (ignore but report) | ignore
+  --custom-robots F   Use this robots.txt file instead of the site's one
+  --per-depth N       Max URLs per crawl depth
+  --folder-depth N    Max folder depth
+  --max-params N      Max number of query strings
+  --max-redirects N   Max redirects to follow (10)
+  --path-limit P=N    Limit by URL path, e.g. "/blog/=200" (repeatable)
+  --remove-params L   Remove URL parameters, e.g. "utm_*,gclid"
+  --auth USER:PASS    HTTP authentication (staging sites)
+  --header "K: V"     Custom HTTP header (repeatable)
+  --extract N=SEL     Custom extraction: CSS selector, or N=/regex/ (repeatable)
+  --ignore-robots     Ignore robots.txt (same as --robots ignore)
   --subdomains        Crawl subdomains too
   --no-sitemap        Do not read XML sitemaps
   --include REGEX     Only crawl matching URLs
@@ -49,22 +63,41 @@ Usage : node src/cli.mjs <url> [options]
   process.exit(url || flag('help') ? 0 : 1);
 }
 
-const opts = {
-  maxPages: Number(val('max', 500)),
-  maxDepth: Number(val('depth', 20)),
-  concurrency: Number(val('concurrency', 5)),
-  delayMs: Number(val('delay', 0)),
-  userAgent: USER_AGENTS[val('ua', 'arachnide')] || val('ua'),
+const [httpUser, ...pass] = (val('auth', '') || '').split(':');
+const opts = toCrawlerOptions({
+  maxPages: val('max', 500),
+  maxDepth: val('depth', 20),
+  concurrency: val('concurrency', 5),
+  delayMs: val('delay', 0),
+  maxUrlPerSec: val('rate', ''),
+  limitPerDepth: val('per-depth', ''),
+  maxFolderDepth: val('folder-depth', ''),
+  maxQueryParams: val('max-params', ''),
+  maxRedirects: val('max-redirects', ''),
+  userAgent: val('ua', 'arachnide'),
   checkExternal: flag('external'),
   checkImages: flag('images'),
-  respectRobots: !flag('ignore-robots'),
+  robotsMode: flag('ignore-robots') ? 'ignore' : val('robots', 'respect'),
   crawlSubdomains: flag('subdomains'),
   useSitemaps: !flag('no-sitemap'),
   render: flag('render'),
   include: val('include', ''),
   exclude: val('exclude', ''),
   search: val('search', ''),
-};
+  removeParams: val('remove-params', ''),
+  httpUser,
+  httpPass: pass.join(':'),
+  customHeaders: vals('header').join('\n'),
+  pathLimits: vals('path-limit').join('\n'),
+  extractors: vals('extract').map((e) => {
+    const [name, ...rest] = e.split('=');
+    const sel = rest.join('=');
+    const re = /^\/(.+)\/$/.exec(sel);
+    return re ? { name, type: 'regex', selector: re[1] } : { name, type: 'css', selector: sel, target: 'text' };
+  }),
+});
+if (!USER_AGENTS[val('ua', 'arachnide')] && val('ua')) opts.userAgent = val('ua');
+if (val('custom-robots')) opts.customRobots = await fs.readFile(val('custom-robots'), 'utf8');
 if (flag('list')) {
   opts.mode = 'list';
   opts.urls = (await fs.readFile(val('list'), 'utf8')).split(/\s+/).filter((x) => /^https?:\/\//i.test(x));

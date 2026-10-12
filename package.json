@@ -1,6 +1,6 @@
 {
   "name": "arachnide-seo-spider",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Free, open-source technical SEO crawler (Screaming Frog alternative): JavaScript rendering, ~90 SEO checks, action plan, white-label PDF reports, 6 languages, local web UI and CLI.",
   "author": "Thierry Gustin (https://thierrygustin.com)",
   "license": "MIT",
@@ -42,7 +42,9 @@
     "node": ">=18.17"
   },
   "dependencies": {
+    "3d-force-graph": "1.80.1",
     "cheerio": "1.0.0",
+    "force-graph": "1.52.0",
     "puppeteer-core": "23.11.1"
   }
 }

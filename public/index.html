@@ -31,48 +31,104 @@
     </div>
   </header>
 
-  <section id="optionsPanel" class="options" hidden>
-    <div class="opt-cols">
-      <fieldset>
-        <legend data-i18n="opt.grpCrawl">Crawl</legend>
-        <label><span data-i18n="opt.maxPages">Max URLs</span><input name="maxPages" type="number" min="1" value="500"></label>
-        <label><span data-i18n="opt.maxDepth">Max depth</span><input name="maxDepth" type="number" min="0" value="20"></label>
-        <label><span data-i18n="opt.concurrency">Concurrent requests</span><input name="concurrency" type="number" min="1" max="30" value="5"></label>
-        <label><span data-i18n="opt.delay">Delay between requests (ms)</span><input name="delayMs" type="number" min="0" value="0"></label>
-        <label><span data-i18n="opt.timeout">Timeout (ms)</span><input name="timeoutMs" type="number" min="1000" value="20000"></label>
-      </fieldset>
-      <fieldset>
-        <legend data-i18n="opt.grpRender">Rendering</legend>
-        <label class="check big"><input type="checkbox" name="render"> <span><b data-i18n="opt.render">JavaScript rendering</b><small data-i18n="opt.renderHelp"></small></span></label>
-        <p id="renderNote" class="opt-note"></p>
-        <label><span data-i18n="opt.userAgent">User-agent</span>
-          <select name="userAgent">
-            <option value="arachnide">ArachnideSEO</option>
-            <option value="googlebot">Googlebot desktop</option>
-            <option value="googlebotMobile">Googlebot smartphone</option>
-            <option value="chrome">Chrome</option>
-          </select>
-        </label>
-        <label><span data-i18n="opt.acceptLanguage">Accept-Language</span><input name="acceptLanguage" type="text" placeholder="fr-FR,fr;q=0.9"></label>
-      </fieldset>
-      <fieldset>
-        <legend data-i18n="opt.grpScope">Scope</legend>
-        <label><span data-i18n="opt.include">Include only (regex)</span><input name="include" type="text" placeholder="/blog/"></label>
-        <label><span data-i18n="opt.exclude">Exclude (regex)</span><input name="exclude" type="text" placeholder="\?(replytocom|share)=|/wp-admin/"></label>
-        <label><span data-i18n="opt.search">Custom search</span><input name="search" type="text" data-i18n-ph="opt.searchPh"></label>
-        <label class="check"><input type="checkbox" name="crawlSubdomains"> <span data-i18n="opt.subdomains">Include subdomains</span></label>
-        <label class="check"><input type="checkbox" name="ignoreQuery"> <span data-i18n="opt.ignoreQuery">Ignore URL parameters</span></label>
-      </fieldset>
-      <fieldset>
-        <legend data-i18n="opt.grpChecks">Checks</legend>
-        <label class="check"><input type="checkbox" name="respectRobots" checked> <span data-i18n="opt.robots">Respect robots.txt</span></label>
-        <label class="check"><input type="checkbox" name="useSitemaps" checked> <span data-i18n="opt.sitemaps">Read XML sitemaps</span></label>
-        <label class="check"><input type="checkbox" name="crawlCanonicals" checked> <span data-i18n="opt.canonicals">Follow canonicals</span></label>
-        <label class="check"><input type="checkbox" name="checkExternal"> <span data-i18n="opt.external">Check external links</span></label>
-        <label class="check"><input type="checkbox" name="checkImages"> <span data-i18n="opt.images">Check images (size, status)</span></label>
-      </fieldset>
-    </div>
-  </section>
+  <dialog id="configDialog" class="wide config">
+    <form id="configForm" method="dialog">
+      <div class="dialog-head"><h2 data-icon="settings"><span data-i18n="cfg.title">Configuration</span></h2><button class="btn icon" value="close" data-icon="x" data-i18n-title="ui.close"></button></div>
+      <div class="cfg">
+        <nav class="cfg-nav" id="cfgNav">
+          <button type="button" data-cfg="spider" class="on" data-i18n="cfg.spider">Spider</button>
+          <button type="button" data-cfg="limits" data-i18n="cfg.limits">Limits</button>
+          <button type="button" data-cfg="speed" data-i18n="cfg.speed">Speed</button>
+          <button type="button" data-cfg="robots" data-i18n="cfg.robots">robots.txt</button>
+          <button type="button" data-cfg="render" data-i18n="cfg.render">Rendering</button>
+          <button type="button" data-cfg="scope" data-i18n="cfg.scope">Include / exclude</button>
+          <button type="button" data-cfg="extract" data-i18n="cfg.extract">Extraction</button>
+          <button type="button" data-cfg="auth" data-i18n="cfg.auth">Authentication</button>
+        </nav>
+        <div class="cfg-body">
+          <section data-pane="spider">
+            <p class="cfg-help" data-i18n="cfg.spiderHelp"></p>
+            <label class="check"><input type="checkbox" name="useSitemaps" checked> <span data-i18n="opt.sitemaps">Read XML sitemaps</span></label>
+            <label class="check"><input type="checkbox" name="crawlCanonicals" checked> <span data-i18n="opt.canonicals">Follow canonicals</span></label>
+            <label class="check"><input type="checkbox" name="crawlSubdomains"> <span data-i18n="opt.subdomains">Include subdomains</span></label>
+            <label class="check"><input type="checkbox" name="checkExternal"> <span data-i18n="opt.external">Check external links</span></label>
+            <label class="check"><input type="checkbox" name="checkImages"> <span data-i18n="opt.images">Check images</span></label>
+          </section>
+          <section data-pane="limits" hidden>
+            <p class="cfg-help" data-i18n="cfg.limitsHelp"></p>
+            <div class="cfg-grid">
+              <label><span data-i18n="opt.maxPages">Limit crawl total</span><input name="maxPages" type="number" min="1" value="500"></label>
+              <label><span data-i18n="opt.maxDepth">Limit crawl depth</span><input name="maxDepth" type="number" min="0" value="20"></label>
+              <label><span data-i18n="opt.limitPerDepth">URLs per crawl depth</span><input name="limitPerDepth" type="number" min="1" data-i18n-ph="cfg.unlimited"></label>
+              <label><span data-i18n="opt.maxFolderDepth">Max folder depth</span><input name="maxFolderDepth" type="number" min="0" data-i18n-ph="cfg.unlimited"></label>
+              <label><span data-i18n="opt.maxQueryParams">Max query strings</span><input name="maxQueryParams" type="number" min="0" data-i18n-ph="cfg.unlimited"></label>
+              <label><span data-i18n="opt.maxRedirects">Max redirects to follow</span><input name="maxRedirects" type="number" min="0" value="10"></label>
+              <label><span data-i18n="opt.maxUrlLength">Max URL length</span><input name="maxUrlLength" type="number" min="20" value="2000"></label>
+              <label><span data-i18n="opt.maxLinksPerPage">Max links per URL</span><input name="maxLinksPerPage" type="number" min="1" value="10000"></label>
+              <label><span data-i18n="opt.maxPageSizeKb">Max page size (KB)</span><input name="maxPageSizeKb" type="number" min="10" value="51200"></label>
+            </div>
+            <label class="block"><span data-i18n="opt.pathLimits">Limit by URL path</span><textarea name="pathLimits" rows="3" placeholder="/blog/ = 200&#10;/produits/ = 1000"></textarea><small data-i18n="opt.pathLimitsHelp"></small></label>
+          </section>
+          <section data-pane="speed" hidden>
+            <p class="cfg-help" data-i18n="cfg.speedHelp"></p>
+            <div class="cfg-grid">
+              <label><span data-i18n="opt.concurrency">Max threads</span><input name="concurrency" type="number" min="1" max="30" value="5"></label>
+              <label><span data-i18n="opt.maxUrlPerSec">Max URL/s</span><input name="maxUrlPerSec" type="number" min="0" step="0.5" data-i18n-ph="cfg.unlimited"></label>
+              <label><span data-i18n="opt.timeout">Timeout (ms)</span><input name="timeoutMs" type="number" min="1000" value="20000"></label>
+            </div>
+          </section>
+          <section data-pane="robots" hidden>
+            <p class="cfg-help" data-i18n="cfg.robotsHelp"></p>
+            <div class="radios">
+              <label class="check"><input type="radio" name="robotsMode" value="respect" checked> <span><b data-i18n="opt.robotsRespect">Respect robots.txt</b><small data-i18n="opt.robotsRespectHelp"></small></span></label>
+              <label class="check"><input type="radio" name="robotsMode" value="report"> <span><b data-i18n="opt.robotsReport">Ignore robots.txt but report status</b><small data-i18n="opt.robotsReportHelp"></small></span></label>
+              <label class="check"><input type="radio" name="robotsMode" value="ignore"> <span><b data-i18n="opt.robotsIgnore">Ignore robots.txt</b><small data-i18n="opt.robotsIgnoreHelp"></small></span></label>
+            </div>
+            <label class="block"><span data-i18n="opt.customRobots">Custom robots.txt</span><textarea name="customRobots" rows="6" class="mono" placeholder="User-agent: *&#10;Disallow: /admin/"></textarea><small data-i18n="opt.customRobotsHelp"></small></label>
+            <div class="robots-test"><input id="robotsTestUrl" type="text" placeholder="https://www.example.com/page"><button type="button" class="btn" id="robotsTestBtn" data-i18n="cfg.test">Test</button><span id="robotsTestOut"></span></div>
+          </section>
+          <section data-pane="render" hidden>
+            <label class="check big"><input type="checkbox" name="render"> <span><b data-i18n="opt.render">JavaScript rendering</b><small data-i18n="opt.renderHelp"></small></span></label>
+            <p id="renderNote" class="opt-note"></p>
+            <div class="cfg-grid">
+              <label><span data-i18n="opt.userAgent">User-agent</span>
+                <select name="userAgent">
+                  <option value="arachnide">ArachnideSEO</option>
+                  <option value="googlebot">Googlebot desktop</option>
+                  <option value="googlebotMobile">Googlebot smartphone</option>
+                  <option value="chrome">Chrome</option>
+                </select>
+              </label>
+              <label><span data-i18n="opt.acceptLanguage">Accept-Language</span><input name="acceptLanguage" type="text" placeholder="fr-FR,fr;q=0.9"></label>
+            </div>
+          </section>
+          <section data-pane="scope" hidden>
+            <div class="cfg-grid one">
+              <label><span data-i18n="opt.include">Include only (regex)</span><input name="include" type="text" placeholder="/blog/"></label>
+              <label><span data-i18n="opt.exclude">Exclude (regex)</span><input name="exclude" type="text" placeholder="\?(replytocom|share)=|/wp-admin/"></label>
+              <label><span data-i18n="opt.removeParams">Remove URL parameters</span><input name="removeParams" type="text" placeholder="utm_*, gclid, fbclid, sessionid"><small data-i18n="opt.removeParamsHelp"></small></label>
+              <label><span data-i18n="opt.search">Custom search</span><input name="search" type="text" data-i18n-ph="opt.searchPh"></label>
+            </div>
+            <label class="check"><input type="checkbox" name="ignoreQuery"> <span data-i18n="opt.ignoreQuery">Ignore all URL parameters</span></label>
+          </section>
+          <section data-pane="extract" hidden>
+            <p class="cfg-help" data-i18n="cfg.extractHelp"></p>
+            <div id="extractors"></div>
+            <button type="button" class="btn small" id="addExtractor" data-i18n="cfg.addExtractor">+ Add</button>
+          </section>
+          <section data-pane="auth" hidden>
+            <p class="cfg-help" data-i18n="cfg.authHelp"></p>
+            <div class="cfg-grid">
+              <label><span data-i18n="opt.httpUser">User</span><input name="httpUser" type="text" autocomplete="off"></label>
+              <label><span data-i18n="opt.httpPass">Password</span><input name="httpPass" type="password" autocomplete="new-password"></label>
+            </div>
+            <label class="block"><span data-i18n="opt.customHeaders">Custom HTTP headers</span><textarea name="customHeaders" rows="3" class="mono" placeholder="Cookie: session=…&#10;X-Preview-Token: …"></textarea><small data-i18n="opt.customHeadersHelp"></small></label>
+          </section>
+        </div>
+      </div>
+      <div class="dialog-foot"><button type="button" class="btn" id="cfgReset" data-i18n="cfg.reset">Reset</button><span class="spacer"></span><button class="btn primary" value="ok" data-i18n="cfg.done">OK</button></div>
+    </form>
+  </dialog>
 
   <div class="progress" id="progress" hidden>
     <div class="bar"><span id="progressBar"></span></div>

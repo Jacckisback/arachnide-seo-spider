@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-2.0.0-3d5f17" alt="Version 2.0.0">
+  <img src="https://img.shields.io/badge/version-2.1.0-3d5f17" alt="Version 2.1.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -28,6 +28,22 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO Health Score, Bewertung nach Kategorie, Statuscodes, Klicktiefe und Prioritäten" width="100%">
+</p>
+
+## 🆕 Neu in Version 2.1
+
+| | |
+|---|---|
+| 🕸️ **2D- & 3D-Visualisierungen** | Sehen Sie die Architektur der Website in 2D oder 3D, in drei Ansichten: **Crawl-Baum** (kürzester Klickpfad von der Startseite), **Verzeichnisse** (URL-Struktur) und **Links** (alle verfolgten internen Links). Färben Sie die Knoten nach Indexierbarkeit, SEO-Problemen oder Tiefe; die Knotengröße zeigt den Link Score. Klicken Sie auf einen Knoten, um die Details der Seite zu sehen, und exportieren Sie die Ansicht als PNG für Ihre Berichte. |
+| ⚙️ **Crawler-Konfiguration wie in Screaming Frog** | Ein Fenster **Konfiguration** mit Tabs: Spider, **Limits**, **Geschwindigkeit**, **robots.txt**, Rendering, Einschließen / ausschließen, Extraktion, Authentifizierung. Es enthält nur die Einstellungen, auf die es ankommt. |
+| 🚧 **Spider › Limits** | Crawl-Gesamtzahl, Crawl-Tiefe, URLs pro Tiefe, Ordnertiefe, Anzahl der Query-Strings, zu folgende Weiterleitungen, URL-Länge, Links pro Seite, Seitengröße und **Limits nach URL-Pfad** (`/blog/ = 200`). Das Dashboard zeigt, wie viele URLs jedes Limit übersprungen hat. |
+| 🤖 **robots.txt** | Drei Modi: **robots.txt beachten**, **robots.txt ignorieren, aber Status melden** (blockierte URLs werden gecrawlt und trotzdem markiert) und **robots.txt ignorieren**. Fügen Sie eine **benutzerdefinierte robots.txt** ein, um eine neue Datei vor der Veröffentlichung zu testen, und prüfen Sie mit dem integrierten **Tester**, ob eine URL erlaubt ist und welche Regel greift. |
+| 🐢 **Geschwindigkeit** | Maximale Anzahl Threads plus eine globale Obergrenze an **URLs pro Sekunde**, um empfindliche Server zu schonen. |
+| 🧲 **Benutzerdefinierte Extraktion** | Erfassen Sie beliebige Daten aus jeder Seite per CSS-Selektor oder regulärem Ausdruck: Preis, Autor, Datum, Artikelnummer, Tracking-Code… Die Ergebnisse erscheinen in einem Tab **Extraktion** und im CSV-Export. |
+| 🔐 **Authentifizierung & URL-Bereinigung** | HTTP-Authentifizierung sowie benutzerdefinierte Header oder Cookies für Staging-Websites. Sie werden nur an die geprüfte Website gesendet, und das Passwort wird nie gespeichert. **Entfernen Sie URL-Parameter** wie `utm_*`, `gclid` oder `fbclid`, um doppelte URLs zu vermeiden. |
+
+<p align="center">
+  <img src="docs/screenshots/viz-crawl-tree-3d.png" alt="3D-Crawl-Baum, gefärbt nach SEO-Problemen" width="100%">
 </p>
 
 ## ✨ Neu in Version 2.0
@@ -73,6 +89,12 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 | <img src="docs/screenshots/titles-serp.png" alt="Titles-Tab mit Google-Vorschau und Pixelanzeige"> | <img src="docs/screenshots/internal-linking.png" alt="Tab Interne Verlinkung mit Link Score und Bereich für eingehende Links"> |
 | **White-Label-Berichtseinstellungen** | **Professioneller Auditbericht** |
 | <img src="docs/screenshots/report-dialog.png" alt="Berichtsdialog mit Logo, Farbe, Kunde und Vergleich"> | <img src="docs/screenshots/report.png" alt="Zusammenfassung des Auditberichts"> |
+| **Crawl-Baum (2D)** | **Link-Graph (2D)** |
+| <img src="docs/screenshots/viz-crawl-tree-2d.png" alt="2D-Crawl-Baum"> | <img src="docs/screenshots/viz-link-graph.png" alt="Kräftebasierter Graph der internen Links"> |
+| **Verzeichnisbaum** | **Benutzerdefinierte Extraktion** |
+| <img src="docs/screenshots/viz-directory-tree.png" alt="Visualisierung des Verzeichnisbaums"> | <img src="docs/screenshots/custom-extraction.png" alt="Tab Extraktion mit per CSS-Selektor extrahierten Preisen"> |
+| **Konfiguration › Limits** | **Konfiguration › robots.txt (mit Tester)** |
+| <img src="docs/screenshots/config-limits.png" alt="Einstellungen für die Spider-Limits"> | <img src="docs/screenshots/config-robots.png" alt="robots.txt-Modi, benutzerdefinierte robots.txt und Tester"> |
 | **Startbildschirm** | **Dunkelmodus** |
 | <img src="docs/screenshots/home.png" alt="Startbildschirm mit den letzten Crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard im Dunkelmodus"> |
 
@@ -125,16 +147,32 @@ Lassen Sie das Terminalfenster geöffnet, solange Sie die App nutzen. Mit `Ctrl 
 
 Mit **Alle Probleme (CSV)** geben Sie Ihrem Kunden oder Entwickler die vollständige Liste der zu korrigierenden URLs.
 
-## ⚙️ Crawl-Optionen
+## ⚙️ Konfiguration
 
-| Gruppe | Optionen |
+Klicken Sie auf **⚙ Optionen**, um das Fenster **Konfiguration** zu öffnen. Ihre Einstellungen werden gespeichert, mit Ausnahme des Passworts.
+
+| Tab | Einstellungen |
 |---|---|
-| Crawl | Max. URLs, max. Tiefe, gleichzeitige Anfragen, Pause zwischen Anfragen, Timeout |
+| Spider | XML-Sitemaps lesen, Canonicals folgen, Subdomains einbeziehen, externe Links und Bilder prüfen |
+| Limits | Crawl-Gesamtzahl, Crawl-Tiefe, URLs pro Tiefe, Ordnertiefe, Query-Strings, zu folgende Weiterleitungen, URL-Länge, Links pro Seite, Seitengröße, Limits nach URL-Pfad (`/blog/ = 200`, eines pro Zeile) |
+| Geschwindigkeit | Max. Threads, max. URLs pro Sekunde, Timeout |
+| robots.txt | Beachten / ignorieren, aber Status melden / ignorieren, benutzerdefinierte robots.txt, URL-Tester |
 | Rendering | JavaScript-Rendering, User-Agent (Arachnide, Googlebot Desktop/Smartphone, Chrome), Accept-Language |
-| Umfang | URLs per regulärem Ausdruck ein- oder ausschließen, benutzerdefinierte Suche, Subdomains, URL-Parameter ignorieren |
-| Prüfungen | robots.txt beachten, XML-Sitemaps lesen, Canonicals folgen, externe Links prüfen, Bilder prüfen |
+| Einschließen / ausschließen | Regulärer Ausdruck zum Ein- und Ausschließen, URL-Parameter entfernen (`utm_*, gclid`), alle Parameter ignorieren, benutzerdefinierte Suche |
+| Extraktion | Bis zu 20 Extraktoren: CSS-Selektor (Text, Attribut, HTML oder Anzahl) oder regulärer Ausdruck |
+| Authentifizierung | HTTP-Benutzer und -Passwort, benutzerdefinierte Header (Cookies, Tokens) |
 
 Mit dem Schalter **Website / Liste** neben dem Adressfeld crawlen Sie eine ganze Website oder nur eine Liste von URLs.
+
+## 🕸️ Visualisierungen
+
+Öffnen Sie nach einem Crawl **Visualisierungen** in der Seitenleiste:
+
+- **Crawl-Baum:** Jede Seite ist mit der Seite verbunden, über die sie auf der vorherigen Klicktiefe erreicht wurde. Lange Äste bedeuten tief liegende Seiten.
+- **Verzeichnisse:** die URL-Struktur, Ordner für Ordner. So erkennen Sie unausgewogene oder zu tief verschachtelte Bereiche.
+- **Links:** der vollständige Graph der internen Links. Gut verlinkte Seiten sammeln sich in der Mitte, isolierte Seiten treiben an den Rand.
+
+Wechseln Sie zwischen **2D** und **3D**, färben Sie nach Indexierbarkeit, Problemen oder Tiefe, wählen Sie, wie viele Knoten angezeigt werden (bis zu 6.000), klicken Sie auf einen Knoten, um seine Details zu öffnen, und exportieren Sie ein PNG für Ihre Berichte.
 
 ## 🖥️ Kommandozeile
 
@@ -143,6 +181,7 @@ node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang de
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```
 
@@ -174,12 +213,14 @@ src/
   analyze.mjs    link graph, click depth, Link Score, duplicates, cannibalisation, SEO checks
   text.mjs       keywords, multilingual stop words, simhash
   pixel.mjs      title and description width in pixels
+  options.mjs    validation of the crawl configuration (UI and CLI)
   server.mjs     local web server and API with live updates
   cli.mjs        command-line interface
 public/
   app.js         web interface (no framework)
+  viz.js         2D / 3D visualisations (force-graph, 3d-force-graph, served locally)
   i18n/*.js      translations (en, fr, de, es, it, pt)
-  shared/        report generator, crawl comparison, i18n, icons (used by the UI and the CLI)
+  shared/        report generator, crawl comparison, robots.txt parser, i18n, icons (used by the UI and the CLI)
 ```
 
 **Eine Sprache hinzufügen:** Kopieren Sie `public/i18n/en.js`, übersetzen Sie die Werte und fügen Sie die Sprache zu `LANGS` in `public/shared/i18n.js` hinzu. `npm test` prüft, dass kein Schlüssel und kein Platzhalter fehlt.
@@ -188,9 +229,10 @@ public/
 
 - [ ] Felddaten aus PageSpeed Insights / CrUX
 - [ ] Integration der Google Search Console (Klicks und Impressionen pro URL)
-- [ ] Benutzerdefinierte Extraktion (CSS-Selektoren / XPath)
 - [ ] Geplante Crawls mit E-Mail-Benachrichtigungen
-- [ ] Interaktive Visualisierung der Website-Architektur
+- [ ] Import eines CSV-Exports aus der Google Search Console (verwaiste Seiten, die nur in der GSC auftauchen)
+- [x] Benutzerdefinierte Extraktion (2.1)
+- [x] 2D- / 3D-Visualisierungen der Website-Architektur (2.1)
 
 Vorschläge und Pull Requests sind willkommen. Siehe [CONTRIBUTING.md](CONTRIBUTING.md).
 

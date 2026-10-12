@@ -34,6 +34,7 @@ const P = {
   chevronLeft: '<path d="m15 18-6-6 6-6"/>',
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
   printer: '<path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/>',
+  graph: '<circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><circle cx="12" cy="10" r="1.5"/><path d="M7 7l4 2.5M17 7l-4 2.5M12 11.5v4"/>',
   trend: '<path d="m3 17 6-6 4 4 8-8M15 7h6v6"/>',
 };
 

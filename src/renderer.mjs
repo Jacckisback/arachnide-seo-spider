@@ -65,8 +65,10 @@ const VITALS = `
 `;
 
 export class Renderer {
-  constructor({ userAgent, timeoutMs = 30000, executablePath } = {}) {
+  constructor({ userAgent, timeoutMs = 30000, executablePath, headers = {}, isInternal = () => false } = {}) {
     this.userAgent = userAgent;
+    this.headers = headers;
+    this.isInternal = isInternal;
     this.timeoutMs = Math.min(timeoutMs, 45000);
     this.executablePath = executablePath || findChrome();
   }
@@ -90,6 +92,14 @@ export class Renderer {
       if (this.userAgent) await page.setUserAgent(this.userAgent);
       await page.setViewport({ width: 1366, height: 900 });
       await page.evaluateOnNewDocument(VITALS);
+      if (Object.keys(this.headers).length) {
+        // Authentification / en-têtes personnalisés : seulement pour les requêtes vers le site audité.
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+          if (this.isInternal(req.url())) req.continue({ headers: { ...req.headers(), ...this.headers } });
+          else req.continue();
+        });
+      }
       // Les échecs de chargement de ressources (404 d'images, favicon…) ne sont pas des erreurs JavaScript.
       page.on('console', (m) => m.type() === 'error' && !/^Failed to load resource/i.test(m.text()) && consoleErrors.length < 20 && consoleErrors.push(m.text().slice(0, 300)));
       page.on('pageerror', (e) => consoleErrors.length < 20 && consoleErrors.push(String(e.message || e).slice(0, 300)));

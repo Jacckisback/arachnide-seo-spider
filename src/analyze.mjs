@@ -39,7 +39,7 @@ export const GENERIC_ANCHORS = new Set([
 
 // Clé d'indexabilité (traduite par l'interface : idx.<clé>).
 function indexability(p) {
-  if (p.blockedByRobots) return 'blocked';
+  if (p.blockedByRobots || p.robotsBlocked) return 'blocked';
   if (!p.status) return 'noResponse';
   if (p.status >= 300 && p.status < 400) return 'redirect';
   if (p.status >= 400 && p.status < 500) return 'clientError';
@@ -359,7 +359,7 @@ export function analyze(crawler) {
   // Directives
   add('noindex', 'notice', 'directives', 'medium', 'low', u(html200.filter((p) => robotsHas(p, 'noindex|none')), (p) => p.metaRobots || p.xRobotsTag));
   add('nofollow-page', 'notice', 'directives', 'low', 'low', u(html200.filter((p) => robotsHas(p, 'nofollow|none'))));
-  add('blocked-robots', 'notice', 'directives', 'medium', 'low', u(pages.filter((p) => p.blockedByRobots)));
+  add('blocked-robots', 'notice', 'directives', 'medium', 'low', u(pages.filter((p) => p.blockedByRobots || p.robotsBlocked)));
 
   // Liens & ancres
   add('nofollow-internal', 'notice', 'links', 'low', 'low', nofollowInternal.map((l) => ({ url: l.from, detail: `→ ${l.to}` })));
@@ -506,13 +506,14 @@ export function analyze(crawler) {
       finishedAt: crawler.finishedAt,
       stopped: crawler.stopped,
       rendered: !!crawler.renderer,
-      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined },
+      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '' },
       robotsTxt: crawler.robotsTxt,
       llmsTxt: crawler.llmsTxt,
       botAccess: crawler.botAccess,
       sitemapFiles: crawler.sitemapFiles,
       sitemapUrlCount: crawler.sitemapUrls.size,
       warnings: crawler.warnings,
+      skipped: crawler.skipped,
       thresholds: T,
     },
     summary: {

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-2.0.0-3d5f17" alt="Versão 2.0.0">
+  <img src="https://img.shields.io/badge/version-2.1.0-3d5f17" alt="Versão 2.1.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -28,6 +28,22 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel: pontuação de saúde SEO, pontuação por categoria, códigos de resposta, profundidade de clique e prioridades" width="100%">
+</p>
+
+## 🆕 Novidades da versão 2.1
+
+| | |
+|---|---|
+| 🕸️ **Visualizações 2D e 3D** | Veja a arquitetura do site em 2D ou 3D, em três vistas: **árvore de rastreio** (caminho de cliques mais curto a partir da página inicial), **diretórios** (estrutura dos URLs) e **links** (todos os links internos seguidos). Colore os nós por indexabilidade, problemas SEO ou profundidade; o tamanho do nó mostra o Link Score. Clique num nó para ver os detalhes da página e exporte a vista em PNG para os seus relatórios. |
+| ⚙️ **Configuração do crawler, como no Screaming Frog** | Uma janela de **Configuração** com separadores: Spider, **Limites**, **Velocidade**, **robots.txt**, Renderização, Incluir / excluir, Extração, Autenticação. Mantém apenas as definições que importam. |
+| 🚧 **Spider › Limites** | Total de rastreio, profundidade de rastreio, URLs por profundidade, profundidade de pastas, número de parâmetros de consulta, redirecionamentos a seguir, comprimento do URL, links por página, tamanho da página e **limites por caminho de URL** (`/blog/ = 200`). O painel mostra quantos URLs cada limite deixou de fora. |
+| 🤖 **robots.txt** | Três modos: **respeitar**, **ignorar mas assinalar** (rastreia os URLs bloqueados e continua a assinalá-los) e **ignorar**. Cole um **robots.txt personalizado** para testar um novo ficheiro antes de o publicar e use o **testador** integrado para ver se um URL é permitido e que regra se aplica. |
+| 🐢 **Velocidade** | Número máximo de threads e um limite global de **URLs por segundo**, para proteger servidores frágeis. |
+| 🧲 **Extração personalizada** | Recolha quaisquer dados de cada página com um seletor CSS ou uma regex: preço, autor, data, SKU, código de acompanhamento… Os resultados aparecem num separador **Extração** e na exportação CSV. |
+| 🔐 **Autenticação e limpeza de URLs** | Autenticação HTTP e cabeçalhos ou cookies personalizados para sites de pré-produção. Só são enviados para o site auditado e a palavra-passe nunca é guardada. **Remova parâmetros de URL** como `utm_*`, `gclid` ou `fbclid` para evitar URLs duplicados. |
+
+<p align="center">
+  <img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Árvore de rastreio em 3D colorida por problemas SEO" width="100%">
 </p>
 
 ## ✨ Novidades da versão 2.0
@@ -73,6 +89,12 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 | <img src="docs/screenshots/titles-serp.png" alt="Separador Títulos com pré-visualização do Google e medidores em píxeis"> | <img src="docs/screenshots/internal-linking.png" alt="Separador de links internos com Link Score e painel de links de entrada"> |
 | **Definições do relatório em marca branca** | **Relatório de auditoria profissional** |
 | <img src="docs/screenshots/report-dialog.png" alt="Janela do relatório com logótipo, cor, cliente e comparação"> | <img src="docs/screenshots/report.png" alt="Resumo executivo do relatório de auditoria"> |
+| **Árvore de rastreio (2D)** | **Grafo de links (2D)** |
+| <img src="docs/screenshots/viz-crawl-tree-2d.png" alt="Árvore de rastreio em 2D"> | <img src="docs/screenshots/viz-link-graph.png" alt="Grafo de links internos com disposição por forças"> |
+| **Diretórios** | **Extração personalizada** |
+| <img src="docs/screenshots/viz-directory-tree.png" alt="Visualização dos diretórios"> | <img src="docs/screenshots/custom-extraction.png" alt="Separador Extração com preços extraídos por seletor CSS"> |
+| **Configuração › Limites** | **Configuração › robots.txt (com testador)** |
+| <img src="docs/screenshots/config-limits.png" alt="Definições de limites do spider"> | <img src="docs/screenshots/config-robots.png" alt="Modos do robots.txt, robots.txt personalizado e testador"> |
 | **Ecrã inicial** | **Modo escuro** |
 | <img src="docs/screenshots/home.png" alt="Ecrã inicial com os rastreamentos recentes"> | <img src="docs/screenshots/dashboard-dark.png" alt="Painel em modo escuro"> |
 
@@ -125,16 +147,32 @@ Mantenha a janela do terminal aberta enquanto usa a aplicação e prima `Ctrl + 
 
 Use **Todos os problemas (CSV)** para dar ao seu cliente ou programador a lista completa de URLs a corrigir.
 
-## ⚙️ Opções de rastreamento
+## ⚙️ Configuração
 
-| Grupo | Opções |
+Clique em **⚙ Opções** para abrir a janela **Configuração**. As suas definições ficam guardadas, exceto a palavra-passe.
+
+| Separador | Definições |
 |---|---|
-| Rastreamento | Máximo de URLs, profundidade máxima, pedidos simultâneos, intervalo entre pedidos, tempo limite |
+| Spider | Ler sitemaps XML, seguir canónicos, incluir subdomínios, verificar links externos e imagens |
+| Limites | Total de rastreio, profundidade de rastreio, URLs por profundidade, profundidade de pastas, parâmetros de consulta, redirecionamentos a seguir, comprimento do URL, links por página, tamanho da página, limites por caminho de URL (`/blog/ = 200`, um por linha) |
+| Velocidade | Número máximo de threads, máximo de URLs por segundo, tempo limite |
+| robots.txt | Respeitar robots.txt / Ignorar robots.txt mas assinalar o estado / Ignorar robots.txt, robots.txt personalizado, testador de URLs |
 | Renderização | Renderização JavaScript, user-agent (Arachnide, Googlebot desktop/smartphone, Chrome), Accept-Language |
-| Âmbito | Incluir / excluir URLs com uma regex, pesquisa personalizada, subdomínios, ignorar parâmetros de URL |
-| Verificações | Respeitar o robots.txt, ler sitemaps XML, seguir canónicos, verificar links externos, verificar imagens |
+| Incluir / excluir | Regex de inclusão / exclusão, remover parâmetros de URL (`utm_*, gclid`), ignorar todos os parâmetros, pesquisa personalizada |
+| Extração | Até 20 extratores: seletor CSS (texto, atributo, HTML ou contagem) ou regex |
+| Autenticação | Utilizador e palavra-passe HTTP, cabeçalhos personalizados (cookies, tokens) |
 
 Use o seletor **Site / Lista** junto ao campo de endereço para rastrear um site inteiro ou apenas uma lista de URLs.
+
+## 🕸️ Visualizações
+
+Depois de um rastreio, abra **Visualizações** na barra lateral:
+
+- **Árvore de rastreio:** cada página está ligada à página que levou até ela no nível de profundidade de clique anterior. Ramos longos significam páginas profundas.
+- **Diretórios:** a estrutura dos URLs, pasta a pasta. Mostra secções desequilibradas ou demasiado profundas.
+- **Links:** o grafo completo dos links internos. As páginas bem ligadas agrupam-se no centro e as páginas isoladas afastam-se para a periferia.
+
+Alterne entre **2D** e **3D**, colore por indexabilidade, problemas ou profundidade, escolha quantos nós mostrar (até 6000), clique num nó para abrir os seus detalhes e exporte um PNG para os seus relatórios.
 
 ## 🖥️ Linha de comandos
 
@@ -143,6 +181,7 @@ node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang pt
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```
 
@@ -174,12 +213,14 @@ src/
   analyze.mjs    link graph, click depth, Link Score, duplicates, cannibalisation, SEO checks
   text.mjs       keywords, multilingual stop words, simhash
   pixel.mjs      title and description width in pixels
+  options.mjs    validation of the crawl configuration (UI and CLI)
   server.mjs     local web server and API with live updates
   cli.mjs        command-line interface
 public/
   app.js         web interface (no framework)
+  viz.js         2D / 3D visualisations (force-graph, 3d-force-graph, served locally)
   i18n/*.js      translations (en, fr, de, es, it, pt)
-  shared/        report generator, crawl comparison, i18n, icons (used by the UI and the CLI)
+  shared/        report generator, crawl comparison, robots.txt parser, i18n, icons (used by the UI and the CLI)
 ```
 
 **Adicionar um idioma:** copie `public/i18n/en.js`, traduza os valores e adicione o idioma a `LANGS` em `public/shared/i18n.js`. O `npm test` verifica que não falta nenhuma chave nem nenhum marcador.
@@ -188,9 +229,10 @@ public/
 
 - [ ] Dados de campo do PageSpeed Insights / CrUX
 - [ ] Integração com o Google Search Console (cliques e impressões por URL)
-- [ ] Extração personalizada (seletores CSS / XPath)
 - [ ] Rastreamentos agendados com alertas por e-mail
-- [ ] Visualização interativa da arquitetura do site
+- [ ] Importação de uma exportação CSV do Google Search Console (páginas órfãs presentes apenas no GSC)
+- [x] Extração personalizada (2.1)
+- [x] Visualizações 2D / 3D da arquitetura do site (2.1)
 
 Sugestões e pull requests são bem-vindos. Consulte [CONTRIBUTING.md](CONTRIBUTING.md).
 
