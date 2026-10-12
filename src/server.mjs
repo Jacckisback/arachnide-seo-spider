@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Serveur local : sert l'interface et pilote le crawler (API JSON + flux SSE).
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Crawler, USER_AGENTS } from './crawler.mjs';
+import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
+import { findChrome } from './renderer.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -12,7 +14,8 @@ const CRAWLS = path.join(ROOT, 'crawls');
 const PORT = Number(process.env.PORT) || 4000;
 const HOST = process.env.HOST || '127.0.0.1';
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon' };
+const INDEX = path.join(CRAWLS, '_index.json');
 
 let crawler = null;
 let lastResult = null;
@@ -44,20 +47,50 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
-const safeName = (n) => /^[\w.-]+\.json$/.test(n) ? n : null;
+const safeName = (n) => (/^[\w.-]+\.json$/.test(n) && n !== '_index.json' ? n : null);
+
+// Index des crawls (score, date, hôte) pour afficher l'historique sans relire chaque fichier.
+async function readIndex() {
+  try {
+    return JSON.parse(await fs.readFile(INDEX, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+const summaryOf = (r) => ({
+  host: new URL(r.meta.startUrl).hostname,
+  startUrl: r.meta.startUrl,
+  finishedAt: r.meta.finishedAt,
+  score: r.summary.score,
+  grade: r.summary.grade,
+  totalUrls: r.summary.totalUrls,
+});
 
 async function listCrawls() {
+  let files;
   try {
-    const files = (await fs.readdir(CRAWLS)).filter((f) => f.endsWith('.json'));
-    const out = [];
-    for (const f of files) {
-      const st = await fs.stat(path.join(CRAWLS, f));
-      out.push({ file: f, size: st.size, mtime: st.mtime });
-    }
-    return out.sort((a, b) => b.mtime - a.mtime);
+    files = (await fs.readdir(CRAWLS)).filter((f) => safeName(f));
   } catch {
     return [];
   }
+  const index = await readIndex();
+  let dirty = false;
+  const out = [];
+  for (const f of files) {
+    const st = await fs.stat(path.join(CRAWLS, f));
+    if (!index[f]) {
+      try {
+        index[f] = summaryOf(JSON.parse(await fs.readFile(path.join(CRAWLS, f), 'utf8')));
+        dirty = true;
+      } catch {
+        index[f] = {};
+      }
+    }
+    out.push({ file: f, size: st.size, mtime: st.mtime, ...index[f] });
+  }
+  if (dirty) await fs.writeFile(INDEX, JSON.stringify(index)).catch(() => {});
+  return out.sort((a, b) => String(b.finishedAt || b.mtime).localeCompare(String(a.finishedAt || a.mtime)));
 }
 
 async function saveResult(result) {
@@ -66,16 +99,28 @@ async function saveResult(result) {
   const stamp = result.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '');
   const file = `${host}_${stamp}.json`;
   await fs.writeFile(path.join(CRAWLS, file), JSON.stringify(result));
+  const index = await readIndex();
+  index[file] = summaryOf(result);
+  await fs.writeFile(INDEX, JSON.stringify(index));
   return file;
 }
 
 async function startCrawl(body) {
-  if (crawler && crawler.phase !== 'done') throw Object.assign(new Error('Un crawl est déjà en cours.'), { status: 409 });
+  if (crawler && crawler.phase !== 'done') throw Object.assign(new Error('A crawl is already running.'), { status: 409, key: 'toast.busy' });
   const o = body.options || {};
   const opts = {};
   for (const k of ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs']) if (o[k] !== undefined && o[k] !== '') opts[k] = Number(o[k]);
-  for (const k of ['respectRobots', 'crawlSubdomains', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages']) if (o[k] !== undefined) opts[k] = !!o[k];
-  for (const k of ['include', 'exclude']) if (o[k]) opts[k] = String(o[k]);
+  for (const k of ['respectRobots', 'crawlSubdomains', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render']) if (o[k] !== undefined) opts[k] = !!o[k];
+  for (const k of ['include', 'exclude', 'search', 'acceptLanguage']) if (o[k]) opts[k] = String(o[k]);
+  if (o.mode === 'list') {
+    opts.mode = 'list';
+    opts.urls = (Array.isArray(o.urls) ? o.urls : String(o.urls || '').split(/\s+/)).map(String).filter(Boolean).slice(0, 100000);
+  }
+  for (const k of ['include', 'exclude']) {
+    if (opts[k]) {
+      try { new RegExp(opts[k]); } catch { throw Object.assign(new Error(`Invalid regex (${k}): ${opts[k]}`), { status: 400, key: 'toast.badRegex' }); }
+    }
+  }
   opts.userAgent = USER_AGENTS[o.userAgent] || (o.customUserAgent ? String(o.customUserAgent) : USER_AGENTS.arachnide);
   opts.concurrency = Math.min(Math.max(opts.concurrency || 5, 1), 30);
 
@@ -85,6 +130,7 @@ async function startCrawl(body) {
   liveRows = [];
   broadcast('reset', { startUrl: c.startUrl });
   c.on('status', (s) => broadcast('status', s));
+  c.on('warning', (w) => broadcast('warning', w));
   c.on('progress', (p) => broadcast('progress', p));
   c.on('page', (p) => liveRows.push({ url: p.url, status: p.status, statusText: p.statusText, contentType: p.contentType, title: p.title || '', responseTime: p.responseTime, size: p.size, wordCount: p.wordCount ?? null }));
   c.start()
@@ -121,6 +167,7 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+    if (p === '/api/env') return send(res, 200, { version: VERSION, chrome: findChrome(), node: process.version, platform: process.platform });
     if (p === '/api/state') return send(res, 200, { running: !!crawler && crawler.phase !== 'done', progress: crawler?.progress() || null, hasResult: !!lastResult, file: lastFile });
     if (p === '/api/crawl' && req.method === 'POST') return send(res, 200, await startCrawl(await readBody(req)));
     if (p === '/api/stop' && req.method === 'POST') {
@@ -135,6 +182,9 @@ const server = http.createServer(async (req, res) => {
       const file = path.join(CRAWLS, name);
       if (req.method === 'DELETE') {
         await fs.unlink(file);
+        const index = await readIndex();
+        delete index[name];
+        await fs.writeFile(INDEX, JSON.stringify(index)).catch(() => {});
         return send(res, 200, { ok: true });
       }
       return send(res, 200, await fs.readFile(file));
@@ -149,10 +199,28 @@ const server = http.createServer(async (req, res) => {
     if (!data) return send(res, 404, 'Introuvable', 'text/plain');
     return send(res, 200, data, MIME[path.extname(file)] || 'application/octet-stream');
   } catch (e) {
-    return send(res, e.status || 500, { error: e.message });
+    return send(res, e.status || 500, { error: e.message, key: e.key });
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`\n🕷️  Arachnide SEO Spider → http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}\n`);
-});
+function openBrowser(url) {
+  const [cmd, args] = process.platform === 'darwin' ? ['open', [url]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : ['xdg-open', [url]];
+  try {
+    spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+  } catch { /* pas de navigateur disponible */ }
+}
+
+// Si le port est occupé (Arachnide déjà lancé ou autre application), on essaie les suivants.
+function listen(port, attempt = 0) {
+  server.once('error', (e) => {
+    if (e.code === 'EADDRINUSE' && attempt < 10 && !process.env.PORT) return listen(port + 1, attempt + 1);
+    console.error(e.code === 'EADDRINUSE' ? `Port ${port} déjà utilisé / already in use.` : e.message);
+    process.exit(1);
+  });
+  server.listen(port, HOST, () => {
+    const url = `http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${port}`;
+    console.log(`\n🕷️  Arachnide SEO Spider ${VERSION} → ${url}\n`);
+    if (process.env.ARACHNIDE_OPEN) openBrowser(url);
+  });
+}
+listen(PORT);

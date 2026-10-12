@@ -20,7 +20,7 @@
   <g transform="translate(1150 150)" fill="#10140b"><circle cx="-7" cy="-29" r="4"/><circle cx="7" cy="-29" r="4"/></g>
   <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
     <text x="72" y="128" fill="#ffffff" font-size="64" font-weight="800">Arachnide <tspan fill="#8cc63f">SEO Spider</tspan></text>
-    <text x="74" y="180" fill="#d3dcc7" font-size="26">Free, open-source technical SEO crawler — runs on your own computer.</text>
+    <text x="74" y="180" fill="#d3dcc7" font-size="26">Free technical SEO crawler · JS rendering · PDF reports · 6 languages</text>
     <text x="74" y="216" fill="#d3dcc7" font-size="26">Audit · Titles · Metas · Redirects · Broken links · Sitemaps · Internal linking</text>
     <text x="74" y="272" fill="#8cc63f" font-size="22" font-weight="600">by Thierry Gustin — SEO consultant · Madrid</text>
   </g>

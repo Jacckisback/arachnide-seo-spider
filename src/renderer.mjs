@@ -1,0 +1,128 @@
+// Rendu JavaScript via Chrome / Edge / Chromium déjà installé (puppeteer-core, aucun téléchargement).
+import fs from 'node:fs';
+import path from 'node:path';
+
+function candidates() {
+  const env = [process.env.CHROME_PATH, process.env.PUPPETEER_EXECUTABLE_PATH].filter(Boolean);
+  if (process.platform === 'darwin') {
+    return [
+      ...env,
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      path.join(process.env.HOME || '', 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome'),
+    ];
+  }
+  if (process.platform === 'win32') {
+    const roots = [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].filter(Boolean);
+    return [
+      ...env,
+      ...roots.flatMap((r) => [
+        path.join(r, 'Google/Chrome/Application/chrome.exe'),
+        path.join(r, 'Microsoft/Edge/Application/msedge.exe'),
+        path.join(r, 'BraveSoftware/Brave-Browser/Application/brave.exe'),
+        path.join(r, 'Chromium/Application/chrome.exe'),
+      ]),
+    ];
+  }
+  const pw = '/opt/pw-browsers';
+  const pwChromes = fs.existsSync(pw)
+    ? fs.readdirSync(pw).filter((d) => d.startsWith('chromium-')).map((d) => path.join(pw, d, 'chrome-linux/chrome'))
+    : [];
+  return [
+    ...env,
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    '/usr/bin/microsoft-edge',
+    '/usr/bin/brave-browser',
+    ...pwChromes,
+  ];
+}
+
+export function findChrome() {
+  return candidates().find((p) => {
+    try {
+      return p && fs.statSync(p).isFile();
+    } catch {
+      return false;
+    }
+  }) || null;
+}
+
+// Script injecté avant le chargement : collecte LCP et CLS (mesures de labo, indicatives).
+const VITALS = `
+  window.__arachnide = { lcp: 0, cls: 0 };
+  try {
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__arachnide.lcp = e.renderTime || e.loadTime || e.startTime; })
+      .observe({ type: 'largest-contentful-paint', buffered: true });
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__arachnide.cls += e.value; })
+      .observe({ type: 'layout-shift', buffered: true });
+  } catch (e) {}
+`;
+
+export class Renderer {
+  constructor({ userAgent, timeoutMs = 30000, executablePath } = {}) {
+    this.userAgent = userAgent;
+    this.timeoutMs = Math.min(timeoutMs, 45000);
+    this.executablePath = executablePath || findChrome();
+  }
+
+  async start() {
+    if (!this.executablePath) throw Object.assign(new Error('Chrome introuvable'), { code: 'NO_CHROME' });
+    const { default: puppeteer } = await import('puppeteer-core');
+    this.browser = await puppeteer.launch({
+      executablePath: this.executablePath,
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run', '--mute-audio'],
+    });
+  }
+
+  async render(url) {
+    const page = await this.browser.newPage();
+    const consoleErrors = [];
+    let requests = 0;
+    let bytes = 0;
+    try {
+      if (this.userAgent) await page.setUserAgent(this.userAgent);
+      await page.setViewport({ width: 1366, height: 900 });
+      await page.evaluateOnNewDocument(VITALS);
+      // Les échecs de chargement de ressources (404 d'images, favicon…) ne sont pas des erreurs JavaScript.
+      page.on('console', (m) => m.type() === 'error' && !/^Failed to load resource/i.test(m.text()) && consoleErrors.length < 20 && consoleErrors.push(m.text().slice(0, 300)));
+      page.on('pageerror', (e) => consoleErrors.length < 20 && consoleErrors.push(String(e.message || e).slice(0, 300)));
+      page.on('requestfinished', (req) => {
+        requests++;
+        const len = Number(req.response()?.headers()['content-length']);
+        if (len) bytes += len;
+      });
+      const t0 = Date.now();
+      try {
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: this.timeoutMs });
+      } catch (e) {
+        if (!/timeout/i.test(e.message)) throw e; // page lente : on garde ce qui est chargé
+      }
+      const loadTime = Date.now() - t0;
+      await new Promise((r) => setTimeout(r, 300));
+      const [html, vitals] = await Promise.all([page.content(), page.evaluate(() => window.__arachnide || null)]);
+      return {
+        html,
+        finalUrl: page.url(),
+        loadTime,
+        lcp: vitals?.lcp ? Math.round(vitals.lcp) : null,
+        cls: vitals ? Math.round(vitals.cls * 1000) / 1000 : null,
+        consoleErrors,
+        requests,
+        bytes,
+      };
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
+  async close() {
+    await this.browser?.close().catch(() => {});
+  }
+}

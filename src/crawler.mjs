@@ -1,11 +1,13 @@
-// Moteur de crawl : file d'attente BFS, concurrence, robots.txt, sitemaps, redirections manuelles.
+// Moteur de crawl : file d'attente BFS, concurrence, robots.txt, sitemaps, redirections manuelles, rendu JS optionnel.
 import { EventEmitter } from 'node:events';
 import zlib from 'node:zlib';
 import { parseHtml, resolveUrl } from './parse.mjs';
 import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
+import { Renderer } from './renderer.mjs';
 
-export const DEFAULT_UA = 'Mozilla/5.0 (compatible; ArachnideSEO/1.0; +https://github.com/Jacckisback/arachnide-seo-spider)';
+export const VERSION = '2.0.0';
+export const DEFAULT_UA = 'Mozilla/5.0 (compatible; ArachnideSEO/2.0; +https://github.com/Jacckisback/arachnide-seo-spider)';
 export const USER_AGENTS = {
   arachnide: DEFAULT_UA,
   googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
@@ -32,7 +34,26 @@ export const DEFAULT_OPTIONS = {
   exclude: '',
   maxExternal: 1000,
   maxImages: 2000,
+  mode: 'spider', // 'spider' : suit les liens ; 'list' : crawle uniquement opts.urls
+  urls: [],
+  render: false, // rendu JavaScript avec Chrome
+  renderConcurrency: 3,
+  search: '', // texte ou /regex/ recherché dans le code source de chaque page
+  acceptLanguage: '', // vide comme Googlebot
 };
+
+// Robots des moteurs de recherche et des IA dont on vérifie l'accès dans le robots.txt.
+export const BOTS = ['Googlebot', 'Bingbot', 'GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'PerplexityBot', 'Google-Extended', 'Applebot-Extended', 'CCBot', 'Bytespider', 'meta-externalagent', 'Amazonbot'];
+
+function searchRegex(q) {
+  if (!q) return null;
+  const m = /^\/(.+)\/([a-z]*)$/.exec(q);
+  try {
+    return m ? new RegExp(m[1], m[2].includes('g') ? m[2] : m[2] + 'g') : new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  } catch {
+    return null;
+  }
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const HTML_TYPES = /text\/html|application\/xhtml\+xml/i;
@@ -54,9 +75,22 @@ export class Crawler extends EventEmitter {
   constructor(startUrl, options = {}) {
     super();
     this.opts = { ...DEFAULT_OPTIONS, ...options };
-    let u = String(startUrl || '').trim();
-    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
-    this.startUrl = new URL(u).href;
+    const fix = (x) => {
+      let u = String(x || '').trim();
+      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+      return new URL(u).href;
+    };
+    if (this.opts.mode === 'list') {
+      this.listUrls = [...new Set((this.opts.urls || []).map((x) => { try { return fix(x); } catch { return null; } }).filter(Boolean))];
+      if (!this.listUrls.length) throw new Error('URL list is empty');
+      startUrl = this.listUrls[0];
+      this.opts.maxPages = Math.max(this.opts.maxPages, this.listUrls.length);
+    }
+    this.startUrl = fix(startUrl);
+    this.searchRe = searchRegex(this.opts.search);
+    this.warnings = [];
+    this.botAccess = [];
+    this.llmsTxt = null;
     this.includeRe = this.opts.include ? new RegExp(this.opts.include, 'i') : null;
     this.excludeRe = this.opts.exclude ? new RegExp(this.opts.exclude, 'i') : null;
     this.pages = new Map(); // url -> enregistrement
@@ -133,7 +167,7 @@ export class Crawler extends EventEmitter {
         headers: {
           'user-agent': this.opts.userAgent,
           accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'accept-language': 'fr-FR,fr;q=0.9,es;q=0.8,en;q=0.7',
+          ...(this.opts.acceptLanguage ? { 'accept-language': this.opts.acceptLanguage } : {}),
         },
       });
       const ttfb = Math.round(performance.now() - t0);
@@ -170,6 +204,7 @@ export class Crawler extends EventEmitter {
   async resolveStart() {
     // Suit les redirections de l'URL de départ pour connaître l'hôte réel du site.
     this.hosts = new Set([new URL(this.startUrl).hostname.toLowerCase()]);
+    if (this.listUrls) for (const x of this.listUrls) this.hosts.add(new URL(x).hostname.toLowerCase());
     let url = this.startUrl;
     for (let i = 0; i < 10; i++) {
       try {
@@ -193,16 +228,16 @@ export class Crawler extends EventEmitter {
   }
 
   async loadRobotsAndSitemaps() {
-    this.phase = 'robots';
-    this.emit('status', { phase: 'robots', message: 'Lecture du robots.txt' });
-    const txt = await this.fetchText(this.origin + '/robots.txt');
+    this.setPhase('robots');
+    const [txt, llms] = await Promise.all([this.fetchText(this.origin + '/robots.txt'), this.fetchText(this.origin + '/llms.txt')]);
     this.robotsTxt = txt;
+    this.llmsTxt = llms && !/<html/i.test(llms.slice(0, 500)) ? { size: llms.length } : null;
     const robots = txt ? parseRobots(txt) : null;
     this.robotsRules = robots ? rulesFor(robots, this.opts.userAgent) : [];
-    if (!this.opts.useSitemaps) return;
+    this.botAccess = BOTS.map((bot) => ({ bot, allowed: robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
+    if (!this.opts.useSitemaps || this.opts.mode === 'list') return;
 
-    this.phase = 'sitemaps';
-    this.emit('status', { phase: 'sitemaps', message: 'Lecture des sitemaps XML' });
+    this.setPhase('sitemaps');
     const toFetch = [...new Set([...(robots?.sitemaps || []), this.origin + '/sitemap.xml', this.origin + '/sitemap_index.xml'])];
     const done = new Set();
     while (toFetch.length && done.size < 100 && !this.stopped) {
@@ -238,18 +273,56 @@ export class Crawler extends EventEmitter {
     return !isAllowed(this.robotsRules, u.pathname + u.search);
   }
 
+  setPhase(phase) {
+    this.phase = phase;
+    this.emit('status', { phase });
+  }
+
+  warn(key, params = {}) {
+    this.warnings.push({ key, params });
+    this.emit('warning', { key, params });
+  }
+
+  async startRenderer() {
+    if (!this.opts.render) return;
+    this.setPhase('browser');
+    const r = new Renderer({ userAgent: this.opts.userAgent, timeoutMs: this.opts.timeoutMs });
+    try {
+      await r.start();
+      this.renderer = r;
+      this.renderSlots = Math.max(1, Math.min(this.opts.renderConcurrency, this.opts.concurrency));
+      this.renderWaiters = [];
+    } catch (e) {
+      this.warn(e.code === 'NO_CHROME' ? 'warn.noChrome' : 'warn.renderFailed', { error: e.message });
+    }
+  }
+
+  async withRenderSlot(fn) {
+    while (this.renderSlots <= 0) await new Promise((r) => this.renderWaiters.push(r));
+    this.renderSlots--;
+    try {
+      return await fn();
+    } finally {
+      this.renderSlots++;
+      this.renderWaiters.shift()?.();
+    }
+  }
+
   async start() {
     this.startedAt = new Date().toISOString();
-    this.phase = 'start';
-    this.emit('status', { phase: 'start', message: 'Résolution de l’URL de départ' });
+    this.setPhase('start');
     await this.resolveStart();
     await this.loadRobotsAndSitemaps();
-    this.enqueue(this.startUrl, 0, 'start');
-    if (this.finalStart !== this.startUrl) this.enqueue(this.finalStart, 0, 'redirect');
-    if (this.opts.useSitemaps) this.deferred = [...this.sitemapUrls];
+    await this.startRenderer();
+    if (this.listUrls) {
+      for (const u of this.listUrls) this.enqueue(u, 0, 'list');
+    } else {
+      this.enqueue(this.startUrl, 0, 'start');
+      if (this.finalStart !== this.startUrl) this.enqueue(this.finalStart, 0, 'redirect');
+      if (this.opts.useSitemaps) this.deferred = [...this.sitemapUrls];
+    }
 
-    this.phase = 'crawl';
-    this.emit('status', { phase: 'crawl', message: 'Crawl en cours' });
+    this.setPhase('crawl');
     const progressTimer = setInterval(() => this.emit('progress', this.progress()), 500);
     try {
       await Promise.all(Array.from({ length: Math.max(1, this.opts.concurrency) }, () => this.worker()));
@@ -257,9 +330,9 @@ export class Crawler extends EventEmitter {
       if (!this.stopped && this.opts.checkImages) await this.checkImages();
     } finally {
       clearInterval(progressTimer);
+      await this.renderer?.close();
     }
-    this.phase = 'analyse';
-    this.emit('status', { phase: 'analyse', message: 'Analyse des résultats' });
+    this.setPhase('analyse');
     this.finishedAt = new Date().toISOString();
     const result = analyze(this);
     this.phase = 'done';
@@ -279,6 +352,7 @@ export class Crawler extends EventEmitter {
       externals: this.externals.size,
       stopped: this.stopped,
       elapsed: this.startedAt ? Date.now() - Date.parse(this.startedAt) : 0,
+      rendering: !!this.renderer,
     };
   }
 
@@ -334,7 +408,6 @@ export class Crawler extends EventEmitter {
   errorRecord(item, e) {
     const rec = this.baseRecord(item);
     rec.error = e?.name === 'AbortError' ? 'Timeout' : e?.cause?.code || e?.message || String(e);
-    rec.statusText = 'Aucune réponse';
     return rec;
   }
 
@@ -342,7 +415,6 @@ export class Crawler extends EventEmitter {
     const rec = this.baseRecord(item);
     if (this.blockedByRobots(item.url)) {
       rec.blockedByRobots = true;
-      rec.statusText = 'Bloqué par robots.txt';
       this.pages.set(item.url, rec);
       this.emit('page', rec);
       return;
@@ -364,12 +436,19 @@ export class Crawler extends EventEmitter {
       rec.xRobotsTag = res.headers.get('x-robots-tag') || '';
       rec.lastModified = res.headers.get('last-modified') || '';
       rec.responseTime = ttfb;
+      rec.headers = {
+        hsts: !!res.headers.get('strict-transport-security'),
+        xcto: !!res.headers.get('x-content-type-options'),
+        csp: !!res.headers.get('content-security-policy'),
+        encoding: res.headers.get('content-encoding') || '',
+        cacheControl: res.headers.get('cache-control') || '',
+      };
       const loc = res.headers.get('location');
       if (res.status >= 300 && res.status < 400) {
         await res.body?.cancel();
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
-          this.enqueue(rec.redirectUrl, item.depth, 'redirect');
+          if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect');
         }
         this.pages.set(item.url, rec);
         this.emit('page', rec);
@@ -387,22 +466,53 @@ export class Crawler extends EventEmitter {
       rec.downloadTime = Math.round(performance.now() - reqRes.t0);
       rec.size = buf.byteLength;
       const html = decodeBody(buf, rec.contentType);
-      const data = parseHtml(html, item.url);
+      let data = parseHtml(html, item.url);
+      if (this.searchRe) rec.searchMatches = (html.match(this.searchRe) || []).length;
+      if (this.renderer && res.status === 200) {
+        const raw = data;
+        try {
+          const r = await this.withRenderSlot(() => this.renderer.render(item.url));
+          // Redirection JavaScript ou meta refresh : la page rendue est une autre URL, on garde le HTML brut.
+          if (this.normalize(r.finalUrl) !== item.url) throw new Error(`JS redirect → ${r.finalUrl}`);
+          data = parseHtml(r.html, item.url);
+          const rawLinks = new Set(raw.links.map((l) => l.to));
+          rec.js = {
+            rendered: true,
+            loadTime: r.loadTime,
+            lcp: r.lcp,
+            cls: r.cls,
+            requests: r.requests,
+            consoleErrors: r.consoleErrors,
+            rawWordCount: raw.wordCount,
+            rawTitle: raw.title,
+            rawH1: raw.h1[0] || '',
+            rawCanonical: raw.canonical,
+            rawMetaRobots: raw.metaRobots,
+            rawLinkCount: raw.links.length,
+            jsOnlyLinks: data.links.filter((l) => !rawLinks.has(l.to)).length,
+          };
+          if (this.searchRe) rec.searchMatches = (r.html.match(this.searchRe) || []).length;
+        } catch (e) {
+          rec.js = { rendered: false, error: e.message.slice(0, 200) };
+        }
+      }
       const { links, images, ...fields } = data;
       Object.assign(rec, fields);
       rec.internalOutlinks = 0;
       rec.externalOutlinks = 0;
       rec.imagesCount = images.length;
       rec.imagesMissingAlt = images.filter((i) => i.alt === null || i.alt === '').length;
+      rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
 
       const followAll = !/nofollow/i.test(rec.metaRobots + ' ' + rec.xRobotsTag);
+      const follow = this.opts.mode !== 'list';
       for (const l of links) {
         const to = this.normalize(l.to) || l.to;
         const internal = this.isInternal(to);
-        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal });
+        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos });
         if (internal) {
           rec.internalOutlinks++;
-          if (followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
+          if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
         } else {
           rec.externalOutlinks++;
           const ex = this.externals.get(to) || { url: to, status: null, statusText: '', inlinks: 0, pages: new Set() };
@@ -418,8 +528,8 @@ export class Crawler extends EventEmitter {
         im.pages.add(item.url);
         this.images.set(img.src, im);
       }
-      if (this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
-      if (rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
+      if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
+      if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
       this.pages.set(item.url, rec);
       this.emit('page', rec);
     } finally {
@@ -446,20 +556,18 @@ export class Crawler extends EventEmitter {
       }
       return { status: res.status, statusText: res.statusText, size: Number(res.headers.get('content-length')) || null, location: res.headers.get('location') || '' };
     } catch (e) {
-      return { status: 0, statusText: e?.name === 'AbortError' ? 'Timeout' : e?.cause?.code || 'Erreur', size: null };
+      return { status: 0, statusText: e?.name === 'AbortError' ? 'Timeout' : e?.cause?.code || 'Error', size: null };
     }
   }
 
   async checkExternals() {
-    this.phase = 'externes';
-    this.emit('status', { phase: 'externes', message: 'Vérification des liens externes' });
+    this.setPhase('externals');
     const list = [...this.externals.values()].slice(0, this.opts.maxExternal);
     await this.pool(list, async (ex) => Object.assign(ex, await this.headStatus(ex.url)), this.opts.concurrency * 2);
   }
 
   async checkImages() {
-    this.phase = 'images';
-    this.emit('status', { phase: 'images', message: 'Vérification des images' });
+    this.setPhase('images');
     const list = [...this.images.values()].slice(0, this.opts.maxImages);
     await this.pool(list, async (im) => {
       const r = await this.headStatus(im.src);

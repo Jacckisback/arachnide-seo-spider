@@ -1,55 +1,76 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Arachnide SEO Spider</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕷️</text></svg>">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">🕷️</span><span>Arachnide <small>SEO Spider</small></span></div>
+    <div class="brand"><span class="logo" data-icon="spider"></span><span class="name">Arachnide <small>SEO Spider</small></span><span id="version" class="ver"></span></div>
     <form id="crawlForm" class="crawl-form" autocomplete="off">
-      <input id="urlInput" type="text" placeholder="https://www.exemple.fr" required>
-      <button id="startBtn" class="btn primary" type="submit">Crawler</button>
-      <button id="stopBtn" class="btn danger" type="button" hidden>Arrêter</button>
-      <button id="optionsBtn" class="btn" type="button" aria-expanded="false">⚙ Options</button>
+      <div class="seg mode" id="modeSeg">
+        <button type="button" data-mode="spider" data-i18n="opt.modeSpider">Spider</button>
+        <button type="button" data-mode="list" data-i18n="opt.modeList">List</button>
+      </div>
+      <input id="urlInput" type="text" inputmode="url" data-i18n-ph="ui.urlPlaceholder" placeholder="https://www.example.com" required>
+      <textarea id="listInput" rows="1" data-i18n-ph="ui.listPlaceholder" hidden></textarea>
+      <button id="startBtn" class="btn primary" type="submit" data-icon="play"><span data-i18n="ui.crawl">Crawl</span></button>
+      <button id="stopBtn" class="btn danger" type="button" data-icon="stop" hidden><span data-i18n="ui.stop">Stop</span></button>
+      <button id="optionsBtn" class="btn" type="button" aria-expanded="false" data-icon="settings"><span data-i18n="ui.options">Options</span></button>
     </form>
     <div class="top-actions">
-      <button id="historyBtn" class="btn" type="button">🕘 Historique</button>
-      <label class="btn" title="Ouvrir un fichier de crawl .json">📂 Ouvrir<input id="importInput" type="file" accept=".json,application/json" hidden></label>
-      <button id="exportJsonBtn" class="btn" type="button" disabled>⬇ JSON</button>
-      <button id="themeBtn" class="btn icon" type="button" title="Thème clair / sombre" aria-label="Changer de thème">🌓</button>
+      <button id="reportBtn" class="btn accent" type="button" data-icon="report" disabled><span data-i18n="ui.report">Report</span></button>
+      <button id="historyBtn" class="btn icon" type="button" data-icon="history" data-i18n-title="ui.history"></button>
+      <label class="btn icon" data-icon="folder" data-i18n-title="ui.open"><input id="importInput" type="file" accept=".json,application/json" hidden></label>
+      <button id="exportJsonBtn" class="btn icon" type="button" data-icon="download" data-i18n-title="ui.exportJson" disabled></button>
+      <label class="lang" data-icon="globe"><select id="langSel" aria-label="Language"></select></label>
+      <button id="themeBtn" class="btn icon" type="button" data-icon="moon" data-i18n-title="ui.theme"></button>
     </div>
   </header>
 
   <section id="optionsPanel" class="options" hidden>
-    <div class="opt-grid">
-      <label>URLs max <input name="maxPages" type="number" min="1" value="500"></label>
-      <label>Profondeur max <input name="maxDepth" type="number" min="0" value="20"></label>
-      <label>Requêtes simultanées <input name="concurrency" type="number" min="1" max="30" value="5"></label>
-      <label>Pause entre requêtes (ms) <input name="delayMs" type="number" min="0" value="0"></label>
-      <label>Timeout (ms) <input name="timeoutMs" type="number" min="1000" value="20000"></label>
-      <label>User-agent
-        <select name="userAgent">
-          <option value="arachnide">ArachnideSEO (défaut)</option>
-          <option value="googlebot">Googlebot desktop</option>
-          <option value="googlebotMobile">Googlebot smartphone</option>
-          <option value="chrome">Chrome (navigateur)</option>
-        </select>
-      </label>
-      <label class="wide">Inclure seulement (regex) <input name="include" type="text" placeholder="ex. /blog/"></label>
-      <label class="wide">Exclure (regex) <input name="exclude" type="text" placeholder="ex. \?(replytocom|share)=|/wp-admin/"></label>
-    </div>
-    <div class="opt-checks">
-      <label><input type="checkbox" name="respectRobots" checked> Respecter robots.txt</label>
-      <label><input type="checkbox" name="useSitemaps" checked> Lire les sitemaps XML</label>
-      <label><input type="checkbox" name="crawlCanonicals" checked> Suivre les canonicals</label>
-      <label><input type="checkbox" name="crawlSubdomains"> Inclure les sous-domaines</label>
-      <label><input type="checkbox" name="ignoreQuery"> Ignorer les paramètres d’URL</label>
-      <label><input type="checkbox" name="checkExternal"> Vérifier les liens externes</label>
-      <label><input type="checkbox" name="checkImages"> Vérifier les images (poids, statut)</label>
+    <div class="opt-cols">
+      <fieldset>
+        <legend data-i18n="opt.grpCrawl">Crawl</legend>
+        <label><span data-i18n="opt.maxPages">Max URLs</span><input name="maxPages" type="number" min="1" value="500"></label>
+        <label><span data-i18n="opt.maxDepth">Max depth</span><input name="maxDepth" type="number" min="0" value="20"></label>
+        <label><span data-i18n="opt.concurrency">Concurrent requests</span><input name="concurrency" type="number" min="1" max="30" value="5"></label>
+        <label><span data-i18n="opt.delay">Delay between requests (ms)</span><input name="delayMs" type="number" min="0" value="0"></label>
+        <label><span data-i18n="opt.timeout">Timeout (ms)</span><input name="timeoutMs" type="number" min="1000" value="20000"></label>
+      </fieldset>
+      <fieldset>
+        <legend data-i18n="opt.grpRender">Rendering</legend>
+        <label class="check big"><input type="checkbox" name="render"> <span><b data-i18n="opt.render">JavaScript rendering</b><small data-i18n="opt.renderHelp"></small></span></label>
+        <p id="renderNote" class="opt-note"></p>
+        <label><span data-i18n="opt.userAgent">User-agent</span>
+          <select name="userAgent">
+            <option value="arachnide">ArachnideSEO</option>
+            <option value="googlebot">Googlebot desktop</option>
+            <option value="googlebotMobile">Googlebot smartphone</option>
+            <option value="chrome">Chrome</option>
+          </select>
+        </label>
+        <label><span data-i18n="opt.acceptLanguage">Accept-Language</span><input name="acceptLanguage" type="text" placeholder="fr-FR,fr;q=0.9"></label>
+      </fieldset>
+      <fieldset>
+        <legend data-i18n="opt.grpScope">Scope</legend>
+        <label><span data-i18n="opt.include">Include only (regex)</span><input name="include" type="text" placeholder="/blog/"></label>
+        <label><span data-i18n="opt.exclude">Exclude (regex)</span><input name="exclude" type="text" placeholder="\?(replytocom|share)=|/wp-admin/"></label>
+        <label><span data-i18n="opt.search">Custom search</span><input name="search" type="text" data-i18n-ph="opt.searchPh"></label>
+        <label class="check"><input type="checkbox" name="crawlSubdomains"> <span data-i18n="opt.subdomains">Include subdomains</span></label>
+        <label class="check"><input type="checkbox" name="ignoreQuery"> <span data-i18n="opt.ignoreQuery">Ignore URL parameters</span></label>
+      </fieldset>
+      <fieldset>
+        <legend data-i18n="opt.grpChecks">Checks</legend>
+        <label class="check"><input type="checkbox" name="respectRobots" checked> <span data-i18n="opt.robots">Respect robots.txt</span></label>
+        <label class="check"><input type="checkbox" name="useSitemaps" checked> <span data-i18n="opt.sitemaps">Read XML sitemaps</span></label>
+        <label class="check"><input type="checkbox" name="crawlCanonicals" checked> <span data-i18n="opt.canonicals">Follow canonicals</span></label>
+        <label class="check"><input type="checkbox" name="checkExternal"> <span data-i18n="opt.external">Check external links</span></label>
+        <label class="check"><input type="checkbox" name="checkImages"> <span data-i18n="opt.images">Check images (size, status)</span></label>
+      </fieldset>
     </div>
   </section>
 
@@ -59,7 +80,7 @@
   </div>
 
   <main class="layout">
-    <nav id="tabs" class="tabs" aria-label="Onglets"></nav>
+    <nav id="tabs" class="tabs" aria-label="Tabs"></nav>
     <section class="content">
       <div id="view" class="view"></div>
       <div id="detail" class="detail" hidden></div>
@@ -67,10 +88,44 @@
   </main>
 
   <dialog id="historyDialog">
-    <form method="dialog" class="dialog-head"><h2>Crawls enregistrés</h2><button class="btn icon" aria-label="Fermer">✕</button></form>
-    <div id="historyList"></div>
+    <form method="dialog" class="dialog-head"><h2 data-i18n="ui.history">History</h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
+    <div id="historyList" class="dialog-body"></div>
   </dialog>
 
-  <script src="app.js"></script>
+  <dialog id="reportDialog" class="wide">
+    <form id="reportForm" class="report-form">
+      <div class="dialog-head"><h2 data-icon="report"><span data-i18n="report.dialogTitle">SEO report</span></h2><button class="btn icon" value="cancel" formnovalidate data-icon="x" data-i18n-title="ui.close"></button></div>
+      <div class="dialog-body">
+        <p class="muted" data-i18n="report.dialogHelp"></p>
+        <div class="rf-grid">
+          <label><span data-i18n="report.language">Report language</span><select name="lang"></select></label>
+          <label><span data-i18n="report.titleField">Title</span><input name="title" type="text" data-i18n-ph="report.defaultTitle"></label>
+          <label><span data-i18n="report.client">Client</span><input name="client" type="text"></label>
+          <label><span data-i18n="report.author">Prepared by</span><input name="author" type="text"></label>
+          <label><span data-i18n="report.company">Company / agency</span><input name="company" type="text"></label>
+          <label><span data-i18n="report.contact">Contact</span><input name="contact" type="text" placeholder="contact@…"></label>
+          <label><span data-i18n="report.website">Website</span><input name="website" type="text" placeholder="https://…"></label>
+          <label><span data-i18n="report.color">Brand colour</span><input name="color" type="color" value="#5b8c1e"></label>
+          <label><span data-i18n="report.compare">Compare with</span><select name="compare"></select></label>
+          <label><span data-i18n="report.maxUrls">Example URLs per issue</span><input name="maxUrls" type="number" min="0" max="200" value="10"></label>
+          <div class="logo-field"><span data-i18n="report.logo">Logo</span>
+            <div class="logo-row"><span id="logoPreview" class="logo-preview"></span>
+              <label class="btn small"><span data-i18n="report.chooseLogo">Choose…</span><input id="logoInput" type="file" accept="image/*" hidden></label>
+              <button type="button" class="btn small" id="logoClear" data-i18n="ui.delete">Remove</button></div>
+          </div>
+          <label class="wide"><span data-i18n="report.intro">Introduction</span><textarea name="intro" rows="3" data-i18n-ph="report.introPh"></textarea></label>
+        </div>
+      </div>
+      <div class="dialog-foot">
+        <button type="button" class="btn" id="exportIssuesBtn" data-icon="download"><span data-i18n="report.csvAll">All issues (CSV)</span></button>
+        <span class="spacer"></span>
+        <button class="btn" value="cancel" formnovalidate data-i18n="ui.cancel">Cancel</button>
+        <button class="btn primary" value="ok" data-icon="report"><span data-i18n="report.generate">Generate report</span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

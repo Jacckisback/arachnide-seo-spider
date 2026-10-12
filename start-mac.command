@@ -10,6 +10,6 @@ if ! command -v node >/dev/null 2>&1; then
   read -r -p "Press Enter to close…"
   exit 1
 fi
-[ -d node_modules ] || npm install || { read -r -p "npm install failed. Press Enter…"; exit 1; }
-(sleep 2 && open "http://localhost:${PORT:-4000}") &
+npm install --no-audit --no-fund --loglevel=error || { read -r -p "npm install failed. Press Enter…"; exit 1; }
+export ARACHNIDE_OPEN=1
 npm start

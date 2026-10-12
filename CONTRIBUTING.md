@@ -21,9 +21,16 @@ Open an [issue](https://github.com/Jacckisback/arachnide-seo-spider/issues) and 
 
 ## Add a new SEO check
 
-SEO checks live in `src/analyze.mjs`. Each check is one `add(id, severity, category, label, description, fix, items)` call:
+SEO checks live in `src/analyze.mjs`. Each check is one `add(id, severity, category, impact, effort, items, params)` call:
 
 - `severity` is `error`, `warning` or `notice`
-- `items` is a list of `{ url, detail }` objects
+- `impact` and `effort` are `high`, `medium` or `low`; they drive the action plan
+- `items` is a list of `{ url, detail }` objects; `detail` is plain text or a translation key `D('d.key', { params })`
 
-The check then appears automatically in the dashboard, the issues tab and the exports.
+Then add `issue.<id>.label`, `issue.<id>.desc` and `issue.<id>.fix` to **every** file in `public/i18n/` and run `npm test`: it fails if a key or a placeholder is missing in any language.
+
+The check then appears automatically in the dashboard, the issues tab, the action plan, the exports and the reports.
+
+## Translations
+
+Translations live in `public/i18n/<code>.js` (flat `key → text` objects, `{placeholders}` must be kept). Corrections from native speakers are very welcome.
