@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-2.1.0-3d5f17" alt="Versão 2.1.0">
+  <img src="https://img.shields.io/badge/version-3.0.0-3d5f17" alt="Versão 3.0.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,31 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel: pontuação de saúde SEO, pontuação por categoria, códigos de resposta, profundidade de clique e prioridades" width="100%">
 </p>
+
+## 🤖 Novidade na 3.0: o Claude audita **e corrige** o seu site (MCP)
+
+O Arachnide agora inclui um **servidor MCP**. Ligue-o ao Claude (Claude Code ou Claude Desktop) e peça em linguagem simples: *“Audite www.meu-site.pt e corrija os títulos, as descrições e os textos alternativos em falta das páginas mais importantes.”* O Claude vai:
+
+1. **detetar** o CMS (WordPress, Shopify, Wix, Squarespace, Webflow, Joomla, Drupal, PrestaShop, site estático, Next.js…);
+2. **rastrear e auditar** o site com o Arachnide;
+3. **redigir** valores melhores a partir do conteúdo real de cada página (títulos únicos dentro do limite de píxeis do Google, descrições, textos alternativos, canónicas, redirecionamentos para URLs partidos);
+4. mostrar uma **pré-visualização antes / depois** e aguardar a sua aprovação;
+5. **aplicar** as alterações aprovadas no site em produção através da API do CMS, **verificá-las** e permitir **desfazer** qualquer lote;
+6. **rastrear novamente** e mostrar a melhoria da pontuação.
+
+| Como as correções são aplicadas | Plataformas | Quota do total de sites* |
+|---|---|---:|
+| API do CMS (+ pequeno plugin WordPress) | WordPress, Shopify, Wix, Joomla, Webflow, Drupal, PrestaShop | ≈ 53% |
+| Ficheiros HTML ou Cloudflare Worker | sites sem CMS (à medida, estáticos, Next.js, Hugo…) e qualquer site atrás da Cloudflare | até 31,6% |
+| Instruções passo a passo | Squarespace e outros construtores fechados | o resto |
+
+<sub>* W3Techs, outubro de 2026.</sub>
+
+```bash
+claude mcp add arachnide -- node /path/to/arachnide-seo-spider/src/mcp.mjs
+```
+
+Segurança em primeiro lugar: pré-visualização antes de cada escrita, pedido de autorização para cada escrita, regras por site (campos permitidos, tamanho dos lotes, só leitura), um registo de todos os valores anteriores com reversão numa única chamada, e credenciais que nunca passam pelo chat. **Guia completo (em inglês): [docs/MCP.md](docs/MCP.md)**.
 
 ## 🆕 Novidades da versão 2.1
 
