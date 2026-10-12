@@ -1,7 +1,7 @@
 {
   "name": "arachnide-seo-spider",
-  "version": "2.2.0",
-  "description": "Free, open-source technical SEO crawler (Screaming Frog alternative): JavaScript rendering, ~90 SEO checks, action plan, white-label PDF reports, 6 languages, local web UI and CLI.",
+  "version": "3.0.0",
+  "description": "Free, open-source technical SEO crawler (Screaming Frog alternative) with an MCP server: Claude audits your site and applies the fixes on WordPress, Shopify, Wix, Webflow, Joomla, Drupal, PrestaShop, static sites or any site behind Cloudflare.",
   "author": "Thierry Gustin (https://thierrygustin.com)",
   "license": "MIT",
   "homepage": "https://github.com/Jacckisback/arachnide-seo-spider#readme",
@@ -26,25 +26,35 @@
     "javascript-rendering",
     "seo-report",
     "core-web-vitals",
-    "geo"
+    "geo",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "wordpress",
+    "shopify",
+    "ai-seo"
   ],
   "private": true,
   "type": "module",
   "bin": {
-    "arachnide": "./src/cli.mjs"
+    "arachnide": "./src/cli.mjs",
+    "arachnide-mcp": "./src/mcp.mjs"
   },
   "scripts": {
     "start": "node src/server.mjs",
     "crawl": "node src/cli.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "mcp": "node src/mcp.mjs"
   },
   "engines": {
     "node": ">=18.17"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "3d-force-graph": "1.80.1",
     "cheerio": "1.0.0",
     "force-graph": "1.52.0",
-    "puppeteer-core": "23.11.1"
+    "puppeteer-core": "23.11.1",
+    "zod": "^4.6.6"
   }
 }

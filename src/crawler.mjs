@@ -6,7 +6,7 @@ import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 
-export const VERSION = '2.2.0';
+export const VERSION = '3.0.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -590,6 +590,7 @@ export class Crawler extends EventEmitter {
       rec.externalOutlinks = 0;
       rec.imagesCount = images.length;
       rec.imagesMissingAlt = images.filter((i) => i.alt === null || i.alt === '').length;
+      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null || i.alt === '').slice(0, 30).map((i) => i.src);
       rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
       rec.imagesResponsive = images.filter((i) => i.responsive).length;
       rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
