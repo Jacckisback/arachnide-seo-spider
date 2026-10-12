@@ -6,7 +6,12 @@ import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 
-export const VERSION = '2.1.0';
+export const VERSION = '2.2.0';
+
+// Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
+const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
+const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: new Set(), missingAlt: false, pages: new Set(), status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
+
 export const DEFAULT_UA = 'Mozilla/5.0 (compatible; ArachnideSEO/2.0; +https://github.com/Jacckisback/arachnide-seo-spider)';
 export const USER_AGENTS = {
   arachnide: DEFAULT_UA,
@@ -134,7 +139,7 @@ export class Crawler extends EventEmitter {
     this.deferred = []; // URLs issues des sitemaps, crawlées en dernier
     this.seen = new Set();
     this.links = []; // {from, to, anchor, nofollow}
-    this.images = new Map(); // src -> {src, alt: Set, missingAlt, pages:Set, status, size}
+    this.images = new Map(); // url -> {src, role: src|srcset|source, of, alts: Set, missingAlt, pages: Set, status, size, …}
     this.externals = new Map(); // url -> {url, status, inlinks}
     this.sitemapUrls = new Set();
     this.sitemapFiles = [];
@@ -586,6 +591,10 @@ export class Crawler extends EventEmitter {
       rec.imagesCount = images.length;
       rec.imagesMissingAlt = images.filter((i) => i.alt === null || i.alt === '').length;
       rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
+      rec.imagesResponsive = images.filter((i) => i.responsive).length;
+      rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
+      rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
+      rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
 
       const followAll = !/nofollow/i.test(rec.metaRobots + ' ' + rec.xRobotsTag);
       const follow = this.opts.mode !== 'list';
@@ -609,11 +618,21 @@ export class Crawler extends EventEmitter {
         }
       }
       for (const img of images) {
-        const im = this.images.get(img.src) || { src: img.src, alts: new Set(), missingAlt: false, pages: new Set(), status: null, size: null };
+        const im = this.images.get(img.src) || newImage(img.src);
+        Object.assign(im, { role: 'src', of: '' });
         if (img.alt === null || img.alt === '') im.missingAlt = true;
         else im.alts.add(img.alt);
         im.pages.add(item.url);
+        if (img.responsive) im.responsive = true;
+        if (img.picture) im.picture = true;
+        im.variantCount = Math.max(im.variantCount, img.variants.length);
         this.images.set(img.src, im);
+        // Chaque fichier de srcset / <picture> est un fichier distinct à contrôler (poids, statut).
+        for (const v of img.variants) {
+          const vm = this.images.get(v.url) || Object.assign(newImage(v.url), { role: v.role, of: img.src, descriptor: v.descriptor, type: v.type || '', media: v.media || '' });
+          vm.pages.add(item.url);
+          this.images.set(v.url, vm);
+        }
       }
       if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
       if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
@@ -641,7 +660,7 @@ export class Crawler extends EventEmitter {
         clearTimeout(timer);
         await res.body?.cancel();
       }
-      return { status: res.status, statusText: res.statusText, size: Number(res.headers.get('content-length')) || null, location: res.headers.get('location') || '' };
+      return { status: res.status, statusText: res.statusText, size: Number(res.headers.get('content-length')) || null, location: res.headers.get('location') || '', type: (res.headers.get('content-type') || '').split(';')[0].trim() };
     } catch (e) {
       return { status: 0, statusText: e?.name === 'AbortError' ? 'Timeout' : e?.cause?.code || 'Error', size: null };
     }
@@ -660,6 +679,7 @@ export class Crawler extends EventEmitter {
       const r = await this.headStatus(im.src);
       im.status = r.status;
       im.size = r.size;
+      if (r.type) im.contentType = r.type;
     }, this.opts.concurrency * 2);
   }
 }

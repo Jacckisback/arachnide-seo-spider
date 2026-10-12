@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.0 — 2026-10-12
+
+### New
+- **Responsive images**: every file listed in `srcset` (on `img`, including lazy-loading `data-srcset`) and in `<picture>` `<source>` elements is now collected and checked like the main `src`: status, file size, format. A heavy 1600w variant or a broken WebP source is now reported.
+- Images tab: new Source (src, srcset 800w, `<picture>` source…), Format, Variants and Main image columns, with filters for main images, variants, responsive / not responsive images and JPEG / PNG / GIF.
+- 3 new checks:
+  - heavy images without `srcset` or `<picture>`;
+  - images without a modern format (no WebP / AVIF in src, srcset or `<picture>`);
+  - `srcset` with width descriptors (`w`) but no `sizes` attribute.
+- Mixed content now also counts `http://` URLs in `srcset`.
+
 ## 2.1.0 — 2026-10-12
 
 ### New

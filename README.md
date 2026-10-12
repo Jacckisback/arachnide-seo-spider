@@ -69,7 +69,7 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 | **Titles & metas** | Missing, duplicate, too long (in pixels), too short or multiple; title identical to H1; Google SERP preview |
 | **Headings** | H1 missing, duplicate or multiple; no H2; skipped heading levels |
 | **Content** | Word count, thin content, exact and near duplicates, keyword cannibalisation, main keyword per page, text ratio |
-| **Images** | Missing alt text, heavy images, broken images, missing width/height (CLS) |
+| **Images** | Missing alt text, heavy images, broken images, missing width/height (CLS), every `srcset` and `<picture>` file checked (size, status, format), no responsive version, no WebP / AVIF, `srcset` without `sizes` |
 | **Indexing** | Canonicals (missing, multiple, pointing to a non-indexable URL), noindex, nofollow, X-Robots-Tag |
 | **Architecture** | Click depth, Link Score (internal PageRank), orphan pages, pages with a single inlink or no contextual link, unreachable pages |
 | **Sitemaps** | Missing sitemap, non-indexable URLs in the sitemap, indexable pages missing from the sitemap |

@@ -2,6 +2,7 @@
 // redirections et liste des problèmes SEO. Les textes sont des clés de traduction (public/i18n).
 import { titlePixels, descPixels } from './pixel.mjs';
 import { similarity } from './text.mjs';
+import { imageFormat } from './parse.mjs';
 
 export const THRESHOLDS = {
   titleMaxPx: 580,
@@ -300,6 +301,7 @@ export function analyze(crawler) {
   const u = (arr, detail = () => '') => arr.map((p) => ({ url: p.url, detail: detail(p) }));
   const robotsHas = (p, s) => new RegExp(s, 'i').test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`);
   const imgs = [...crawler.images.values()];
+  const imgRole = (i) => (i.role === 'src' ? '' : ` [${i.role === 'source' ? '<picture>' : 'srcset'}${i.descriptor ? ' ' + i.descriptor : ''}]`);
 
   // Codes réponse & liens
   add('4xx', 'error', 'codes', 'high', 'low', u(pages.filter((p) => p.status >= 400 && p.status < 500), (p) => D('d.statusInlinks', { status: p.status, n: p.uniqueInlinks })));
@@ -352,9 +354,12 @@ export function analyze(crawler) {
 
   // Images
   add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(html200.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
-  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && (i.status === 0 || i.status >= 400)).map((i) => ({ url: [...i.pages][0], detail: `${i.src} (${i.status})` })));
-  add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.` })), { max: Math.round(T.largeImageBytes / 1024) });
+  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && (i.status === 0 || i.status >= 400)).map((i) => ({ url: [...i.pages][0], detail: `${i.src}${imgRole(i)} (${i.status})` })));
+  add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.${imgRole(i)}` })), { max: Math.round(T.largeImageBytes / 1024) });
   add('img-dimensions', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
+  add('img-not-responsive', 'notice', 'images', 'medium', 'medium', imgs.filter((i) => i.role === 'src' && !i.responsive && i.size > T.largeImageBytes && !/svg/.test(i.contentType + imageFormat(i.src))).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.` })), { max: Math.round(T.largeImageBytes / 1024) });
+  add('img-legacy-format', 'notice', 'images', 'medium', 'medium', u(html200.filter((p) => p.imagesLegacyOnly > 0), (p) => `${p.imagesLegacyOnly}/${p.imagesCount}`));
+  add('img-srcset-no-sizes', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoSizes > 0), (p) => `${p.imagesNoSizes}/${p.imagesCount}`));
 
   // Directives
   add('noindex', 'notice', 'directives', 'medium', 'low', u(html200.filter((p) => robotsHas(p, 'noindex|none')), (p) => p.metaRobots || p.xRobotsTag));
@@ -543,7 +548,7 @@ export function analyze(crawler) {
     brokenLinks,
     nearDuplicates: nearDup.sort((a, b) => b.similarity - a.similarity).slice(0, 5000),
     cannibalization: cannibal.map(([keyword, arr]) => ({ keyword, urls: arr.map((p) => p.url) })),
-    images: imgs.map((i) => ({ src: i.src, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
+    images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
     links: { urls, edges },
   };

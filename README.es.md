@@ -69,7 +69,7 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 | **Títulos y metas** | Ausentes, duplicados, demasiado largos (en píxeles), demasiado cortos o múltiples; título idéntico al H1; vista previa del SERP de Google |
 | **Encabezados** | H1 ausente, duplicado o múltiple; sin H2; niveles de encabezado saltados |
 | **Contenido** | Número de palabras, contenido escaso, duplicados exactos y casi duplicados, canibalización de palabras clave, palabra clave principal por página, ratio de texto |
-| **Imágenes** | Texto alternativo ausente, imágenes pesadas, imágenes rotas, width/height ausentes (CLS) |
+| **Imágenes** | Texto alternativo ausente, imágenes pesadas, imágenes rotas, width/height ausentes (CLS), cada archivo de `srcset` y `<picture>` comprobado (peso, estado, formato), sin versión responsive, sin WebP / AVIF, `srcset` sin `sizes` |
 | **Indexación** | Canonicals (ausentes, múltiples, que apuntan a una URL no indexable), noindex, nofollow, X-Robots-Tag |
 | **Arquitectura** | Profundidad de clics, Link Score (PageRank interno), páginas huérfanas, páginas con un solo enlace entrante o sin enlace contextual, páginas inaccesibles |
 | **Sitemaps** | Sitemap ausente, URLs no indexables en el sitemap, páginas indexables que faltan en el sitemap |

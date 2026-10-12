@@ -48,6 +48,13 @@ const html200 = (R) => R.pages.filter((p) => p.isHtml && p.status === 200);
 const idxLabel = (p) => (p.indexable ? t('idx.indexable') : t('idx.' + (p.indexabilityReason || 'nonIndexable')));
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const urlCell = (u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>`;
+const LEGACY_IMG = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
+// Origine d'une image : attribut src, candidat srcset ou <source> d'un élément <picture>.
+const imgSource = (r) => {
+  if (!r.role || r.role === 'src') return r.picture ? 'src · <picture>' : 'src';
+  const d = [r.descriptor, r.media].filter(Boolean).join(' · ');
+  return (r.role === 'source' ? '<picture> source' : 'srcset') + (d ? ` (${d})` : '');
+};
 
 function toast(msg, kind = 'info') {
   const el = document.createElement('div');
@@ -151,8 +158,8 @@ const TABS = [
   { id: 'cannibal', icon: 'target', rows: (R) => (R.cannibalization || []).flatMap((g) => g.urls.map((url) => ({ keyword: g.keyword, url, count: g.urls.length }))),
     cols: [{ k: 'keyword', l: 'col.keyword' }, { k: 'count', l: 'col.pages', num: true }, C.url, { k: 'title', l: 'col.title', cls: 'trunc', v: (r) => linkGraph().byUrl.get(r.url)?.title || '' }] },
   { id: 'images', icon: 'image', rows: (R) => R.images,
-    cols: [{ k: 'src', l: 'col.image', cls: 'trunc', html: (r) => urlCell(r.src) }, { k: 'alt', l: 'col.alt', cls: 'wrap' }, { k: 'missingAlt', l: 'col.altMissing', v: (r) => (r.missingAlt ? t('ui.yes') : ''), html: (r) => (r.missingAlt ? `<span class="chip warning">${t('ui.yes')}</span>` : '') }, { k: 'size', l: 'col.size', num: true, html: (r) => (r.size == null ? '' : kb(r.size)) }, { k: 'status', l: 'col.status', num: true }, { k: 'pages', l: 'col.pages', num: true }, { k: 'firstPage', l: 'col.foundOn', cls: 'trunc' }],
-    filters: { all: () => true, altMissing: (i) => i.missingAlt, heavy: (i) => i.size > (TH().largeImageBytes || 153600), broken: (i) => i.status !== null && (i.status === 0 || i.status >= 400) } },
+    cols: [{ k: 'src', l: 'col.image', cls: 'trunc', html: (r) => urlCell(r.src) }, { k: 'role', l: 'col.imgSource', v: imgSource }, { k: 'format', l: 'col.format' }, { k: 'variants', l: 'col.variants', num: true }, { k: 'of', l: 'col.mainImage', cls: 'trunc' }, { k: 'alt', l: 'col.alt', cls: 'wrap' }, { k: 'missingAlt', l: 'col.altMissing', v: (r) => (r.missingAlt ? t('ui.yes') : ''), html: (r) => (r.missingAlt ? `<span class="chip warning">${t('ui.yes')}</span>` : '') }, { k: 'size', l: 'col.size', num: true, html: (r) => (r.size == null ? '' : kb(r.size)) }, { k: 'status', l: 'col.status', num: true }, { k: 'pages', l: 'col.pages', num: true }, { k: 'firstPage', l: 'col.foundOn', cls: 'trunc' }],
+    filters: { all: () => true, mainImages: (i) => !i.role || i.role === 'src', variantsOnly: (i) => i.role && i.role !== 'src', responsive: (i) => i.responsive, notResponsive: (i) => (!i.role || i.role === 'src') && !i.responsive, legacyFormat: (i) => LEGACY_IMG.has(i.format), altMissing: (i) => i.missingAlt, heavy: (i) => i.size > (TH().largeImageBytes || 153600), broken: (i) => i.status !== null && (i.status === 0 || i.status >= 400) } },
   { id: 'extraction', icon: 'code', show: (R) => !!R.meta.options.extractors?.length, rows: html200, cols: [], filters: { all: () => true, withMatches: (p) => p.extracted && Object.values(p.extracted).some((v) => v.length && v[0] !== 0), withoutMatches: (p) => !p.extracted || Object.values(p.extracted).every((v) => !v.length || v[0] === 0) } },
   { id: 'search', icon: 'search', show: (R) => !!R.meta.options.search, rows: html200,
     cols: [C.url, { k: 'searchMatches', l: 'col.matches', num: true }, C.title],
@@ -641,7 +648,7 @@ function detailKv(p) {
     ['col.words', p.wordCount], ['col.textRatio', p.textRatio != null ? p.textRatio + ' %' : ''],
     ['col.similarity', p.closestMatch ? `≈${p.closestSimilarity} % · ${p.closestMatch}` : ''],
     ['col.depth', p.depth], ['col.linkScore', p.linkScore], ['col.inlinks', p.uniqueInlinks], ['col.contentInlinks', p.contentInlinks], ['col.outlinks', p.internalOutlinks], ['col.extOutlinks', p.externalOutlinks],
-    ['detail.images', p.imagesCount != null ? `${p.imagesCount} · ${t('col.altMissing')}: ${p.imagesMissingAlt}` : ''],
+    ['detail.images', p.imagesCount != null ? `${p.imagesCount} · ${t('col.altMissing')}: ${p.imagesMissingAlt}${p.imagesResponsive != null ? ` · ${t('f.responsive')}: ${p.imagesResponsive}` : ''}` : ''],
     ['col.alternates', (p.hreflang || []).map((h) => `${h.lang}: ${h.href}`).join(' | ')],
     ['col.schemaTypes', (p.schemaTypes || []).join(', ')],
     ['detail.og', p.og ? [p.og.title && 'og:title', p.og.description && 'og:description', p.og.image && 'og:image', p.og.twitterCard && 'twitter:card'].filter(Boolean).join(', ') : ''],

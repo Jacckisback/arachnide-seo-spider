@@ -20,6 +20,53 @@ export function resolveUrl(href, base) {
   }
 }
 
+// Analyse d'un attribut srcset selon l'algorithme HTML : les URL peuvent contenir des virgules
+// (CDN d'images du type « w_400,h_300 »), seule une virgule suivie d'un descripteur ou d'un espace sépare les candidats.
+export function parseSrcset(value, base) {
+  const out = [];
+  const s = String(value || '');
+  let i = 0;
+  while (i < s.length) {
+    while (i < s.length && /[\s,]/.test(s[i])) i++;
+    if (i >= s.length) break;
+    let j = i;
+    while (j < s.length && !/\s/.test(s[j])) j++;
+    let url = s.slice(i, j);
+    let descriptor = '';
+    if (url.endsWith(',')) {
+      url = url.replace(/,+$/, '');
+    } else {
+      let k = j;
+      let depth = 0;
+      while (k < s.length && (s[k] !== ',' || depth)) {
+        if (s[k] === '(') depth++;
+        else if (s[k] === ')') depth--;
+        k++;
+      }
+      descriptor = s.slice(j, k).trim();
+      j = k;
+    }
+    i = j;
+    const abs = resolveUrl(url, base);
+    if (abs) out.push({ url: abs, descriptor: /^\d+(\.\d+)?[wx]$/i.test(descriptor) ? descriptor.toLowerCase() : '' });
+  }
+  return out;
+}
+
+const IMG_EXT = { jpg: 'jpg', jpeg: 'jpg', png: 'png', gif: 'gif', webp: 'webp', avif: 'avif', svg: 'svg', jxl: 'jxl', bmp: 'bmp', ico: 'ico', tif: 'tiff', tiff: 'tiff' };
+export function imageFormat(url) {
+  try {
+    const u = new URL(url);
+    const m = /\.([a-z0-9]{2,5})$/i.exec(u.pathname);
+    if (m && IMG_EXT[m[1].toLowerCase()]) return IMG_EXT[m[1].toLowerCase()];
+    // CDN : format dans les paramètres (?format=webp, ?fm=avif, f_auto…)
+    const q = /(?:^|[?&,/])(?:format|fm|f)[=_](webp|avif|jpe?g|png|auto)\b/i.exec(u.search + u.pathname);
+    return q ? (q[1].toLowerCase() === 'jpeg' ? 'jpg' : q[1].toLowerCase()) : '';
+  } catch {
+    return '';
+  }
+}
+
 function metaContent($, names) {
   const out = [];
   $('meta').each((_, el) => {
@@ -191,18 +238,39 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     links.push({ to, anchor: anchor.slice(0, 200), nofollow, imageLink, pos: linkPosition($el) });
   });
 
-  // Images
+  // Images : src, srcset et sources <picture> (chaque fichier candidat est relevé)
   const images = [];
   $('img').each((_, el) => {
     const $el = $(el);
-    const src = resolveUrl($el.attr('src') || $el.attr('data-src') || $el.attr('data-lazy-src'), base);
+    const attr = (n) => $el.attr(n) || $el.attr('data-' + n) || $el.attr('data-lazy-' + n) || '';
+    const srcset = parseSrcset(attr('srcset'), base);
+    const $picture = $el.parent().is('picture') ? $el.parent() : null;
+    const sources = [];
+    $picture?.children('source').each((_, s) => {
+      const $s = $(s);
+      const type = ($s.attr('type') || '').toLowerCase().trim();
+      const media = ($s.attr('media') || '').trim();
+      for (const c of parseSrcset($s.attr('srcset') || $s.attr('data-srcset') || '', base)) sources.push({ ...c, type, media });
+    });
+    const src = resolveUrl(attr('src'), base) || srcset[0]?.url || sources[0]?.url;
     if (!src) return;
     const alt = $el.attr('alt');
+    const variants = [];
+    const seen = new Set([src]);
+    for (const c of srcset) if (!seen.has(c.url)) { seen.add(c.url); variants.push({ ...c, role: 'srcset' }); }
+    for (const c of sources) if (!seen.has(c.url)) { seen.add(c.url); variants.push({ ...c, role: 'source' }); }
+    const formats = new Set([imageFormat(src), ...variants.map((v) => v.type ? v.type.replace('image/', '').replace('jpeg', 'jpg') : imageFormat(v.url))].filter(Boolean));
     images.push({
       src,
       alt: alt === undefined ? null : alt.trim(),
       hasDimensions: !!($el.attr('width') && $el.attr('height')),
       lazy: ($el.attr('loading') || '').toLowerCase() === 'lazy',
+      picture: !!$picture,
+      responsive: srcset.length > 1 || sources.length > 0,
+      // Descripteurs « w » sans attribut sizes : le navigateur suppose 100vw et télécharge une image trop grande.
+      noSizes: [...srcset, ...sources].some((c) => /w$/.test(c.descriptor)) && !attr('sizes') && !$picture?.children('source[sizes]').length,
+      formats: [...formats],
+      variants,
     });
   });
 
@@ -212,6 +280,9 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     $('img[src], script[src], iframe[src], link[rel="stylesheet"][href], source[src], video[src], audio[src]').each((_, el) => {
       const v = $(el).attr('src') || $(el).attr('href') || '';
       if (/^http:\/\//i.test(v.trim())) mixedContent++;
+    });
+    $('img[srcset], source[srcset]').each((_, el) => {
+      if (/(^|,)\s*http:\/\//i.test($(el).attr('srcset'))) mixedContent++;
     });
   }
 
