@@ -293,6 +293,55 @@ export function analyze(crawler) {
   }
 
   // ---------- Problèmes ----------
+  // Données Google rattachées aux pages : Search Console (clics, impressions…) et PageSpeed Insights.
+  const gscKey = (u) => {
+    try {
+      const x = new URL(u);
+      return x.hostname.replace(/^www\./, '').toLowerCase() + (x.pathname.replace(/\/+$/, '') || '/') + x.search;
+    } catch {
+      return u;
+    }
+  };
+  const gscOnly = [];
+  let gscMeta = null;
+  if (crawler.gsc) {
+    const byKey = new Map(pages.map((p) => [gscKey(p.url), p]));
+    const host = new URL(crawler.finalStart || crawler.startUrl).hostname.replace(/^www\./, '');
+    let clicks = 0;
+    let impressions = 0;
+    for (const r of crawler.gsc.rows) {
+      clicks += r.clicks || 0;
+      impressions += r.impressions || 0;
+      const p = byKey.get(gscKey(r.url));
+      const data = { clicks: r.clicks ?? 0, impressions: r.impressions ?? 0, ctr: r.ctr ?? (r.impressions ? r.clicks / r.impressions : 0), position: r.position != null ? Math.round(r.position * 10) / 10 : null };
+      if (p) {
+        // Plusieurs variantes d'une même URL (slash final…) : on additionne.
+        if (p.gsc) {
+          p.gsc.clicks += data.clicks;
+          p.gsc.impressions += data.impressions;
+          p.gsc.ctr = p.gsc.impressions ? p.gsc.clicks / p.gsc.impressions : 0;
+        } else p.gsc = data;
+      } else {
+        try {
+          if (new URL(r.url).hostname.replace(/^www\./, '') === host) gscOnly.push({ url: r.url, ...data });
+        } catch {
+          // URL invalide dans l'export : ignorée
+        }
+      }
+    }
+    for (const p of pages) if (p.isHtml && p.status === 200 && !p.gsc) p.gsc = { clicks: 0, impressions: 0, ctr: 0, position: null };
+    gscMeta = { source: crawler.gsc.source, property: crawler.gsc.property, start: crawler.gsc.start, end: crawler.gsc.end, rows: crawler.gsc.rows.length, clicks, impressions, matched: crawler.gsc.rows.length - gscOnly.length };
+  }
+  let psiMeta = null;
+  if (crawler.psi?.size) {
+    for (const [u, r] of crawler.psi) {
+      const p = byUrl.get(u);
+      if (p) p.psi = { score: r.score, field: r.field, lab: r.lab };
+    }
+    psiMeta = { tested: crawler.psi.size, strategy: crawler.opts.psiStrategy, origin: [...crawler.psi.values()].find((r) => r.origin)?.origin || null };
+  }
+  gscOnly.sort((a, b) => b.impressions - a.impressions);
+
   const issues = [];
   // impact : importance SEO ; effort : difficulté de correction (pour le plan d'action)
   const add = (id, severity, category, impact, effort, items, params = {}) => {
@@ -387,6 +436,12 @@ export function analyze(crawler) {
   const spider = crawler.opts.mode !== 'list';
   add('no-sitemap', 'warning', 'sitemap', 'medium', 'low', hasSitemap || !crawler.opts.useSitemaps || !spider ? [] : [{ url: crawler.origin + '/sitemap.xml', detail: '404' }]);
   add('orphan', 'warning', 'sitemap', 'high', 'medium', u(pages.filter((p) => p.inSitemap && p.uniqueInlinks === 0 && !homes.has(p.url))));
+  // Search Console : pages vues par Google mais absentes du crawl, pages sans visibilité, CTR faible.
+  const EXPECTED_CTR = [0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025];
+  add('gsc-orphan', 'warning', 'sitemap', 'high', 'medium', gscOnly.filter((r) => r.impressions > 0).map((r) => ({ url: r.url, detail: D('d.gsc', { clicks: r.clicks, impressions: r.impressions }) })));
+  add('gsc-no-impressions', 'notice', 'content', 'medium', 'high', crawler.gsc ? u(indexableHtml.filter((p) => p.gsc && !p.gsc.impressions)) : []);
+  add('gsc-low-ctr', 'warning', 'titles', 'high', 'low', u(indexableHtml.filter((p) => p.gsc?.impressions >= 100 && p.gsc.position && p.gsc.position <= 10 && p.gsc.ctr < EXPECTED_CTR[Math.max(0, Math.round(p.gsc.position) - 1)] / 2), (p) => `CTR ${(p.gsc.ctr * 100).toFixed(1)} % · pos. ${p.gsc.position} · ${p.gsc.impressions} impr.`));
+  add('gsc-non-indexable-traffic', 'warning', 'directives', 'high', 'low', u(html200.filter((p) => !p.indexable && p.gsc?.clicks > 0), (p) => D('d.gsc', { clicks: p.gsc.clicks, impressions: p.gsc.impressions })));
   add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable), (p) => D('idx.' + p.indexabilityReason)));
   add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
 
@@ -402,6 +457,12 @@ export function analyze(crawler) {
   add('no-compression', 'warning', 'performance', 'medium', 'low', u(html200.filter((p) => p.headers && !p.headers.encoding && p.size > 10 * 1024), (p) => `${Math.round(p.size / 1024)} KB`));
   add('lcp-slow', 'warning', 'performance', 'high', 'high', u(html200.filter((p) => p.js?.lcp > T.lcpMs), (p) => `LCP ${(p.js.lcp / 1000).toFixed(1)} s`), { max: T.lcpMs / 1000 });
   add('cls-high', 'warning', 'performance', 'medium', 'medium', u(html200.filter((p) => p.js?.cls > T.cls), (p) => `CLS ${p.js.cls}`), { max: T.cls });
+  // Core Web Vitals terrain (CrUX via PageSpeed Insights) : ce que vivent les vrais visiteurs, utilisé par Google.
+  const cwvDetail = (p) => ['lcp', 'inp', 'cls'].filter((k) => p.psi.field[k]).map((k) => `${k.toUpperCase()} ${k === 'cls' ? p.psi.field[k].p75 : k === 'lcp' ? (p.psi.field[k].p75 / 1000).toFixed(1) + ' s' : p.psi.field[k].p75 + ' ms'} (${p.psi.field[k].cat})`).join(' · ');
+  const withField = html200.filter((p) => p.psi?.field);
+  add('cwv-poor', 'error', 'performance', 'high', 'high', u(withField.filter((p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field[k]?.cat === 'poor')), cwvDetail));
+  add('cwv-needs-improvement', 'warning', 'performance', 'medium', 'high', u(withField.filter((p) => !['lcp', 'inp', 'cls'].some((k) => p.psi.field[k]?.cat === 'poor') && ['lcp', 'inp', 'cls'].some((k) => p.psi.field[k]?.cat === 'ni')), cwvDetail));
+  add('psi-low-score', 'notice', 'performance', 'medium', 'high', u(html200.filter((p) => p.psi?.score != null && p.psi.score < 50), (p) => `${p.psi.score}/100`));
 
   // JavaScript (mode rendu)
   const rendered = html200.filter((p) => p.js?.rendered);
@@ -511,7 +572,9 @@ export function analyze(crawler) {
       finishedAt: crawler.finishedAt,
       stopped: crawler.stopped,
       rendered: !!crawler.renderer,
-      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '' },
+      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '', psiKey: crawler.opts.psiKey ? '••••' : '', gscCsv: crawler.opts.gscCsv ? true : undefined, googleFetch: undefined },
+      gsc: gscMeta,
+      psi: psiMeta,
       robotsTxt: crawler.robotsTxt,
       llmsTxt: crawler.llmsTxt,
       botAccess: crawler.botAccess,
@@ -549,6 +612,7 @@ export function analyze(crawler) {
     nearDuplicates: nearDup.sort((a, b) => b.similarity - a.similarity).slice(0, 5000),
     cannibalization: cannibal.map(([keyword, arr]) => ({ keyword, urls: arr.map((p) => p.url) })),
     images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
+    gscOnly,
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
     links: { urls, edges },
   };

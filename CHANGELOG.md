@@ -1,5 +1,31 @@
 # Changelog
 
+## 3.2.0 — 2026-10-12
+
+### New
+- **PageSpeed Insights & Core Web Vitals field data (CrUX)** for the most important pages:
+  - Lighthouse score, plus LCP, INP, CLS, FCP and TTFB from real Chrome users, each rated good / needs improvement / poor;
+  - new Core Web Vitals tab and 3 checks;
+  - optional free API key (`ARACHNIDE_PSI_KEY`).
+- **Google Search Console**, from the API (read-only service account, nothing to install) or from a CSV export:
+  - clicks, impressions, CTR and position per URL in a new Search Console tab;
+  - **pages seen by Google but missing from the crawl** (GSC-only orphan pages);
+  - pages with no impressions, low CTR for the position, and non-indexable pages getting traffic.
+- **Scheduled crawls with email alerts**:
+  - daily, weekly or monthly schedules, with missed runs caught up;
+  - comparison with the previous crawl;
+  - alert rules: score drop, new or increased errors, new issue types, or always;
+  - email summary with the full report attached;
+  - SMTP settings with a test email;
+  - runs in the app or standalone with `npm run scheduler`;
+  - `--alert-email` for system cron jobs.
+- Command line: `--psi`, `--psi-key`, `--gsc-key`, `--gsc-property`, `--gsc-days`, `--gsc-csv`, `--alert-email`, `--alert-score-drop`. MCP `arachnide_crawl`: `psi_pages`, `gsc_key_file`, `gsc_property`, `gsc_csv_path`.
+- Setup guide: `docs/GOOGLE-AND-SCHEDULES.md`.
+
+### Changed
+- Decimal numbers in the new tables follow the interface language (3,4 s in French).
+- New dependency: `nodemailer` (email).
+
 ## 3.1.0 — 2026-10-12
 
 ### Visualisations (user feedback)

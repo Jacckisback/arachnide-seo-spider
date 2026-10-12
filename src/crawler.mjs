@@ -5,8 +5,9 @@ import { parseHtml, resolveUrl } from './parse.mjs';
 import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
+import { runPsi, fetchGscPages, parseGscCsv, readGscKey } from './google.mjs';
 
-export const VERSION = '3.1.0';
+export const VERSION = '3.2.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -65,6 +66,14 @@ export const DEFAULT_OPTIONS = {
   httpPass: '',
   customHeaders: '', // une ligne "Nom: valeur" par en-tête (cookies, jetons…)
   extractors: [], // [{ name, type: 'css' | 'regex', selector, target: 'text' | 'html' | 'attr' | 'count', attr }]
+  // Données Google (facultatives)
+  psiMax: 0, // nombre de pages testées avec PageSpeed Insights (0 = désactivé)
+  psiKey: '', // clé API Google (PageSpeed Insights) — conseillée au-delà de quelques pages
+  psiStrategy: 'mobile', // mobile | desktop
+  gscKeyFile: '', // chemin du fichier JSON du compte de service Search Console
+  gscProperty: '', // propriété (sc-domain:exemple.fr ou https://www.exemple.fr/) ; détectée si vide
+  gscDays: 90,
+  gscCsv: '', // contenu d'un export CSV « Pages » de Search Console
 };
 
 // Robots des moteurs de recherche et des IA dont on vérifie l'accès dans le robots.txt.
@@ -403,6 +412,8 @@ export class Crawler extends EventEmitter {
       await Promise.all(Array.from({ length: Math.max(1, this.opts.concurrency) }, () => this.worker()));
       if (!this.stopped && this.opts.checkExternal) await this.checkExternals();
       if (!this.stopped && this.opts.checkImages) await this.checkImages();
+      if (!this.stopped) await this.loadSearchConsole();
+      if (!this.stopped && this.opts.psiMax > 0) await this.runPageSpeed();
     } finally {
       clearInterval(progressTimer);
       await this.renderer?.close();
@@ -665,6 +676,45 @@ export class Crawler extends EventEmitter {
     } catch (e) {
       return { status: 0, statusText: e?.name === 'AbortError' ? 'Timeout' : e?.cause?.code || 'Error', size: null };
     }
+  }
+
+  // Search Console : export CSV importé, sinon API avec un compte de service.
+  async loadSearchConsole() {
+    const o = this.opts;
+    if (!o.gscCsv && !o.gscKeyFile) return;
+    this.setPhase('gsc');
+    try {
+      if (o.gscCsv) {
+        this.gsc = { source: 'csv', rows: parseGscCsv(o.gscCsv) };
+      } else {
+        const r = await fetchGscPages({ keyJson: await readGscKey(o.gscKeyFile), property: o.gscProperty, siteUrl: this.finalStart || this.startUrl, days: o.gscDays || 90, fetch: o.googleFetch, api: o.gscApi });
+        this.gsc = { source: 'api', property: r.property, start: r.start, end: r.end, rows: r.rows };
+      }
+    } catch (e) {
+      this.warn('warn.gscFailed', { error: e.message });
+    }
+  }
+
+  // PageSpeed Insights sur les pages les plus importantes : les plus cliquées (Search Console), sinon l'accueil
+  // puis les pages qui reçoivent le plus de liens internes.
+  async runPageSpeed() {
+    this.setPhase('psi');
+    const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !/noindex/i.test(`${p.metaRobots} ${p.xRobotsTag}`));
+    const inl = new Map();
+    for (const l of this.links) if (l.internal && l.from !== l.to) inl.set(l.to, (inl.get(l.to) || 0) + 1);
+    const clicks = new Map((this.gsc?.rows || []).map((r) => [r.url, r.clicks || 0]));
+    const home = this.finalStart || this.startUrl;
+    const ranked = html.sort((a, b) => (b.url === home) - (a.url === home) || (clicks.get(b.url) || 0) - (clicks.get(a.url) || 0) || (inl.get(b.url) || 0) - (inl.get(a.url) || 0)).slice(0, this.opts.psiMax);
+    this.psi = new Map();
+    let failures = 0;
+    await this.pool(ranked, async (p) => {
+      try {
+        this.psi.set(p.url, await runPsi(p.url, { key: this.opts.psiKey, strategy: this.opts.psiStrategy, fetch: this.opts.googleFetch, api: this.opts.psiApi }));
+      } catch (e) {
+        if (++failures === 1) this.warn('warn.psiFailed', { error: e.message });
+      }
+      this.emit('progress', this.progress());
+    }, this.opts.psiKey ? 4 : 1);
   }
 
   async checkExternals() {

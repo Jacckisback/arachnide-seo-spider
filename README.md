@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.1.0-3d5f17" alt="Version 3.1.0">
+  <img src="https://img.shields.io/badge/version-3.2.0-3d5f17" alt="Version 3.2.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,14 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
 </p>
+
+## 📈 New in 3.2: Google data & scheduled crawls
+
+- **Core Web Vitals from real users** (PageSpeed Insights + CrUX: LCP, INP, CLS…) and Lighthouse score for your key pages.
+- **Google Search Console**: clicks, impressions, CTR and position per URL, by API or CSV import. Also finds **pages Google sees but your links don't reach**, low-CTR pages and non-indexable pages with traffic.
+- **Scheduled crawls** (daily / weekly / monthly) with **email alerts** when the score drops or errors appear, with the full report attached.
+
+Setup in 5 minutes: **[docs/GOOGLE-AND-SCHEDULES.md](docs/GOOGLE-AND-SCHEDULES.md)**.
 
 ## 🤖 New in 3.0: Claude audits **and fixes** your site (MCP)
 

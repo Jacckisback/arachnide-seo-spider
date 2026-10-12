@@ -30,6 +30,14 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: punteggio di salute SEO, punteggio per categoria, codici di risposta, profondità di clic e priorità" width="100%">
 </p>
 
+## 📈 Novità della 3.2: dati Google e crawl pianificati
+
+- **Core Web Vitals degli utenti reali** (PageSpeed Insights + CrUX: LCP, INP, CLS…) e punteggio Lighthouse delle tue pagine chiave.
+- **Google Search Console**: clic, impressioni, CTR e posizione per URL, tramite API o importando il CSV. Trova anche le **pagine che Google conosce ma che i tuoi link non raggiungono**, i CTR bassi e le pagine non indicizzabili con traffico.
+- **Crawl pianificati** (giornalieri / settimanali / mensili) con **avvisi via email** quando il punteggio cala o compaiono errori, con il report completo allegato.
+
+Configurazione in 5 minuti: **[docs/GOOGLE-AND-SCHEDULES.md](docs/GOOGLE-AND-SCHEDULES.md)** (in inglese).
+
 ## 🤖 Novità della 3.0: Claude analizza **e corregge** il tuo sito (MCP)
 
 Arachnide ora include un **server MCP**. Collegalo a Claude (Claude Code o Claude Desktop) e chiedi in parole semplici: *«Fai l'audit di www.mio-sito.it e correggi i title, le description e gli alt text mancanti delle pagine più importanti.»* Claude:

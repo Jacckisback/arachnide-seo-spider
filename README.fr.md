@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.1.0-3d5f17" alt="Version 3.1.0">
+  <img src="https://img.shields.io/badge/version-3.2.0-3d5f17" alt="Version 3.2.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,14 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Tableau de bord : score de santé SEO, score par catégorie, codes de réponse, profondeur de clic et priorités" width="100%">
 </p>
+
+## 📈 Nouveau en 3.2 : données Google et crawls planifiés
+
+- **Core Web Vitals des vrais visiteurs** (PageSpeed Insights + CrUX : LCP, INP, CLS…) et score Lighthouse de vos pages clés.
+- **Google Search Console** : clics, impressions, CTR et position par URL, par l’API ou par import CSV. Repère aussi les **pages vues par Google mais que vos liens n’atteignent pas**, les CTR faibles et les pages non indexables qui ont du trafic.
+- **Crawls planifiés** (jour / semaine / mois) avec **alertes e-mail** quand le score baisse ou que des erreurs apparaissent, rapport complet en pièce jointe.
+
+Mise en place en 5 minutes : **[docs/GOOGLE-AND-SCHEDULES.md](docs/GOOGLE-AND-SCHEDULES.md)** (en anglais).
 
 ## 🤖 Nouveau dans la 3.0 : Claude audite **et corrige** votre site (MCP)
 

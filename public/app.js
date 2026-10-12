@@ -88,6 +88,15 @@ function linkGraph() {
 }
 
 /* ---------- Colonnes ---------- */
+// Core Web Vitals : valeur au 75e centile avec la couleur Google (bon / à améliorer / mauvais).
+const cwvCell = (m, k) => {
+  if (!m) return '<span class="muted">—</span>';
+  const v = k === 'cls' ? dec(m.p75, 2) : m.p75 >= 1000 ? `${dec(m.p75 / 1000, 1)} s` : `${num(m.p75)} ms`;
+  return `<span class="cwv ${m.cat}">${v}</span>`;
+};
+// Nombre décimal dans le format de la langue (3,4 en français, 3.4 en anglais).
+const dec = (v, d) => new Intl.NumberFormat(t.locale, { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
+const scoreCell = (s) => (s == null ? '' : `<span class="cwv ${s >= 90 ? 'good' : s >= 50 ? 'ni' : 'poor'}">${s}</span>`);
 const C = {
   url: { k: 'url', l: 'col.url', cls: 'trunc', html: (r) => urlCell(r.url) },
   type: { k: 'contentType', l: 'col.type', cls: 'trunc', v: (r) => (r.contentType || '').split(';')[0] },
@@ -184,6 +193,13 @@ const TABS = [
   { id: 'security', icon: 'shield', rows: html200,
     cols: [C.url, { k: 'https', l: 'col.https', v: (r) => (r.url.startsWith('https:') ? t('ui.yes') : t('ui.no')), html: (r) => yn(r.url.startsWith('https:')) }, { k: 'hsts', l: 'col.hsts', v: (r) => (r.headers?.hsts ? t('ui.yes') : t('ui.no')), html: (r) => yn(r.headers?.hsts) }, { k: 'mixedContent', l: 'col.mixedContent', num: true }, { k: 'xcto', l: 'col.xcto', v: (r) => (r.headers?.xcto ? t('ui.yes') : t('ui.no')) }, { k: 'csp', l: 'col.csp', v: (r) => (r.headers?.csp ? t('ui.yes') : t('ui.no')) }],
     filters: { all: () => true, http: (p) => p.url.startsWith('http:'), noHsts: (p) => !p.headers?.hsts, mixed: (p) => p.mixedContent > 0 } },
+  { group: 'grp.google' },
+  { id: 'gsc', icon: 'search', show: (R) => !!R.meta.gsc, rows: (R) => [...html200(R), ...(R.gscOnly || []).map((r) => ({ ...r, gsc: r, gscOnly: true }))],
+    cols: [C.url, { k: 'clicks', l: 'col.clicks', num: true, v: (r) => r.gsc?.clicks ?? '' }, { k: 'impressions', l: 'col.impressions', num: true, v: (r) => r.gsc?.impressions ?? '' }, { k: 'ctr', l: 'col.ctr', num: true, v: (r) => (r.gsc ? +(r.gsc.ctr * 100).toFixed(2) : ''), html: (r) => (r.gsc ? `${dec(r.gsc.ctr * 100, 1)} %` : '') }, { k: 'position', l: 'col.position', num: true, v: (r) => r.gsc?.position ?? '' }, { k: 'inCrawl', l: 'col.inCrawl', v: (r) => (r.gscOnly ? t('ui.no') : t('ui.yes')), html: (r) => (r.gscOnly ? `<span class="chip warning">${t('ui.no')}</span>` : t('ui.yes')) }, { ...C.indexability, html: (r) => (r.gscOnly ? '' : C.indexability.html(r)) }, C.linkScore],
+    filters: { all: () => true, withClicks: (r) => r.gsc?.clicks > 0, gscOrphans: (r) => r.gscOnly, noImpressions: (r) => !r.gscOnly && r.indexable && !r.gsc?.impressions, lowCtr: (r) => r.gsc?.impressions >= 100 && r.gsc.position <= 10 && r.gsc.ctr < 0.02, nonIndexableTraffic: (r) => !r.gscOnly && !r.indexable && r.gsc?.clicks > 0 } },
+  { id: 'cwv', icon: 'bolt', show: (R) => !!R.meta.psi, rows: (R) => html200(R).filter((p) => p.psi),
+    cols: [C.url, { k: 'psiScore', l: 'col.psiScore', num: true, v: (r) => r.psi.score ?? '', html: (r) => scoreCell(r.psi.score) }, ...['lcp', 'inp', 'cls', 'fcp', 'ttfb'].map((m) => ({ k: 'f_' + m, l: 'col.' + m, num: true, v: (r) => r.psi.field?.[m]?.p75 ?? '', html: (r) => cwvCell(r.psi.field?.[m], m) })), { k: 'fieldSrc', l: 'col.fieldData', v: (r) => (r.psi.field ? t('ui.yes') : t('cwv.noField')) }, { k: 'labLcp', l: 'col.labLcp', num: true, v: (r) => (r.psi.lab?.lcp ? Math.round(r.psi.lab.lcp) : ''), html: (r) => (r.psi.lab?.lcp ? `${dec(r.psi.lab.lcp / 1000, 1)} s` : '') }, { k: 'tbt', l: 'col.tbt', num: true, v: (r) => (r.psi.lab?.tbt != null ? Math.round(r.psi.lab.tbt) : '') }],
+    filters: { all: () => true, poor: (p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field?.[k]?.cat === 'poor'), needsImprovement: (p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field?.[k]?.cat === 'ni'), good: (p) => p.psi.field && ['lcp', 'inp', 'cls'].every((k) => !p.psi.field[k] || p.psi.field[k].cat === 'good'), noField: (p) => !p.psi.field } },
   { group: 'grp.architecture' },
   { id: 'linking', icon: 'sitemap', rows: html200, cols: [C.url, C.linkScore, C.depth, C.inlinks, C.contentInlinks, C.outlinks, C.extOut, C.indexability],
     filters: { all: () => true, lowInlinks: (p) => (p.uniqueInlinks || 0) <= 1, noContentInlinks: (p) => !p.contentInlinks, deep: (p) => p.depth >= (TH().deepLevel || 4), unreachable: (p) => p.depth === null } },
@@ -193,7 +209,11 @@ const TABS = [
   { id: 'robots', icon: 'robot' },
 ];
 const TAB_BY_ID = Object.fromEntries(TABS.filter((x) => x.id).map((x) => [x.id, x]));
-const visibleTabs = () => TABS.filter((x) => x.group || !x.show || (state.R && x.show(state.R)));
+const visibleTabs = () => {
+  const list = TABS.filter((x) => x.group || !x.show || (state.R && x.show(state.R)));
+  // Un groupe sans onglet visible (ex. Google sans données) n'est pas affiché.
+  return list.filter((x, i) => !x.group || (list[i + 1] && !list[i + 1].group));
+};
 
 /* ---------- Barre latérale ---------- */
 function renderTabs() {
@@ -890,6 +910,117 @@ $('#historyBtn').addEventListener('click', async () => {
   }));
 });
 
+/* ---------- Crawls planifiés & alertes e-mail ---------- */
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0];
+async function openSchedules(edit) {
+  const dlg = $('#scheduleDialog');
+  const body = $('#scheduleBody');
+  if (!dlg.open) dlg.showModal();
+  body.innerHTML = `<p class="muted">${esc(t('ui.loading'))}</p>`;
+  const [list, smtp] = await Promise.all([fetch('/api/schedules').then((r) => r.json()).catch(() => []), fetch('/api/smtp').then((r) => r.json()).catch(() => ({}))]);
+  const s = edit === 'new' ? { url: $('#urlInput').value || state.R?.meta.startUrl || '', frequency: 'weekly', time: '06:00', weekday: 1, monthday: 1, emails: [], alerts: { scoreDrop: 5, errors: true, newIssues: false, always: false } } : list.find((x) => x.id === edit);
+  const freq = (x) => (x.frequency === 'daily' ? t('sched.daily', { time: x.time }) : x.frequency === 'weekly' ? t('sched.weekly', { day: t('sched.day' + x.weekday), time: x.time }) : t('sched.monthly', { day: x.monthday, time: x.time }));
+  const last = (x) => {
+    const r = x.lastResult;
+    if (!r) return `<span class="muted">${esc(t('sched.never'))}</span>`;
+    if (r.status === 'running') return `<span class="chip">${esc(t('sched.running'))}</span>`;
+    if (r.status === 'error') return `<span class="chip error" title="${esc(r.error)}">${esc(t('sched.failed'))}</span>`;
+    return `<span class="grade g${esc(r.grade)}">${esc(r.grade)}</span> ${r.score}/100 · ${esc(t('alert.count', { n: r.alerts }))}${r.emailed ? ` · ✉︎` : ''}${r.mailError ? ` · <span class="chip warning" title="${esc(r.mailError)}">${esc(t('sched.mailFailed'))}</span>` : ''}`;
+  };
+  body.innerHTML = s
+    ? `<form id="schedForm" class="sched-form">
+        <div class="cfg-grid">
+          <label class="span2"><span>${esc(t('sched.url'))}</span><input name="url" type="url" required value="${esc(s.url)}"></label>
+          <label><span>${esc(t('sched.name'))}</span><input name="name" value="${esc(s.name || '')}" placeholder="${esc(t('sched.namePh'))}"></label>
+          <label><span>${esc(t('sched.frequency'))}</span><select name="frequency">${['daily', 'weekly', 'monthly'].map((f) => `<option value="${f}" ${s.frequency === f ? 'selected' : ''}>${esc(t('sched.f.' + f))}</option>`).join('')}</select></label>
+          <label data-when="weekly"><span>${esc(t('sched.weekday'))}</span><select name="weekday">${WEEKDAYS.map((d) => `<option value="${d}" ${+s.weekday === d ? 'selected' : ''}>${esc(t('sched.day' + d))}</option>`).join('')}</select></label>
+          <label data-when="monthly"><span>${esc(t('sched.monthday'))}</span><input name="monthday" type="number" min="1" max="28" value="${s.monthday}"></label>
+          <label><span>${esc(t('sched.time'))}</span><input name="time" type="time" value="${esc(s.time)}"></label>
+          <label class="span2"><span>${esc(t('sched.emails'))}</span><input name="emails" value="${esc((s.emails || []).join(', '))}" placeholder="vous@exemple.fr, client@exemple.fr"></label>
+        </div>
+        <h4>${esc(t('sched.alerts'))}</h4>
+        <div class="sched-alerts">
+          <label>${esc(t('sched.scoreDrop'))} <input name="scoreDrop" type="number" min="0" max="100" value="${s.alerts.scoreDrop}" class="small-num"></label>
+          <label class="check"><input type="checkbox" name="errors" ${s.alerts.errors ? 'checked' : ''}> ${esc(t('sched.alertErrors'))}</label>
+          <label class="check"><input type="checkbox" name="newIssues" ${s.alerts.newIssues ? 'checked' : ''}> ${esc(t('sched.alertNew'))}</label>
+          <label class="check"><input type="checkbox" name="always" ${s.alerts.always ? 'checked' : ''}> ${esc(t('sched.alertAlways'))}</label>
+        </div>
+        <p class="cfg-help">${esc(t('sched.optionsHelp'))}</p>
+        <div class="sched-actions"><button type="button" class="btn" id="schedCancel">${esc(t('ui.cancel'))}</button><button class="btn primary">${esc(t('sched.save'))}</button></div>
+      </form>`
+    : `<p class="cfg-help">${esc(t('sched.help'))}</p>
+      ${list.length ? `<div class="sched-list">${list.map((x) => `<div class="sched-item ${x.enabled ? '' : 'off'}">
+          <div class="si-main"><b>${esc(x.name)}</b><small>${esc(x.url)}</small><small>${esc(freq(x))}${x.nextRun ? ` · ${esc(t('sched.next'))} ${esc(t.date(x.nextRun))}` : ''}${x.emails.length ? ` · ✉︎ ${esc(x.emails.join(', '))}` : ''}</small></div>
+          <div class="si-last">${last(x)}</div>
+          <div class="si-actions"><label class="switch" title="${esc(t('sched.enabled'))}"><input type="checkbox" data-toggle="${x.id}" ${x.enabled ? 'checked' : ''}><span></span></label>
+            <button class="btn small" data-run="${x.id}">${icon('play')} ${esc(t('sched.runNow'))}</button><button class="btn small" data-edit="${x.id}">${icon('settings')}</button><button class="btn small" data-del="${x.id}" aria-label="${esc(t('ui.delete'))}">${icon('x')}</button></div>
+        </div>`).join('')}</div>` : `<p class="muted">${esc(t('sched.none'))}</p>`}
+      <button class="btn primary" id="schedNew">${icon('calendar')} ${esc(t('sched.add'))}</button>
+      <details class="smtp" ${smtp.host ? '' : 'open'}><summary>${esc(t('mail.settings'))}${smtp.host ? ` · <span class="muted">${esc(smtp.host)}</span>` : ''}</summary>
+        ${smtp.fromEnv ? `<p class="cfg-help">${esc(t('mail.fromEnv'))}</p>` : ''}
+        <p class="cfg-help">${esc(t('mail.help'))}</p>
+        <form id="smtpForm" class="cfg-grid">
+          <label><span>${esc(t('mail.host'))}</span><input name="host" value="${esc(smtp.host)}" placeholder="smtp.gmail.com"></label>
+          <label><span>${esc(t('mail.port'))}</span><input name="port" type="number" value="${smtp.port}"></label>
+          <label><span>${esc(t('mail.user'))}</span><input name="user" value="${esc(smtp.user)}" autocomplete="off"></label>
+          <label><span>${esc(t('mail.pass'))}</span><input name="pass" type="password" autocomplete="new-password" placeholder="${smtp.hasPassword ? esc(t('mail.passKept')) : ''}"></label>
+          <label><span>${esc(t('mail.from'))}</span><input name="from" value="${esc(smtp.from)}" placeholder="Arachnide &lt;vous@exemple.fr&gt;"></label>
+          <label class="check"><input type="checkbox" name="secure" ${smtp.secure ? 'checked' : ''}> ${esc(t('mail.secure'))}</label>
+          <div class="span2 smtp-actions"><button class="btn">${esc(t('mail.save'))}</button><input id="testTo" type="email" placeholder="${esc(t('mail.testTo'))}"><button type="button" class="btn" id="smtpTest">${esc(t('mail.test'))}</button></div>
+        </form></details>`;
+  if (s) {
+    const f = $('#schedForm');
+    const showWhen = () => f.querySelectorAll('[data-when]').forEach((el) => { el.hidden = el.dataset.when !== f.frequency.value; });
+    showWhen();
+    f.frequency.addEventListener('change', showWhen);
+    $('#schedCancel').addEventListener('click', () => openSchedules());
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const o = readOptions();
+      for (const k of [...SECRET, 'gscCsv']) delete o[k];
+      const payload = { id: s.id, url: f.url.value, name: f.name.value, frequency: f.frequency.value, weekday: +f.weekday.value, monthday: +f.monthday.value, time: f.time.value, emails: f.emails.value, lang: t.lang, alerts: { scoreDrop: +f.scoreDrop.value, errors: f.errors.checked, newIssues: f.newIssues.checked, always: f.always.checked }, options: s.id ? s.options : o, enabled: s.enabled !== false };
+      const r = await fetch('/api/schedules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!r.ok) return toast(t('sched.invalid'), 'error');
+      toast(t('sched.saved'), 'ok');
+      openSchedules();
+    });
+    return;
+  }
+  $('#schedNew').addEventListener('click', () => openSchedules('new'));
+  body.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => openSchedules(b.dataset.edit)));
+  body.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm(t('sched.confirmDelete'))) return;
+    await fetch('/api/schedules/' + b.dataset.del, { method: 'DELETE' });
+    openSchedules();
+  }));
+  body.querySelectorAll('[data-run]').forEach((b) => b.addEventListener('click', async () => {
+    await fetch(`/api/schedules/${b.dataset.run}/run`, { method: 'POST' });
+    toast(t('sched.started'), 'ok');
+    setTimeout(() => dlg.open && openSchedules(), 800);
+  }));
+  body.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('change', async () => {
+    const x = list.find((y) => y.id === b.dataset.toggle);
+    await fetch('/api/schedules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...x, enabled: b.checked }) });
+    openSchedules();
+  }));
+  const sf = $('#smtpForm');
+  sf.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = { host: sf.host.value, port: +sf.port.value, user: sf.user.value, from: sf.from.value, secure: sf.secure.checked };
+    if (sf.pass.value) payload.pass = sf.pass.value;
+    await fetch('/api/smtp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    toast(t('mail.saved'), 'ok');
+    openSchedules();
+  });
+  $('#smtpTest').addEventListener('click', async () => {
+    const to = $('#testTo').value;
+    if (!to) return $('#testTo').focus();
+    const r = await fetch('/api/smtp/test', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ to }) }).then((x) => x.json());
+    toast(r.ok ? t('mail.testOk', { to }) : `${t('mail.testFailed')} ${r.error}`, r.ok ? 'ok' : 'error');
+  });
+}
+$('#scheduleBtn').addEventListener('click', () => openSchedules());
+
 /* ---------- Configuration & lancement ---------- */
 const configForm = $('#configForm');
 const configDialog = $('#configDialog');
@@ -905,6 +1036,7 @@ function readOptions() {
     if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; } else o[el.name] = el.type === 'checkbox' ? el.checked : el.value;
   });
   o.extractors = readExtractors();
+  if (state.gscCsv) o.gscCsv = state.gscCsv.text;
   return o;
 }
 function applyOptions(saved) {
@@ -925,6 +1057,7 @@ function restoreOptions() {
 function saveOptions() {
   const o = readOptions();
   for (const k of SECRET) delete o[k];
+  delete o.gscCsv; // gros fichier : gardé en mémoire pour la session seulement
   store.set('options', o);
 }
 
@@ -946,6 +1079,19 @@ function readExtractors() {
     name: $('.ex-name', r).value.trim(), type: $('.ex-type', r).value, selector: $('.ex-sel', r).value.trim(), target: $('.ex-target', r).value, attr: $('.ex-attr', r).value.trim(),
   })).filter((e) => e.name && e.selector);
 }
+// Import d'un export CSV de Search Console : lu dans le navigateur, envoyé avec le prochain crawl.
+$('#gscCsvFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  state.gscCsv = { name: f.name, text: await f.text() };
+  showGscCsv();
+});
+$('#gscCsvClear').addEventListener('click', () => { state.gscCsv = null; $('#gscCsvFile').value = ''; showGscCsv(); });
+function showGscCsv() {
+  $('#gscCsvName').textContent = state.gscCsv ? `${state.gscCsv.name} · ${num(Math.round(state.gscCsv.text.length / 1024))} KB` : '';
+  $('#gscCsvClear').hidden = !state.gscCsv;
+}
+
 $('#addExtractor').addEventListener('click', () => {
   if ($$('#extractors .ex-row').length >= 20) return;
   $('#extractors').insertAdjacentHTML('beforeend', extractorRow({ type: 'css', target: 'text' }));
