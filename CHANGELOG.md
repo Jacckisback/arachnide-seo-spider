@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.0 — 2026-10-12
+
+### New
+- **2D / 3D visualisations**: crawl tree, directory tree and internal link graph. Nodes are coloured by indexability, issues or depth, and sized by Link Score. Click a node for its details, export as PNG. The libraries (force-graph, 3d-force-graph) are served locally, so it works offline.
+- **Configuration window** with tabs, modelled on Screaming Frog's Spider configuration: Spider, Limits, Speed, robots.txt, Rendering, Include / exclude, Extraction, Authentication.
+- **Spider › Limits**: URLs per crawl depth, max folder depth, max query strings, max redirects to follow, max URL length, max links per URL, max page size, limits by URL path. Skipped URLs are counted per reason on the dashboard.
+- **Speed**: global max URLs per second.
+- **robots.txt**: respect / ignore but report / ignore modes, custom robots.txt for the crawl, URL tester showing the matching rule.
+- **Custom extraction**: CSS selector (text, attribute, HTML, count) or regex, with an Extraction tab and CSV export.
+- **Authentication**: HTTP basic auth and custom headers/cookies, sent only to the audited site (also in JavaScript rendering); the password is never saved.
+- **Remove URL parameters** (`utm_*`, `gclid`…), with wildcards.
+- CLI flags for all of the above: `--rate`, `--robots`, `--custom-robots`, `--per-depth`, `--folder-depth`, `--max-params`, `--max-redirects`, `--path-limit`, `--remove-params`, `--auth`, `--header`, `--extract`.
+
+### Changed
+- `respectRobots: false` (2.0) still works and maps to `robotsMode: 'ignore'`.
+- The robots.txt parser moved to `public/shared/robots.js` so the interface can use it.
+
 ## 2.0.0 — 2026-10-12
 
 ### New

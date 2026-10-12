@@ -3,6 +3,7 @@ import { LANGS, getT, detailText, detectLang } from './shared/i18n.js';
 import { icon } from './shared/icons.js';
 import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
+import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -152,6 +153,7 @@ const TABS = [
   { id: 'images', icon: 'image', rows: (R) => R.images,
     cols: [{ k: 'src', l: 'col.image', cls: 'trunc', html: (r) => urlCell(r.src) }, { k: 'alt', l: 'col.alt', cls: 'wrap' }, { k: 'missingAlt', l: 'col.altMissing', v: (r) => (r.missingAlt ? t('ui.yes') : ''), html: (r) => (r.missingAlt ? `<span class="chip warning">${t('ui.yes')}</span>` : '') }, { k: 'size', l: 'col.size', num: true, html: (r) => (r.size == null ? '' : kb(r.size)) }, { k: 'status', l: 'col.status', num: true }, { k: 'pages', l: 'col.pages', num: true }, { k: 'firstPage', l: 'col.foundOn', cls: 'trunc' }],
     filters: { all: () => true, altMissing: (i) => i.missingAlt, heavy: (i) => i.size > (TH().largeImageBytes || 153600), broken: (i) => i.status !== null && (i.status === 0 || i.status >= 400) } },
+  { id: 'extraction', icon: 'code', show: (R) => !!R.meta.options.extractors?.length, rows: html200, cols: [], filters: { all: () => true, withMatches: (p) => p.extracted && Object.values(p.extracted).some((v) => v.length && v[0] !== 0), withoutMatches: (p) => !p.extracted || Object.values(p.extracted).every((v) => !v.length || v[0] === 0) } },
   { id: 'search', icon: 'search', show: (R) => !!R.meta.options.search, rows: html200,
     cols: [C.url, { k: 'searchMatches', l: 'col.matches', num: true }, C.title],
     filters: { withMatches: (p) => p.searchMatches > 0, withoutMatches: (p) => !p.searchMatches } },
@@ -180,6 +182,7 @@ const TABS = [
     filters: { all: () => true, lowInlinks: (p) => (p.uniqueInlinks || 0) <= 1, noContentInlinks: (p) => !p.contentInlinks, deep: (p) => p.depth >= (TH().deepLevel || 4), unreachable: (p) => p.depth === null } },
   { id: 'sitemap', icon: 'sitemap', rows: (R) => R.pages, cols: [C.url, C.status, C.inSitemap, C.indexability, C.inlinks, C.depth],
     filters: { inSitemap: (p) => p.inSitemap, orphans: (p) => p.inSitemap && !p.uniqueInlinks && p.depth !== 0, nonIndexableInSitemap: (p) => p.inSitemap && !p.indexable, indexableNotInSitemap: (p) => !p.inSitemap && p.indexable && p.isHtml } },
+  { id: 'viz', icon: 'graph' },
   { id: 'robots', icon: 'robot' },
 ];
 const TAB_BY_ID = Object.fromEntries(TABS.filter((x) => x.id).map((x) => [x.id, x]));
@@ -215,6 +218,11 @@ function goTab(id) {
 /* ---------- Rendu principal ---------- */
 function render() {
   const view = $('#view');
+  if (state.vizHandle && state.tab !== 'viz') {
+    state.vizHandle.destroy();
+    state.vizHandle = null;
+  }
+  view.classList.toggle('full', state.tab === 'viz' && !!state.R);
   if (!state.R) {
     if (state.tab === 'internal' && state.live.length) return renderTable(view, liveTab(), state.live);
     return state.running ? renderRunning(view) : renderHome(view);
@@ -223,8 +231,13 @@ function render() {
   if (state.tab === 'issues') return renderIssues(view);
   if (state.tab === 'plan') return renderPlan(view);
   if (state.tab === 'robots') return renderRobots(view);
-  const tab = TAB_BY_ID[state.tab];
+  if (state.tab === 'viz') return renderViz(view);
+  let tab = TAB_BY_ID[state.tab];
   if (!tab || (tab.show && !tab.show(state.R))) return goTab('dashboard');
+  if (tab.id === 'extraction') {
+    // Une colonne par extracteur défini dans la configuration du crawl.
+    tab = { ...tab, cols: [C.url, ...state.R.meta.options.extractors.map((ex) => ({ k: 'x:' + ex.name, l: ex.name, raw: true, cls: 'wrap', v: (r) => (r.extracted?.[ex.name] || []).join(' | ') }))] };
+  }
   renderTable(view, tab, tab.rows(state.R));
 }
 
@@ -303,7 +316,7 @@ function renderTable(view, tab, allRows, opts = {}) {
       </div>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr>${tab.cols.map((c) => `<th data-k="${esc(c.k)}" class="${c.num ? 'num' : ''} ${s && s.k === c.k ? 'sorted' + (s.desc ? ' desc' : '') : ''}">${esc(t(c.l))}</th>`).join('')}</tr></thead>
+      <thead><tr>${tab.cols.map((c) => `<th data-k="${esc(c.k)}" class="${c.num ? 'num' : ''} ${s && s.k === c.k ? 'sorted' + (s.desc ? ' desc' : '') : ''}">${esc(c.raw ? c.l : t(c.l))}</th>`).join('')}</tr></thead>
       <tbody>${slice.map((r, i) => `<tr tabindex="-1" data-i="${state.page * PAGE_SIZE + i}" class="${state.selected && rowKey(r) === state.selected ? 'sel' : ''}">${tab.cols.map((c) => {
         const v = cellValue(c, r);
         return `<td class="${c.num ? 'num' : ''} ${c.cls || ''}" title="${esc(v)}">${c.html ? c.html(r) : esc(c.num ? num(v) : v)}</td>`;
@@ -395,6 +408,7 @@ function renderDashboard(view) {
     <div class="toolbar"><div class="tb-title"><h2>${esc(R.meta.startUrl)}</h2><p class="help">${esc(t('dash.crawledOn', { date: t.date(R.meta.finishedAt) }))}${R.meta.stopped ? ' · ' + esc(t('dash.interrupted')) : ''}${R.meta.rendered ? ' · ' + esc(t('dash.jsRendered')) : ''}${R.meta.mode === 'list' ? ' · ' + esc(t('opt.modeList')) : ''}</p></div>
       <div class="tb-actions"><button class="btn primary" id="dashReport">${icon('report')} ${esc(t('ui.report'))}</button></div></div>
     ${(R.meta.warnings || []).map((w) => `<div class="banner warn">${icon('alert')} ${esc(t(w.key, w.params))}</div>`).join('')}
+    ${skippedBanner(R)}
     <div class="dash-row">
       <div class="card score"><h3>${esc(t('dash.health'))}</h3>${gauge(S.score, S.grade)}
         <div class="label">${esc(t('grade.' + S.grade))}</div>
@@ -423,6 +437,13 @@ function renderDashboard(view) {
   $('#allIssues')?.addEventListener('click', (e) => { e.preventDefault(); openIssue(null); });
   $('#toPlan')?.addEventListener('click', (e) => { e.preventDefault(); goTab('plan'); });
   $('#dashReport').addEventListener('click', openReportDialog);
+}
+
+function skippedBanner(R) {
+  const sk = Object.entries(R.meta.skipped || {}).filter(([, n]) => n > 0);
+  if (!sk.length) return '';
+  const total = sk.reduce((a, [, n]) => a + n, 0);
+  return `<div class="banner info">${icon('info')} <span><b>${esc(t('dash.skipped', { n: total }))}</b> ${sk.map(([k, n]) => `${esc(t('skip.' + k))} : ${num(n)}`).join(' · ')}</span></div>`;
 }
 
 function openIssue(id) {
@@ -477,6 +498,58 @@ function renderPlan(view) {
   $('#planReport').addEventListener('click', openReportDialog);
 }
 
+/* ---------- Visualisations 2D / 3D ---------- */
+async function renderViz(view) {
+  const o = { view: 'crawl', dim: '2d', colorBy: 'status', maxNodes: 1500, ...store.get('viz', {}) };
+  const seg = (name, values) => `<div class="seg">${values.map((v) => `<button data-${name}="${v}" class="${o[name] === v ? 'on' : ''}">${esc(t(`viz.${name}.${v}`))}</button>`).join('')}</div>`;
+  const legend = o.colorBy === 'issues'
+    ? [['sevError', 'sev.error'], ['sevWarning', 'sev.warning'], ['sevNotice', 'sev.notice'], ['sevNone', 'viz.noIssue']]
+    : o.colorBy === 'depth'
+      ? [['__depth0', 'viz.shallow'], ['__depth1', 'viz.deep']]
+      : [['indexable', 'idx.indexable'], ['nonIndexable', 'idx.nonIndexable'], ['redirect', 'idx.redirect'], ['error', 'viz.error'], ['blocked', 'idx.blocked'], ...(o.view === 'dir' ? [['folder', 'viz.folder']] : [])];
+  const swatch = (k) => (k === '__depth0' ? 'hsl(130 65% 45%)' : k === '__depth1' ? 'hsl(0 65% 45%)' : PALETTE[k]);
+  view.innerHTML = `
+    <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.viz'))}</h2><p class="help">${esc(t('help.viz.' + o.view))}</p></div>
+      <div class="tb-actions">
+        ${seg('view', ['crawl', 'dir', 'links'])}
+        ${seg('dim', ['2d', '3d'])}
+        <select id="vizColor" aria-label="${esc(t('viz.colorBy'))}">${['status', 'issues', 'depth'].map((c) => `<option value="${c}" ${o.colorBy === c ? 'selected' : ''}>${esc(t('viz.color.' + c))}</option>`).join('')}</select>
+        <select id="vizMax" aria-label="${esc(t('viz.maxNodes'))}">${[500, 1500, 3000, 6000].map((n) => `<option value="${n}" ${o.maxNodes === n ? 'selected' : ''}>${esc(t('viz.nodes', { n }))}</option>`).join('')}</select>
+        <button class="btn" id="vizFit" title="${esc(t('viz.fit'))}">${icon('target')}</button>
+        <button class="btn" id="vizPng">${icon('download')} PNG</button>
+      </div></div>
+    <div class="viz-wrap"><div id="vizCanvas" class="viz-canvas"><div class="empty">${icon('spider')} ${esc(t('ui.loading'))}</div></div>
+      <div class="viz-legend">${legend.map(([k, l]) => `<span><i style="background:${swatch(k)}"></i>${esc(t(l))}</span>`).join('')}<span class="muted">${esc(t('viz.sizeHint'))}</span></div>
+      <div id="vizNote" class="viz-note muted"></div></div>`;
+  const update = (patch) => { store.set('viz', { ...o, ...patch }); render(); };
+  view.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => update({ view: b.dataset.view })));
+  view.querySelectorAll('[data-dim]').forEach((b) => b.addEventListener('click', () => update({ dim: b.dataset.dim })));
+  $('#vizColor').addEventListener('change', (e) => update({ colorBy: e.target.value }));
+  $('#vizMax').addEventListener('change', (e) => update({ maxNodes: Number(e.target.value) }));
+  if (state.vizHandle) { state.vizHandle.destroy(); state.vizHandle = null; }
+  const el = $('#vizCanvas');
+  const data = buildGraph(state.R, linkGraph(), o);
+  $('#vizNote').textContent = t('viz.stats', { nodes: data.nodes.length, links: data.links.length }) + (data.truncated ? ' · ' + t('viz.truncated', { n: o.maxNodes }) : '');
+  try {
+    el.innerHTML = '';
+    const R = state.R;
+    const handle = await renderGraph(el, data, { view: o.view, dim: o.dim, t, onSelect: (url) => selectUrl(url) });
+    if (state.R !== R || state.tab !== 'viz' || !document.body.contains(el)) return handle.destroy();
+    state.vizHandle = handle;
+    $('#vizFit').addEventListener('click', () => handle.graph.zoomToFit(500, 30));
+    $('#vizPng').addEventListener('click', () => {
+      const url = handle.png();
+      if (!url) return toast(t('toast.copyFailed'), 'error');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${hostOf()}_${o.view}_${o.dim}.png`;
+      a.click();
+    });
+  } catch (err) {
+    el.innerHTML = `<div class="empty">${icon('error')} ${esc(t('viz.loadFailed'))}<br><small>${esc(err.message)}</small></div>`;
+  }
+}
+
 /* ---------- Robots, IA & sitemaps ---------- */
 function renderRobots(view) {
   const m = state.R.meta;
@@ -492,6 +565,7 @@ function renderRobots(view) {
       </div>
     </div>
     <div class="card mt"><h3>robots.txt · <a href="${esc(m.origin)}/robots.txt" target="_blank" rel="noopener">${esc(m.origin)}/robots.txt</a></h3>
+      <p class="mt0"><span class="chip muted">${esc(t('robots.modeUsed'))} : ${esc(t({ respect: 'opt.robotsRespect', report: 'opt.robotsReport', ignore: 'opt.robotsIgnore' }[m.options.robotsMode || 'respect']))}</span>${m.options.customRobots ? ` <span class="chip notice">${esc(t('robots.customUsed'))}</span>` : ''}</p>
       ${m.robotsTxt ? `<pre class="robots">${esc(m.robotsTxt)}</pre>` : `<p class="muted">${esc(t('robots.noRobots'))}</p>`}</div>
     <div class="card mt"><h3>${esc(t('robots.config'))}</h3><div class="kv">${Object.entries(m.options).filter(([, v]) => v !== '' && v !== undefined).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('')}</div></div>`;
 }
@@ -623,7 +697,7 @@ function exportCsv(tab, rows, fname, title) {
     const s = Array.isArray(v) ? v.join(' | ') : v == null ? '' : String(v);
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const csv = '﻿' + [tab.cols.map((c) => cell(t(c.l))).join(';'), ...rows.map((r) => tab.cols.map((c) => cell(cellValue(c, r))).join(';'))].join('\r\n');
+  const csv = '﻿' + [tab.cols.map((c) => cell(c.raw ? c.l : t(c.l))).join(';'), ...rows.map((r) => tab.cols.map((c) => cell(cellValue(c, r))).join(';'))].join('\r\n');
   download(`${hostOf()}_${slug(title)}${fname ? '_' + slug(t('f.' + fname)) : ''}.csv`, csv, 'text/csv;charset=utf-8');
 }
 
@@ -765,25 +839,97 @@ $('#historyBtn').addEventListener('click', async () => {
   }));
 });
 
-/* ---------- Options & lancement ---------- */
-const optionsPanel = $('#optionsPanel');
+/* ---------- Configuration & lancement ---------- */
+const configForm = $('#configForm');
+const configDialog = $('#configDialog');
+const SECRET = new Set(['httpPass']); // jamais enregistré dans le navigateur
+const DEFAULTS = {};
+configForm.querySelectorAll('[name]').forEach((el) => {
+  if (el.type === 'radio') { if (el.checked) DEFAULTS[el.name] = el.value; } else DEFAULTS[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+});
+
 function readOptions() {
   const o = {};
-  optionsPanel.querySelectorAll('input[name], select[name]').forEach((el) => { o[el.name] = el.type === 'checkbox' ? el.checked : el.value; });
+  configForm.querySelectorAll('[name]').forEach((el) => {
+    if (el.type === 'radio') { if (el.checked) o[el.name] = el.value; } else o[el.name] = el.type === 'checkbox' ? el.checked : el.value;
+  });
+  o.extractors = readExtractors();
   return o;
+}
+function applyOptions(saved) {
+  configForm.querySelectorAll('[name]').forEach((el) => {
+    if (!(el.name in saved)) return;
+    if (el.type === 'checkbox') el.checked = !!saved[el.name];
+    else if (el.type === 'radio') el.checked = el.value === saved[el.name];
+    else el.value = saved[el.name];
+  });
+  renderExtractors(saved.extractors || []);
 }
 function restoreOptions() {
   const saved = store.get('options');
-  if (!saved) return;
-  optionsPanel.querySelectorAll('input[name], select[name]').forEach((el) => {
-    if (!(el.name in saved)) return;
-    if (el.type === 'checkbox') el.checked = !!saved[el.name];
-    else el.value = saved[el.name];
-  });
+  // Compatibilité 2.0 : respectRobots (case à cocher) → robotsMode
+  if (saved && saved.robotsMode === undefined && saved.respectRobots === false) saved.robotsMode = 'ignore';
+  applyOptions(saved || { extractors: [] });
 }
-$('#optionsBtn').addEventListener('click', () => {
-  optionsPanel.hidden = !optionsPanel.hidden;
-  $('#optionsBtn').setAttribute('aria-expanded', String(!optionsPanel.hidden));
+function saveOptions() {
+  const o = readOptions();
+  for (const k of SECRET) delete o[k];
+  store.set('options', o);
+}
+
+// Extraction personnalisée : une ligne par extracteur.
+function extractorRow(e = {}) {
+  return `<div class="ex-row">
+    <input class="ex-name" type="text" placeholder="${esc(t('cfg.exName'))}" value="${esc(e.name || '')}">
+    <select class="ex-type"><option value="css" ${e.type !== 'regex' ? 'selected' : ''}>CSS</option><option value="regex" ${e.type === 'regex' ? 'selected' : ''}>Regex</option></select>
+    <input class="ex-sel mono" type="text" placeholder="${esc(t('cfg.exSelector'))}" value="${esc(e.selector || '')}">
+    <select class="ex-target">${['text', 'attr', 'html', 'count'].map((x) => `<option value="${x}" ${e.target === x ? 'selected' : ''}>${esc(t('cfg.ex.' + x))}</option>`).join('')}</select>
+    <input class="ex-attr" type="text" placeholder="href" value="${esc(e.attr || '')}" ${e.target === 'attr' ? '' : 'hidden'}>
+    <button type="button" class="btn small ex-del" aria-label="${esc(t('ui.delete'))}">${icon('x')}</button></div>`;
+}
+function renderExtractors(list) {
+  $('#extractors').innerHTML = list.map(extractorRow).join('');
+}
+function readExtractors() {
+  return $$('#extractors .ex-row').map((r) => ({
+    name: $('.ex-name', r).value.trim(), type: $('.ex-type', r).value, selector: $('.ex-sel', r).value.trim(), target: $('.ex-target', r).value, attr: $('.ex-attr', r).value.trim(),
+  })).filter((e) => e.name && e.selector);
+}
+$('#addExtractor').addEventListener('click', () => {
+  if ($$('#extractors .ex-row').length >= 20) return;
+  $('#extractors').insertAdjacentHTML('beforeend', extractorRow({ type: 'css', target: 'text' }));
+});
+$('#extractors').addEventListener('click', (e) => { if (e.target.closest('.ex-del')) e.target.closest('.ex-row').remove(); });
+$('#extractors').addEventListener('change', (e) => {
+  if (e.target.matches('.ex-target')) $('.ex-attr', e.target.closest('.ex-row')).hidden = e.target.value !== 'attr';
+  if (e.target.matches('.ex-type')) {
+    const row = e.target.closest('.ex-row');
+    $('.ex-target', row).disabled = e.target.value === 'regex';
+  }
+});
+
+$$('#cfgNav button').forEach((b) => b.addEventListener('click', () => {
+  $$('#cfgNav button').forEach((x) => x.classList.toggle('on', x === b));
+  $$('.cfg-body [data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== b.dataset.cfg; });
+}));
+$('#optionsBtn').addEventListener('click', () => configDialog.showModal());
+configDialog.addEventListener('close', saveOptions);
+$('#cfgReset').addEventListener('click', () => { applyOptions({ ...DEFAULTS, extractors: [] }); toast(t('cfg.resetDone'), 'ok'); });
+
+// Testeur robots.txt : robots.txt personnalisé, sinon celui du dernier crawl.
+import('./shared/robots.js').then(({ testRobots }) => {
+  $('#robotsTestBtn').addEventListener('click', () => {
+    const out = $('#robotsTestOut');
+    const url = $('#robotsTestUrl').value.trim();
+    const txt = configForm.customRobots.value.trim() || state.R?.meta?.robotsTxt || '';
+    if (!url) return;
+    if (!txt) { out.innerHTML = `<span class="muted">${esc(t('cfg.noRobots'))}</span>`; return; }
+    try {
+      const ua = { googlebot: 'Googlebot', googlebotMobile: 'Googlebot', chrome: 'Chrome' }[configForm.userAgent.value] || 'ArachnideSEO';
+      const r = testRobots(txt, ua, /^https?:/i.test(url) ? url : 'https://x' + (url.startsWith('/') ? '' : '/') + url);
+      out.innerHTML = `${r.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`} <code>${esc(r.rule || t('cfg.noRule'))}</code>`;
+    } catch (err) { out.textContent = err.message; }
+  });
 });
 
 let mode = store.get('mode', 'spider');
@@ -800,7 +946,7 @@ $$('#modeSeg button').forEach((b) => b.addEventListener('click', () => setMode(b
 $('#crawlForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const options = readOptions();
-  store.set('options', options);
+  saveOptions();
   const body = { options };
   if (mode === 'list') {
     options.mode = 'list';
@@ -813,7 +959,6 @@ $('#crawlForm').addEventListener('submit', async (e) => {
   const res = await fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return toast(data.key ? t(data.key) : data.error || t('toast.startFailed'), 'error');
-  optionsPanel.hidden = true;
 });
 $('#stopBtn').addEventListener('click', () => fetch('/api/stop', { method: 'POST' }));
 

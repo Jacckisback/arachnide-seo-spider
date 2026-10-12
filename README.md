@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-2.0.0-3d5f17" alt="Version 2.0.0">
+  <img src="https://img.shields.io/badge/version-2.1.0-3d5f17" alt="Version 2.1.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -28,6 +28,22 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
+</p>
+
+## 🆕 What's new in 2.1
+
+| | |
+|---|---|
+| 🕸️ **2D & 3D visualisations** | See the site's architecture in 2D or 3D, in three views: **crawl tree** (shortest click path from the homepage), **directory tree** (URL structure) and **link graph** (every followed internal link). Colour the nodes by indexability, SEO issues or depth; node size shows the Link Score. Click a node to see the page's details, and export the view as PNG for your reports. |
+| ⚙️ **Crawler configuration, like Screaming Frog** | A **Configuration** window with tabs: Spider, **Limits**, **Speed**, **robots.txt**, Rendering, Include / exclude, Extraction, Authentication. It keeps only the settings that matter. |
+| 🚧 **Spider › Limits** | Crawl total, crawl depth, URLs per depth, folder depth, number of query strings, redirects to follow, URL length, links per page, page size, and **limits by URL path** (`/blog/ = 200`). The dashboard shows how many URLs each limit skipped. |
+| 🤖 **robots.txt** | Three modes: **respect**, **ignore but report** (crawl blocked URLs and still flag them) and **ignore**. Paste a **custom robots.txt** to test a new file before you publish it, and use the built-in **tester** to see whether a URL is allowed and which rule applies. |
+| 🐢 **Speed** | Max threads plus a global **max URLs per second** cap, to protect fragile servers. |
+| 🧲 **Custom extraction** | Collect any data from every page with a CSS selector or a regex: price, author, date, SKU, tracking code… It appears in an **Extraction** tab and the CSV export. |
+| 🔐 **Authentication & URL cleaning** | HTTP authentication and custom headers or cookies for staging sites. They are only sent to the audited site, and the password is never saved. **Remove URL parameters** such as `utm_*`, `gclid` or `fbclid` to avoid duplicate URLs. |
+
+<p align="center">
+  <img src="docs/screenshots/viz-crawl-tree-3d.png" alt="3D crawl tree coloured by SEO issues" width="100%">
 </p>
 
 ## ✨ What's new in 2.0
@@ -73,6 +89,12 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 | <img src="docs/screenshots/titles-serp.png" alt="Titles tab with Google preview and pixel meters"> | <img src="docs/screenshots/internal-linking.png" alt="Internal linking tab with Link Score and inlinks panel"> |
 | **White-label report settings** | **Professional audit report** |
 | <img src="docs/screenshots/report-dialog.png" alt="Report dialog with logo, colour, client and comparison"> | <img src="docs/screenshots/report.png" alt="Executive summary of the audit report"> |
+| **Crawl tree (2D)** | **Link graph (2D)** |
+| <img src="docs/screenshots/viz-crawl-tree-2d.png" alt="2D crawl tree"> | <img src="docs/screenshots/viz-link-graph.png" alt="Force-directed internal link graph"> |
+| **Directory tree** | **Custom extraction** |
+| <img src="docs/screenshots/viz-directory-tree.png" alt="Directory tree visualisation"> | <img src="docs/screenshots/custom-extraction.png" alt="Extraction tab with prices extracted by CSS selector"> |
+| **Configuration › Limits** | **Configuration › robots.txt (with tester)** |
+| <img src="docs/screenshots/config-limits.png" alt="Spider limits settings"> | <img src="docs/screenshots/config-robots.png" alt="robots.txt modes, custom robots.txt and tester"> |
 | **Home screen** | **Dark mode** |
 | <img src="docs/screenshots/home.png" alt="Home screen with recent crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard in dark mode"> |
 
@@ -125,16 +147,32 @@ Keep the terminal window open while you use the app, and press `Ctrl + C` to sto
 
 Use **All issues (CSV)** to give your client or developer the full list of URLs to fix.
 
-## ⚙️ Crawl options
+## ⚙️ Configuration
 
-| Group | Options |
+Click **⚙ Options** to open the **Configuration** window. Your settings are remembered, except the password.
+
+| Tab | Settings |
 |---|---|
-| Crawl | Max URLs, max depth, concurrent requests, delay between requests, timeout |
+| Spider | Read XML sitemaps, follow canonicals, include subdomains, check external links and images |
+| Limits | Crawl total, crawl depth, URLs per depth, folder depth, query strings, redirects to follow, URL length, links per page, page size, limits by URL path (`/blog/ = 200`, one per line) |
+| Speed | Max threads, max URLs per second, timeout |
+| robots.txt | Respect / ignore but report / ignore, custom robots.txt, URL tester |
 | Rendering | JavaScript rendering, user-agent (Arachnide, Googlebot desktop/smartphone, Chrome), Accept-Language |
-| Scope | Include / exclude URLs with a regex, custom search, subdomains, ignore URL parameters |
-| Checks | Respect robots.txt, read XML sitemaps, follow canonicals, check external links, check images |
+| Include / exclude | Include / exclude regex, remove URL parameters (`utm_*, gclid`), ignore all parameters, custom search |
+| Extraction | Up to 20 extractors: CSS selector (text, attribute, HTML or count) or regex |
+| Authentication | HTTP user and password, custom headers (cookies, tokens) |
 
 Use the **Website / List** switch next to the address field to crawl a whole site or only a list of URLs.
+
+## 🕸️ Visualisations
+
+Open **Visualisations** in the sidebar after a crawl:
+
+- **Crawl tree:** each page is linked to the page that led to it at the previous click depth. Long branches mean deep pages.
+- **Directories:** the URL structure folder by folder. It shows unbalanced or overly deep sections.
+- **Links:** the full internal link graph. Well-linked pages gather in the centre, and isolated pages drift to the edge.
+
+Switch between **2D** and **3D**, colour by indexability, issues or depth, choose how many nodes to show (up to 6,000), click a node to open its details, and export a PNG for your reports.
 
 ## 🖥️ Command line
 
@@ -143,6 +181,7 @@ node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang en
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```
 
@@ -174,12 +213,14 @@ src/
   analyze.mjs    link graph, click depth, Link Score, duplicates, cannibalisation, SEO checks
   text.mjs       keywords, multilingual stop words, simhash
   pixel.mjs      title and description width in pixels
+  options.mjs    validation of the crawl configuration (UI and CLI)
   server.mjs     local web server and API with live updates
   cli.mjs        command-line interface
 public/
   app.js         web interface (no framework)
+  viz.js         2D / 3D visualisations (force-graph, 3d-force-graph, served locally)
   i18n/*.js      translations (en, fr, de, es, it, pt)
-  shared/        report generator, crawl comparison, i18n, icons (used by the UI and the CLI)
+  shared/        report generator, crawl comparison, robots.txt parser, i18n, icons (used by the UI and the CLI)
 ```
 
 **Adding a language:** copy `public/i18n/en.js`, translate the values and add the language to `LANGS` in `public/shared/i18n.js`. `npm test` checks that no key or placeholder is missing.
@@ -188,9 +229,10 @@ public/
 
 - [ ] PageSpeed Insights / CrUX field data
 - [ ] Google Search Console integration (clicks and impressions per URL)
-- [ ] Custom extraction (CSS selectors / XPath)
 - [ ] Scheduled crawls with email alerts
-- [ ] Interactive site architecture visualisation
+- [ ] Import of a Google Search Console CSV export (GSC-only orphan pages)
+- [x] Custom extraction (2.1)
+- [x] 2D / 3D site architecture visualisations (2.1)
 
 Suggestions and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 

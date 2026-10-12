@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { findChrome } from './renderer.mjs';
+import { toCrawlerOptions } from './options.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -107,22 +108,7 @@ async function saveResult(result) {
 
 async function startCrawl(body) {
   if (crawler && crawler.phase !== 'done') throw Object.assign(new Error('A crawl is already running.'), { status: 409, key: 'toast.busy' });
-  const o = body.options || {};
-  const opts = {};
-  for (const k of ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs']) if (o[k] !== undefined && o[k] !== '') opts[k] = Number(o[k]);
-  for (const k of ['respectRobots', 'crawlSubdomains', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render']) if (o[k] !== undefined) opts[k] = !!o[k];
-  for (const k of ['include', 'exclude', 'search', 'acceptLanguage']) if (o[k]) opts[k] = String(o[k]);
-  if (o.mode === 'list') {
-    opts.mode = 'list';
-    opts.urls = (Array.isArray(o.urls) ? o.urls : String(o.urls || '').split(/\s+/)).map(String).filter(Boolean).slice(0, 100000);
-  }
-  for (const k of ['include', 'exclude']) {
-    if (opts[k]) {
-      try { new RegExp(opts[k]); } catch { throw Object.assign(new Error(`Invalid regex (${k}): ${opts[k]}`), { status: 400, key: 'toast.badRegex' }); }
-    }
-  }
-  opts.userAgent = USER_AGENTS[o.userAgent] || (o.customUserAgent ? String(o.customUserAgent) : USER_AGENTS.arachnide);
-  opts.concurrency = Math.min(Math.max(opts.concurrency || 5, 1), 30);
+  const opts = toCrawlerOptions(body.options || {});
 
   const c = new Crawler(body.url, opts); // lève une erreur si l'URL est invalide
   crawler = c;
@@ -190,6 +176,15 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, await fs.readFile(file));
     }
     if (p.startsWith('/api/')) return send(res, 404, { error: 'Route inconnue' });
+
+    // Bibliothèques de visualisation servies depuis node_modules (fonctionne hors ligne)
+    if (p.startsWith('/vendor/')) {
+      const VENDOR = { 'force-graph.min.js': 'force-graph/dist/force-graph.min.js', '3d-force-graph.min.js': '3d-force-graph/dist/3d-force-graph.min.js' };
+      const rel = VENDOR[p.slice('/vendor/'.length)];
+      if (!rel) return send(res, 404, 'Not found', 'text/plain');
+      res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'public, max-age=86400' });
+      return res.end(await fs.readFile(path.join(ROOT, 'node_modules', rel)));
+    }
 
     // Fichiers statiques
     const rel = p === '/' ? 'index.html' : p.slice(1);

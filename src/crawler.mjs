@@ -6,7 +6,7 @@ import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 
-export const VERSION = '2.0.0';
+export const VERSION = '2.1.0';
 export const DEFAULT_UA = 'Mozilla/5.0 (compatible; ArachnideSEO/2.0; +https://github.com/Jacckisback/arachnide-seo-spider)';
 export const USER_AGENTS = {
   arachnide: DEFAULT_UA,
@@ -40,6 +40,26 @@ export const DEFAULT_OPTIONS = {
   renderConcurrency: 3,
   search: '', // texte ou /regex/ recherché dans le code source de chaque page
   acceptLanguage: '', // vide comme Googlebot
+  // Spider > Limites (null = illimité)
+  limitPerDepth: null, // URLs max par niveau de profondeur
+  maxFolderDepth: null, // nombre max de dossiers dans le chemin
+  maxQueryParams: null, // nombre max de paramètres d'URL
+  maxRedirects: 10, // redirections suivies dans une chaîne
+  maxUrlLength: 2000,
+  maxLinksPerPage: 10000,
+  maxPageSizeKb: 51200, // 50 Mo
+  pathLimits: [], // [{ pattern: '/blog/', max: 200 }]
+  // Vitesse
+  maxUrlPerSec: 0, // 0 = illimité ; plafond global de requêtes par seconde
+  // robots.txt : 'respect' | 'report' (ignorer mais signaler) | 'ignore'
+  robotsMode: 'respect',
+  customRobots: '', // robots.txt de test qui remplace celui du site pendant le crawl
+  // Réécriture d'URL & accès
+  removeParams: '', // ex. "utm_*, gclid, fbclid"
+  httpUser: '',
+  httpPass: '',
+  customHeaders: '', // une ligne "Nom: valeur" par en-tête (cookies, jetons…)
+  extractors: [], // [{ name, type: 'css' | 'regex', selector, target: 'text' | 'html' | 'attr' | 'count', attr }]
 };
 
 // Robots des moteurs de recherche et des IA dont on vérifie l'accès dans le robots.txt.
@@ -87,6 +107,21 @@ export class Crawler extends EventEmitter {
       this.opts.maxPages = Math.max(this.opts.maxPages, this.listUrls.length);
     }
     this.startUrl = fix(startUrl);
+    if (options.respectRobots === false && !options.robotsMode) this.opts.robotsMode = 'ignore'; // compatibilité 2.0
+    this.removeParamRes = String(this.opts.removeParams || '').split(/[\s,]+/).filter(Boolean)
+      .map((p) => new RegExp('^' + p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i'));
+    this.pathLimits = (this.opts.pathLimits || [])
+      .map((l) => { try { return { re: new RegExp(l.pattern, 'i'), max: Number(l.max), count: 0, pattern: l.pattern }; } catch { return null; } })
+      .filter((l) => l && l.max >= 0);
+    this.depthCounts = new Map();
+    this.skipped = {}; // URLs non crawlées à cause des limites, par motif
+    this.nextRequestAt = 0;
+    this.extraHeaders = {};
+    for (const line of String(this.opts.customHeaders || '').split(/\r?\n/)) {
+      const i = line.indexOf(':');
+      if (i > 0) this.extraHeaders[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
+    }
+    if (this.opts.httpUser) this.extraHeaders.authorization = 'Basic ' + Buffer.from(`${this.opts.httpUser}:${this.opts.httpPass || ''}`).toString('base64');
     this.searchRe = searchRegex(this.opts.search);
     this.warnings = [];
     this.botAccess = [];
@@ -121,6 +156,9 @@ export class Crawler extends EventEmitter {
       const u = new URL(url);
       u.hash = '';
       if (this.opts.ignoreQuery) u.search = '';
+      else if (this.removeParamRes.length && u.search) {
+        for (const k of [...u.searchParams.keys()]) if (this.removeParamRes.some((re) => re.test(k))) u.searchParams.delete(k);
+      }
       return u.href;
     } catch {
       return null;
@@ -145,17 +183,46 @@ export class Crawler extends EventEmitter {
     return true;
   }
 
-  enqueue(url, depth, via = 'link') {
+  skip(reason) {
+    this.skipped[reason] = (this.skipped[reason] || 0) + 1;
+  }
+
+  enqueue(url, depth, via = 'link', hops = 0) {
     const n = this.normalize(url);
     if (!n || this.seen.has(n)) return;
     if (!this.isInternal(n) || !this.inScope(n)) return;
-    if (depth > this.opts.maxDepth) return;
-    if (this.seen.size >= this.opts.maxPages) return;
+    const o = this.opts;
+    if (via !== 'start' && via !== 'list') {
+      // Spider > Limites
+      if (depth > o.maxDepth) return this.skip('depth');
+      if (hops > o.maxRedirects) return this.skip('redirects');
+      if (n.length > o.maxUrlLength) return this.skip('urlLength');
+      const u = new URL(n);
+      if (o.maxFolderDepth != null && u.pathname.split('/').filter(Boolean).length - (u.pathname.endsWith('/') ? 0 : 1) > o.maxFolderDepth) return this.skip('folderDepth');
+      if (o.maxQueryParams != null && [...u.searchParams.keys()].length > o.maxQueryParams) return this.skip('queryParams');
+      if (o.limitPerDepth != null && (this.depthCounts.get(depth) || 0) >= o.limitPerDepth) return this.skip('perDepth');
+      const pl = this.pathLimits.find((l) => l.re.test(n));
+      if (pl && pl.count >= pl.max) return this.skip('path');
+      if (pl) pl.count++;
+    }
+    if (this.seen.size >= o.maxPages) return this.skip('total');
     this.seen.add(n);
-    this.queue.push({ url: n, depth, via });
+    this.depthCounts.set(depth, (this.depthCounts.get(depth) || 0) + 1);
+    this.queue.push({ url: n, depth, via, hops });
+  }
+
+  // Vitesse : plafond global de requêtes par seconde, partagé par tous les workers.
+  async throttle() {
+    if (!this.opts.maxUrlPerSec) return;
+    const gap = 1000 / this.opts.maxUrlPerSec;
+    const now = Date.now();
+    const at = Math.max(now, this.nextRequestAt);
+    this.nextRequestAt = at + gap;
+    if (at > now) await sleep(at - now);
   }
 
   async request(url, method = 'GET') {
+    await this.throttle();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.opts.timeoutMs);
     const t0 = performance.now();
@@ -168,6 +235,8 @@ export class Crawler extends EventEmitter {
           'user-agent': this.opts.userAgent,
           accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           ...(this.opts.acceptLanguage ? { 'accept-language': this.opts.acceptLanguage } : {}),
+          // Authentification et en-têtes personnalisés : uniquement vers le site audité.
+          ...(this.hosts && this.isInternal(url) ? this.extraHeaders : {}),
         },
       });
       const ttfb = Math.round(performance.now() - t0);
@@ -232,7 +301,8 @@ export class Crawler extends EventEmitter {
     const [txt, llms] = await Promise.all([this.fetchText(this.origin + '/robots.txt'), this.fetchText(this.origin + '/llms.txt')]);
     this.robotsTxt = txt;
     this.llmsTxt = llms && !/<html/i.test(llms.slice(0, 500)) ? { size: llms.length } : null;
-    const robots = txt ? parseRobots(txt) : null;
+    if (this.opts.customRobots) this.robotsTxt = this.opts.customRobots;
+    const robots = this.robotsTxt ? parseRobots(this.robotsTxt) : null;
     this.robotsRules = robots ? rulesFor(robots, this.opts.userAgent) : [];
     this.botAccess = BOTS.map((bot) => ({ bot, allowed: robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
     if (!this.opts.useSitemaps || this.opts.mode === 'list') return;
@@ -267,7 +337,7 @@ export class Crawler extends EventEmitter {
   }
 
   blockedByRobots(url) {
-    if (!this.opts.respectRobots || !this.robotsRules.length) return false;
+    if (this.opts.robotsMode === 'ignore' || !this.robotsRules.length) return false;
     const u = new URL(url);
     if (u.origin !== this.origin) return false;
     return !isAllowed(this.robotsRules, u.pathname + u.search);
@@ -286,7 +356,7 @@ export class Crawler extends EventEmitter {
   async startRenderer() {
     if (!this.opts.render) return;
     this.setPhase('browser');
-    const r = new Renderer({ userAgent: this.opts.userAgent, timeoutMs: this.opts.timeoutMs });
+    const r = new Renderer({ userAgent: this.opts.userAgent, timeoutMs: this.opts.timeoutMs, headers: this.extraHeaders, isInternal: (u) => this.isInternal(u) });
     try {
       await r.start();
       this.renderer = r;
@@ -413,7 +483,9 @@ export class Crawler extends EventEmitter {
 
   async process(item) {
     const rec = this.baseRecord(item);
-    if (this.blockedByRobots(item.url)) {
+    const blocked = this.blockedByRobots(item.url);
+    if (blocked && this.opts.robotsMode === 'report') rec.robotsBlocked = true; // crawlé quand même, mais signalé
+    else if (blocked) {
       rec.blockedByRobots = true;
       this.pages.set(item.url, rec);
       this.emit('page', rec);
@@ -448,7 +520,7 @@ export class Crawler extends EventEmitter {
         await res.body?.cancel();
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
-          if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect');
+          if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
         }
         this.pages.set(item.url, rec);
         this.emit('page', rec);
@@ -462,11 +534,22 @@ export class Crawler extends EventEmitter {
         this.emit('page', rec);
         return;
       }
+      const maxBytes = this.opts.maxPageSizeKb * 1024;
+      if (Number(res.headers.get('content-length')) > maxBytes) {
+        await res.body?.cancel();
+        rec.size = Number(res.headers.get('content-length'));
+        rec.tooLarge = true;
+        this.skip('pageSize');
+        this.pages.set(item.url, rec);
+        this.emit('page', rec);
+        return;
+      }
       const buf = new Uint8Array(await res.arrayBuffer());
       rec.downloadTime = Math.round(performance.now() - reqRes.t0);
       rec.size = buf.byteLength;
       const html = decodeBody(buf, rec.contentType);
-      let data = parseHtml(html, item.url);
+      const popts = { extractors: this.opts.extractors };
+      let data = parseHtml(html, item.url, popts);
       if (this.searchRe) rec.searchMatches = (html.match(this.searchRe) || []).length;
       if (this.renderer && res.status === 200) {
         const raw = data;
@@ -474,7 +557,7 @@ export class Crawler extends EventEmitter {
           const r = await this.withRenderSlot(() => this.renderer.render(item.url));
           // Redirection JavaScript ou meta refresh : la page rendue est une autre URL, on garde le HTML brut.
           if (this.normalize(r.finalUrl) !== item.url) throw new Error(`JS redirect → ${r.finalUrl}`);
-          data = parseHtml(r.html, item.url);
+          data = parseHtml(r.html, item.url, popts);
           const rawLinks = new Set(raw.links.map((l) => l.to));
           rec.js = {
             rendered: true,
@@ -506,6 +589,10 @@ export class Crawler extends EventEmitter {
 
       const followAll = !/nofollow/i.test(rec.metaRobots + ' ' + rec.xRobotsTag);
       const follow = this.opts.mode !== 'list';
+      if (links.length > this.opts.maxLinksPerPage) {
+        rec.linksTruncated = links.length;
+        links.length = this.opts.maxLinksPerPage;
+      }
       for (const l of links) {
         const to = this.normalize(l.to) || l.to;
         const internal = this.isInternal(to);

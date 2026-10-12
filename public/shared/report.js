@@ -140,6 +140,7 @@ export function buildReport(R, opts, t) {
       <div><h3>${esc(t('report.crawlSetup'))}</h3><table class="mini"><tbody>
         <tr><td>${esc(t('report.mode'))}</td><td>${esc(R.meta.mode === 'list' ? t('opt.modeList') : t('opt.modeSpider'))}</td></tr>
         <tr><td>${esc(t('opt.render'))}</td><td>${R.meta.rendered ? '✓' : '✗'}</td></tr>
+        <tr><td>robots.txt</td><td>${esc(t({ respect: 'opt.robotsRespect', report: 'opt.robotsReport', ignore: 'opt.robotsIgnore' }[R.meta.options.robotsMode || 'respect']))}${R.meta.options.customRobots ? ' · ' + esc(t('robots.customUsed')) : ''}</td></tr>
         <tr><td>${esc(t('opt.userAgent'))}</td><td class="small">${esc(R.meta.options.userAgent)}</td></tr>
         <tr><td>${esc(t('robots.sitemaps'))}</td><td>${t.num(R.meta.sitemapFiles?.length || 0)} · ${t.num(R.meta.sitemapUrlCount)} URLs</td></tr>
         <tr><td>${esc(t('dash.indexable'))}</td><td>${t.num(S.indexable)} / ${t.num(S.htmlPages)} (${pct(S.indexable)}%)</td></tr>
