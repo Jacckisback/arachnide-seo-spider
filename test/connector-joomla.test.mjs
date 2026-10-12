@@ -208,6 +208,9 @@ test('joomla : alt d’image (image d’introduction et image du texte)', async 
   await c.set({ url, field: 'image_alt', target: body, value: 'Schéma "corps"' });
   assert.equal(await c.get({ url, field: 'image_alt', target: body }), 'Schéma "corps"');
   assert.equal(s.articles[1].fulltext, '<p>Suite</p>');
+  await c.set({ url, field: 'image_alt', target: body, value: null });
+  assert.equal(await c.get({ url, field: 'image_alt', target: body }), null);
+  assert.match(s.articles[1].introtext, /<img src="images\/corps.png">/);
   await assert.rejects(c.get({ url, field: 'image_alt', target: origin + '/images/absente.jpg' }), { code: 'not_found' });
 });
 

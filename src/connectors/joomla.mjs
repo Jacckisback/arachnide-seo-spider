@@ -45,6 +45,10 @@ const fileOf = (s) => {
   }
 };
 
+// Écrit l'alt d'une <img> ; null retire l'attribut (retour exact à l'état « sans alt »).
+const NO_ALT = '\u0000arachnide-no-alt';
+const htmlAlt = (html, src, v) => setImageAltInHtml(html, src, v ?? NO_ALT).html.replace(` alt="${NO_ALT}"`, '');
+
 // Identifiant d'article d'un lien de menu « index.php?option=com_content&view=article&id=12 ».
 const articleIdFromLink = (link) => {
   const q = new URLSearchParams(String(link || '').split('?')[1] || '');
@@ -289,7 +293,7 @@ export default class JoomlaConnector extends Connector {
     for (const k of ['introtext', 'fulltext']) {
       const alt = getImageAltInHtml(raw[k], target);
       if (alt !== undefined) {
-        return { alt, update: (v) => ({ [k]: setImageAltInHtml(raw[k], target, v ?? '').html }) };
+        return { alt, update: (v) => ({ [k]: htmlAlt(raw[k], target, v) }) };
       }
     }
     throw new ConnectorError('not_found', `Joomla: image ${target} not found in article ${art.id}.`, 'The image may come from a module, the template or a custom field.');

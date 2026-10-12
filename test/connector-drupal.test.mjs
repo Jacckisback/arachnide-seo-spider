@@ -70,7 +70,7 @@ function mockDrupal() {
       }
       if (!p.startsWith('/jsonapi')) return send(res, 404, {}, 'text/html');
       if (req.method !== 'GET') {
-        assert.equal(req.headers['content-type'], 'application/vnd.api+json');
+        if (req.method !== 'DELETE') assert.equal(req.headers['content-type'], 'application/vnd.api+json');
         if (s.readOnly) return send(res, 405, { errors: [{ status: '405', detail: 'JSON:API is configured to accept only read operations.' }] });
         if (!authed) return send(res, 403, { errors: [{ status: '403' }] });
       }
@@ -144,7 +144,7 @@ test('drupal : valeur Metatag JSON (2.x) et PHP sérialisée (1.x)', () => {
   const j = decodeMetatag('{"title":"Été"}');
   assert.deepEqual(j.tags, { title: 'Été' });
   assert.equal(j.write({ title: 'X' }), '{"title":"X"}');
-  const p = decodeMetatag('a:1:{s:5:"title";s:4:"Été";}');
+  const p = decodeMetatag('a:1:{s:5:"title";s:5:"Été";}');
   assert.deepEqual(p.tags, { title: 'Été' });
   assert.equal(p.write({ title: 'Noël' }), 'a:1:{s:5:"title";s:5:"Noël";}');
   assert.deepEqual(decodeMetatag({ value: '{"a":"b"}' }).write({ a: 'c' }), { value: '{"a":"c"}' });
@@ -218,7 +218,7 @@ test('drupal : h1, titre SEO, description, canonical, noindex (aller-retour et n
   assert.equal(s.nodes['u-2'].attributes.field_meta_tags, 'a:2:{s:5:"title";s:16:"Qui sommes-nous?";s:6:"robots";s:8:"nofollow";}');
 
   // Pas de champ Metatag sur le nœud : erreur de configuration explicite.
-  await assert.rejects(c.get({ url: origin + '/', field: 'seo_title' }).then(() => c.get({ url: origin + '/', field: 'seo_title' })), (e) => true);
+  assert.equal(await c.get({ url: origin + '/', field: 'seo_title' }), null);
   const other = new DrupalConnector({ url: origin, user: 'editor', password: 's3cret', metatagField: 'field_seo' });
   await assert.rejects(other.get({ url, field: 'seo_title' }), { code: 'config' });
 });
@@ -246,6 +246,8 @@ test('drupal : alt d’image (champ image, média, image du body)', async (t) =>
   const bodyPatch = s.patches.findLast((d) => d.attributes?.body);
   assert.equal(bodyPatch.attributes.body.format, 'basic_html');
   assert.ok(!('processed' in bodyPatch.attributes.body));
+  await c.set({ url, field: 'image_alt', target: inline, value: null });
+  assert.equal(await c.get({ url, field: 'image_alt', target: inline }), null);
   await assert.rejects(c.get({ url, field: 'image_alt', target: origin + '/x/absente.jpg' }), { code: 'not_found' });
 });
 

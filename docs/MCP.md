@@ -20,10 +20,10 @@ Shares are of all websites (W3Techs, October 2026).
 | Shopify | 5.4% | Admin GraphQL API | title, description, H1, noindex, product image alt, redirects |
 | Wix | 4.2% | Wix REST APIs (Item SEO Tags, URL Redirect Manager) | title, description, canonical, noindex, redirects |
 | Squarespace | 2.4% | no write API → step-by-step instructions, or Cloudflare Worker | — |
-| Joomla 4/5 | 1.1% | Web Services API | see `arachnide_list_connectors` |
+| Joomla 4/5 | 1.1% | Web Services API (articles) | title, description, H1, noindex, image alt, redirects |
 | Webflow | 0.8% | Data API v2 | title, description, CMS item H1, redirects (Enterprise) |
-| Drupal 9-11 | 0.6% | JSON:API (+ Metatag, Redirect modules) | see `arachnide_list_connectors` |
-| PrestaShop | 0.5% | Webservice API | see `arachnide_list_connectors` |
+| Drupal 9-11 | 0.6% | JSON:API (+ Metatag, Redirect modules) | all 7 |
+| PrestaShop | 0.5% | Webservice API | title, description, H1 (name), alt in descriptions |
 | No CMS (custom, static, Next.js, Hugo…) | 31.6% | **files** (edit the HTML + `_redirects` / `.htaccess` / nginx / `vercel.json`) or **Cloudflare Worker** | all 7 |
 | Any other site behind Cloudflare | — | [Arachnide SEO Worker](../integrations/cloudflare-worker) rewrites the HTML at the edge | all 7 |
 | Everything else | — | **manual**: exact click path + value to paste, per CMS | — |

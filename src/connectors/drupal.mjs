@@ -116,6 +116,10 @@ const fileOf = (s) => {
   }
 };
 
+// Écrit l'alt d'une <img> ; null retire l'attribut (retour exact à l'état « sans alt »).
+const NO_ALT = '\u0000arachnide-no-alt';
+const htmlAlt = (html, src, v) => setImageAltInHtml(html, src, v ?? NO_ALT).html.replace(` alt="${NO_ALT}"`, '');
+
 const asList = (d) => (Array.isArray(d) ? d : d ? [d] : []);
 
 export default class DrupalConnector extends Connector {
@@ -323,7 +327,7 @@ export default class DrupalConnector extends Connector {
         alt,
         write: (v) => {
           const { processed, ...rest } = val;
-          return this.patch(n.type, n.uuid, { attributes: { [name]: { ...rest, value: setImageAltInHtml(val.value, target, v ?? '').html } } });
+          return this.patch(n.type, n.uuid, { attributes: { [name]: { ...rest, value: htmlAlt(val.value, target, v) } } });
         },
       };
     }
@@ -343,7 +347,7 @@ export default class DrupalConnector extends Connector {
       });
       if (idx < 0) continue;
       return {
-        alt: list[idx].meta.alt ?? null,
+        alt: list[idx].meta.alt || null,
         // PATCH de la relation complète : toutes les valeurs sont renvoyées avec leurs méta (alt, title, width, height).
         write: (v) => {
           const data = list.map((d, i) => {
