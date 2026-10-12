@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10140b"/><stop offset=".55" stop-color="#1c2a12"/><stop offset="1" stop-color="#3d5f17"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".82" cy=".35" r=".45"><stop offset="0" stop-color="#8cc63f" stop-opacity=".35"/><stop offset="1" stop-color="#8cc63f" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="24" fill="url(#glow)"/>
+  <g stroke="#8cc63f" stroke-opacity=".18" fill="none" stroke-width="1.5">
+    <circle cx="1150" cy="40" r="60"/><circle cx="1150" cy="40" r="120"/><circle cx="1150" cy="40" r="180"/><circle cx="1150" cy="40" r="240"/>
+    <path d="M1150 40 L1150 320 M1150 40 L950 300 M1150 40 L1350 300 M1150 40 L910 120 M1150 40 L1360 150"/>
+  </g>
+  <g transform="translate(1150 150)" stroke="#e6f4d2" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="0" y1="-110" x2="0" y2="-40" stroke-width="2.5" stroke-opacity=".7"/>
+    <path d="M-18 -10 L-60 -50 L-85 -20"/><path d="M-20 4 L-72 -10 L-100 22"/><path d="M-20 16 L-66 34 L-84 72"/><path d="M-16 26 L-44 62 L-50 100"/>
+    <path d="M18 -10 L60 -50 L85 -20"/><path d="M20 4 L72 -10 L100 22"/><path d="M20 16 L66 34 L84 72"/><path d="M16 26 L44 62 L50 100"/>
+  </g>
+  <g transform="translate(1150 150)" fill="#e6f4d2"><ellipse cx="0" cy="20" rx="28" ry="34"/><circle cx="0" cy="-26" r="18"/></g>
+  <g transform="translate(1150 150)" fill="#10140b"><circle cx="-7" cy="-29" r="4"/><circle cx="7" cy="-29" r="4"/></g>
+  <g font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <text x="72" y="128" fill="#ffffff" font-size="64" font-weight="800">Arachnide <tspan fill="#8cc63f">SEO Spider</tspan></text>
+    <text x="74" y="180" fill="#d3dcc7" font-size="26">Free, open-source technical SEO crawler — runs on your own computer.</text>
+    <text x="74" y="216" fill="#d3dcc7" font-size="26">Audit · Titles · Metas · Redirects · Broken links · Sitemaps · Internal linking</text>
+    <text x="74" y="272" fill="#8cc63f" font-size="22" font-weight="600">by Thierry Gustin — SEO consultant · Madrid</text>
+  </g>
+</svg>

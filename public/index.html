@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arachnide SEO Spider</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕷️</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">🕷️</span><span>Arachnide <small>SEO Spider</small></span></div>
+    <form id="crawlForm" class="crawl-form" autocomplete="off">
+      <input id="urlInput" type="text" placeholder="https://www.exemple.fr" required>
+      <button id="startBtn" class="btn primary" type="submit">Crawler</button>
+      <button id="stopBtn" class="btn danger" type="button" hidden>Arrêter</button>
+      <button id="optionsBtn" class="btn" type="button" aria-expanded="false">⚙ Options</button>
+    </form>
+    <div class="top-actions">
+      <button id="historyBtn" class="btn" type="button">🕘 Historique</button>
+      <label class="btn" title="Ouvrir un fichier de crawl .json">📂 Ouvrir<input id="importInput" type="file" accept=".json,application/json" hidden></label>
+      <button id="exportJsonBtn" class="btn" type="button" disabled>⬇ JSON</button>
+      <button id="themeBtn" class="btn icon" type="button" title="Thème clair / sombre" aria-label="Changer de thème">🌓</button>
+    </div>
+  </header>
+
+  <section id="optionsPanel" class="options" hidden>
+    <div class="opt-grid">
+      <label>URLs max <input name="maxPages" type="number" min="1" value="500"></label>
+      <label>Profondeur max <input name="maxDepth" type="number" min="0" value="20"></label>
+      <label>Requêtes simultanées <input name="concurrency" type="number" min="1" max="30" value="5"></label>
+      <label>Pause entre requêtes (ms) <input name="delayMs" type="number" min="0" value="0"></label>
+      <label>Timeout (ms) <input name="timeoutMs" type="number" min="1000" value="20000"></label>
+      <label>User-agent
+        <select name="userAgent">
+          <option value="arachnide">ArachnideSEO (défaut)</option>
+          <option value="googlebot">Googlebot desktop</option>
+          <option value="googlebotMobile">Googlebot smartphone</option>
+          <option value="chrome">Chrome (navigateur)</option>
+        </select>
+      </label>
+      <label class="wide">Inclure seulement (regex) <input name="include" type="text" placeholder="ex. /blog/"></label>
+      <label class="wide">Exclure (regex) <input name="exclude" type="text" placeholder="ex. \?(replytocom|share)=|/wp-admin/"></label>
+    </div>
+    <div class="opt-checks">
+      <label><input type="checkbox" name="respectRobots" checked> Respecter robots.txt</label>
+      <label><input type="checkbox" name="useSitemaps" checked> Lire les sitemaps XML</label>
+      <label><input type="checkbox" name="crawlCanonicals" checked> Suivre les canonicals</label>
+      <label><input type="checkbox" name="crawlSubdomains"> Inclure les sous-domaines</label>
+      <label><input type="checkbox" name="ignoreQuery"> Ignorer les paramètres d’URL</label>
+      <label><input type="checkbox" name="checkExternal"> Vérifier les liens externes</label>
+      <label><input type="checkbox" name="checkImages"> Vérifier les images (poids, statut)</label>
+    </div>
+  </section>
+
+  <div class="progress" id="progress" hidden>
+    <div class="bar"><span id="progressBar"></span></div>
+    <div id="progressText" class="progress-text"></div>
+  </div>
+
+  <main class="layout">
+    <nav id="tabs" class="tabs" aria-label="Onglets"></nav>
+    <section class="content">
+      <div id="view" class="view"></div>
+      <div id="detail" class="detail" hidden></div>
+    </section>
+  </main>
+
+  <dialog id="historyDialog">
+    <form method="dialog" class="dialog-head"><h2>Crawls enregistrés</h2><button class="btn icon" aria-label="Fermer">✕</button></form>
+    <div id="historyList"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

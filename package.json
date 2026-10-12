@@ -1,0 +1,43 @@
+{
+  "name": "arachnide-seo-spider",
+  "version": "1.0.0",
+  "description": "Free, open-source technical SEO crawler (Screaming Frog alternative) with a local web UI and CLI: titles, metas, headings, canonicals, redirects, broken links, sitemaps, internal linking, structured data.",
+  "author": "Thierry Gustin (https://thierrygustin.com)",
+  "license": "MIT",
+  "homepage": "https://github.com/Jacckisback/arachnide-seo-spider#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jacckisback/arachnide-seo-spider.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jacckisback/arachnide-seo-spider/issues"
+  },
+  "keywords": [
+    "seo",
+    "crawler",
+    "spider",
+    "seo-audit",
+    "technical-seo",
+    "screaming-frog-alternative",
+    "sitemap",
+    "broken-links",
+    "redirects",
+    "site-audit"
+  ],
+  "private": true,
+  "type": "module",
+  "bin": {
+    "arachnide": "./src/cli.mjs"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "crawl": "node src/cli.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "cheerio": "1.0.0"
+  }
+}
