@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.0.0 — 2026-10-12
+
+### New: MCP server — Claude audits and fixes your site
+- `src/mcp.mjs` (`npm run mcp`, bin `arachnide-mcp`): 19 tools and an `optimize_site` prompt for Claude Code, Claude Desktop and any MCP client. See [docs/MCP.md](docs/MCP.md).
+- **Analysis tools**: CMS / technology detection, crawl with progress, summary, issues, affected URLs, page details, live page reading, crawl comparison.
+- **Decision support**: `arachnide_suggest_fixes` turns a crawl into fixable items per page, with the current value, the reason, the SEO constraints and the page context.
+- **Changes on the live site**: preview (nothing written), apply, verify on the public page, journal with previous values, and rollback by batch or change id. Supported fields: SEO title, meta description, H1, canonical, noindex, image alt, 301 redirect.
+- **Connectors**:
+  - WordPress, with a companion plugin for Yoast, Rank Math, AIOSEO, SEOPress and Redirection;
+  - Shopify, Wix, Webflow, Joomla, Drupal, PrestaShop;
+  - **files**: static HTML, plus `_redirects`, `.htaccess`, nginx or `vercel.json` redirects;
+  - **Cloudflare Worker**: rewrites the HTML at the edge, for any site behind Cloudflare;
+  - **manual**: exact click path and value for every other CMS.
+- **Safety**:
+  - per-site policy (allowed fields, batch size, read-only);
+  - secrets stored as `env:VARIABLE` and never shown;
+  - writes limited to the site's own domain;
+  - destructive tools flagged so MCP clients ask for permission.
+
+### Changed
+- Crawl storage moved to `src/store.mjs`, shared by the web app, the CLI and the MCP server.
+- Crawls now keep the `src` of images without alt text, one list per page.
+
 ## 2.2.0 — 2026-10-12
 
 ### New

@@ -8,15 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { findChrome } from './renderer.mjs';
 import { toCrawlerOptions } from './options.mjs';
+import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl } from './store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
-const CRAWLS = path.join(ROOT, 'crawls');
 const PORT = Number(process.env.PORT) || 4000;
 const HOST = process.env.HOST || '127.0.0.1';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon' };
-const INDEX = path.join(CRAWLS, '_index.json');
 
 let crawler = null;
 let lastResult = null;
@@ -46,64 +45,6 @@ async function readBody(req) {
   for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString('utf8');
   return raw ? JSON.parse(raw) : {};
-}
-
-const safeName = (n) => (/^[\w.-]+\.json$/.test(n) && n !== '_index.json' ? n : null);
-
-// Index des crawls (score, date, hôte) pour afficher l'historique sans relire chaque fichier.
-async function readIndex() {
-  try {
-    return JSON.parse(await fs.readFile(INDEX, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-const summaryOf = (r) => ({
-  host: new URL(r.meta.startUrl).hostname,
-  startUrl: r.meta.startUrl,
-  finishedAt: r.meta.finishedAt,
-  score: r.summary.score,
-  grade: r.summary.grade,
-  totalUrls: r.summary.totalUrls,
-});
-
-async function listCrawls() {
-  let files;
-  try {
-    files = (await fs.readdir(CRAWLS)).filter((f) => safeName(f));
-  } catch {
-    return [];
-  }
-  const index = await readIndex();
-  let dirty = false;
-  const out = [];
-  for (const f of files) {
-    const st = await fs.stat(path.join(CRAWLS, f));
-    if (!index[f]) {
-      try {
-        index[f] = summaryOf(JSON.parse(await fs.readFile(path.join(CRAWLS, f), 'utf8')));
-        dirty = true;
-      } catch {
-        index[f] = {};
-      }
-    }
-    out.push({ file: f, size: st.size, mtime: st.mtime, ...index[f] });
-  }
-  if (dirty) await fs.writeFile(INDEX, JSON.stringify(index)).catch(() => {});
-  return out.sort((a, b) => String(b.finishedAt || b.mtime).localeCompare(String(a.finishedAt || a.mtime)));
-}
-
-async function saveResult(result) {
-  await fs.mkdir(CRAWLS, { recursive: true });
-  const host = new URL(result.meta.startUrl).hostname.replace(/[^\w.-]/g, '_');
-  const stamp = result.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '');
-  const file = `${host}_${stamp}.json`;
-  await fs.writeFile(path.join(CRAWLS, file), JSON.stringify(result));
-  const index = await readIndex();
-  index[file] = summaryOf(result);
-  await fs.writeFile(INDEX, JSON.stringify(index));
-  return file;
 }
 
 async function startCrawl(body) {
@@ -167,10 +108,7 @@ const server = http.createServer(async (req, res) => {
       if (!name) return send(res, 400, { error: 'Nom invalide' });
       const file = path.join(CRAWLS, name);
       if (req.method === 'DELETE') {
-        await fs.unlink(file);
-        const index = await readIndex();
-        delete index[name];
-        await fs.writeFile(INDEX, JSON.stringify(index)).catch(() => {});
+        await deleteCrawl(name);
         return send(res, 200, { ok: true });
       }
       return send(res, 200, await fs.readFile(file));

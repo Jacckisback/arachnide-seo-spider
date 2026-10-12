@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-2.1.0-3d5f17" alt="Version 2.1.0">
+  <img src="https://img.shields.io/badge/version-3.0.0-3d5f17" alt="Version 3.0.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,31 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
 </p>
+
+## 🤖 New in 3.0: Claude audits **and fixes** your site (MCP)
+
+Arachnide now includes an **MCP server**. Plug it into Claude (Claude Code or Claude Desktop) and ask in plain words: *“Audit www.my-site.com and fix the titles, descriptions and missing alt texts of the most important pages.”* Claude will:
+
+1. **detect** the CMS (WordPress, Shopify, Wix, Squarespace, Webflow, Joomla, Drupal, PrestaShop, static site, Next.js…);
+2. **crawl and audit** the site with Arachnide;
+3. **write** better values from the real content of each page (unique titles within Google's pixel limit, descriptions, alt texts, canonicals, redirects for broken URLs);
+4. show you a **before / after preview** and wait for your approval;
+5. **apply** the approved changes on the live site through the CMS API, **verify** them, and let you **undo** any batch;
+6. **re-crawl** and show the score gain.
+
+| How fixes are applied | Platforms | Share of all websites* |
+|---|---|---:|
+| CMS API (+ small WordPress plugin) | WordPress, Shopify, Wix, Joomla, Webflow, Drupal, PrestaShop | ≈ 53% |
+| HTML files or Cloudflare Worker | sites without CMS (custom, static, Next.js, Hugo…) and any site behind Cloudflare | up to 31.6% |
+| Step-by-step instructions | Squarespace and other closed builders | the rest |
+
+<sub>* W3Techs, October 2026.</sub>
+
+```bash
+claude mcp add arachnide -- node /path/to/arachnide-seo-spider/src/mcp.mjs
+```
+
+Safety first: preview before every write, permission prompt for each write, per-site policy (allowed fields, batch size, read-only), a journal of every previous value with one-call rollback, and secrets that never pass through the chat. **Full guide: [docs/MCP.md](docs/MCP.md)**.
 
 ## 🆕 What's new in 2.1
 

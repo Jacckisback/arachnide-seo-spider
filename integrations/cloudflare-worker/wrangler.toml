@@ -1,0 +1,16 @@
+# Arachnide SEO Worker — configuration Wrangler
+# 1. npx wrangler kv namespace create ARACHNIDE  → copiez l'id ci-dessous
+# 2. Remplacez exemple.com par votre domaine (le site doit passer par Cloudflare, proxy orange activé)
+# 3. npx wrangler deploy
+name = "arachnide-seo"
+main = "src/worker.js"
+compatibility_date = "2026-08-01"
+
+routes = [
+  { pattern = "exemple.com/*", zone_name = "exemple.com" },
+  { pattern = "www.exemple.com/*", zone_name = "exemple.com" },
+]
+
+[[kv_namespaces]]
+binding = "ARACHNIDE"
+id = "REMPLACEZ_PAR_L_ID_DU_NAMESPACE"
