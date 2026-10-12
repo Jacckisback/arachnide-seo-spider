@@ -69,7 +69,7 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 | **Titles & Metas** | Fehlend, doppelt, zu lang (in Pixeln), zu kurz oder mehrfach; Title identisch mit H1; Google-SERP-Vorschau |
 | **Überschriften** | H1 fehlend, doppelt oder mehrfach; keine H2; übersprungene Überschriftenebenen |
 | **Inhalt** | Wortanzahl, dünner Inhalt, exakte und nahezu doppelte Inhalte, Keyword-Kannibalisierung, Haupt-Keyword pro Seite, Textanteil |
-| **Bilder** | Fehlender Alt-Text, schwere Bilder, defekte Bilder, fehlende width/height (CLS) |
+| **Bilder** | Fehlender Alt-Text, schwere Bilder, defekte Bilder, fehlende width/height (CLS), jede Datei aus `srcset` und `<picture>` geprüft (Größe, Status, Format), keine responsive Version, kein WebP / AVIF, `srcset` ohne `sizes` |
 | **Indexierung** | Canonicals (fehlend, mehrfach, auf eine nicht indexierbare URL verweisend), noindex, nofollow, X-Robots-Tag |
 | **Architektur** | Klicktiefe, Link Score (interner PageRank), verwaiste Seiten, Seiten mit nur einem eingehenden Link oder ohne Kontextlink, nicht erreichbare Seiten |
 | **Sitemaps** | Fehlende Sitemap, nicht indexierbare URLs in der Sitemap, indexierbare Seiten, die in der Sitemap fehlen |

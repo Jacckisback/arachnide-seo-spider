@@ -69,7 +69,7 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 | **Title e meta** | Mancanti, duplicati, troppo lunghi (in pixel), troppo corti o multipli; title identico all’H1; anteprima SERP di Google |
 | **Titoli** | H1 mancante, duplicato o multiplo; nessun H2; livelli di titolo saltati |
 | **Contenuto** | Numero di parole, contenuto scarso, duplicati esatti e quasi duplicati, cannibalizzazione delle parole chiave, parola chiave principale per pagina, rapporto testo |
-| **Immagini** | Testo alternativo mancante, immagini pesanti, immagini rotte, width/height mancanti (CLS) |
+| **Immagini** | Testo alternativo mancante, immagini pesanti, immagini rotte, width/height mancanti (CLS), ogni file di `srcset` e `<picture>` controllato (peso, stato, formato), nessuna versione responsive, nessun WebP / AVIF, `srcset` senza `sizes` |
 | **Indicizzazione** | Canonical (mancanti, multipli, che puntano a un URL non indicizzabile), noindex, nofollow, X-Robots-Tag |
 | **Architettura** | Profondità di clic, Link Score (PageRank interno), pagine orfane, pagine con un solo link in entrata o senza link contestuale, pagine irraggiungibili |
 | **Sitemap** | Sitemap mancante, URL non indicizzabili nella sitemap, pagine indicizzabili assenti dalla sitemap |

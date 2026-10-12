@@ -69,7 +69,7 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 | **Titles & metas** | Manquants, dupliqués, trop longs (en pixels), trop courts ou multiples ; title identique au H1 ; aperçu dans la SERP Google |
 | **Titres Hn** | H1 manquant, dupliqué ou multiple ; aucun H2 ; niveaux de titres sautés |
 | **Contenu** | Nombre de mots, contenu pauvre, doublons exacts et quasi-doublons, cannibalisation de mots-clés, mot-clé principal par page, ratio texte |
-| **Images** | Texte alternatif manquant, images lourdes, images cassées, width/height manquants (CLS) |
+| **Images** | Texte alternatif manquant, images lourdes, images cassées, width/height manquants (CLS), chaque fichier des `srcset` et `<picture>` contrôlé (poids, statut, format), pas de version responsive, pas de WebP / AVIF, `srcset` sans `sizes` |
 | **Indexation** | Canonicals (manquantes, multiples, pointant vers une URL non indexable), noindex, nofollow, X-Robots-Tag |
 | **Architecture** | Profondeur de clic, Link Score (PageRank interne), pages orphelines, pages avec un seul lien entrant ou sans lien contextuel, pages inaccessibles |
 | **Sitemaps** | Sitemap manquant, URLs non indexables dans le sitemap, pages indexables absentes du sitemap |

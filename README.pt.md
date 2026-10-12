@@ -69,7 +69,7 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 | **Títulos e metas** | Em falta, duplicados, demasiado longos (em píxeis), demasiado curtos ou múltiplos; título idêntico ao H1; pré-visualização da SERP do Google |
 | **Cabeçalhos** | H1 em falta, duplicado ou múltiplo; sem H2; níveis de cabeçalho saltados |
 | **Conteúdo** | Número de palavras, conteúdo pobre, duplicados exatos e quase duplicados, canibalização de palavras-chave, palavra-chave principal por página, rácio de texto |
-| **Imagens** | Texto alternativo em falta, imagens pesadas, imagens partidas, width/height em falta (CLS) |
+| **Imagens** | Texto alternativo em falta, imagens pesadas, imagens partidas, width/height em falta (CLS), cada ficheiro de `srcset` e `<picture>` verificado (peso, estado, formato), sem versão responsiva, sem WebP / AVIF, `srcset` sem `sizes` |
 | **Indexação** | Canónicos (em falta, múltiplos, a apontar para um URL não indexável), noindex, nofollow, X-Robots-Tag |
 | **Arquitetura** | Profundidade de clique, Link Score (PageRank interno), páginas órfãs, páginas com um único link de entrada ou sem link contextual, páginas inacessíveis |
 | **Sitemaps** | Sitemap em falta, URLs não indexáveis no sitemap, páginas indexáveis ausentes do sitemap |
