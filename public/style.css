@@ -424,3 +424,54 @@ details.smtp summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
 .switch span::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
 .switch input:checked + span { background: var(--accent, #5b8c1e); }
 .switch input:checked + span::before { transform: translateX(14px); }
+
+/* ---------- Corriger en 1 clic ---------- */
+.chip.info { background: var(--info-soft); color: var(--info); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.btn.tiny { padding: 2px 7px; font-size: 11.5px; min-height: 24px; }
+button.link { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-align: left; }
+button.link:hover { color: var(--accent); }
+.fix-sim { justify-content: flex-start; flex-wrap: wrap; }
+.fix-sim > span { flex: 1 1 260px; min-width: 0; }
+.fix-sim .switch { flex: 0 0 auto; display: inline-flex; gap: 6px; align-items: center; font-weight: 600; cursor: pointer; }
+.fix-groups { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fix-groups th, .fix-groups td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.fix-groups .r { text-align: right; }
+.fix-groups tr.open > td { background: var(--panel-2); }
+.fix-urls ul { margin: 4px 0; padding-left: 18px; max-height: 260px; overflow: auto; }
+.fix-urls li { margin: 3px 0; overflow-wrap: anywhere; }
+.progress.inline { position: static; margin: 0 0 12px; }
+.fix-review { margin-top: 14px; }
+.fix-bulk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.fix-bulk h3 { margin: 0; font-size: 15px; }
+.fix-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.fix-card.status-approved { border-color: var(--ok); }
+.fix-card.status-failed { border-color: var(--err); }
+.fix-head, .fix-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12.5px; }
+.fix-url { font-weight: 600; overflow-wrap: anywhere; }
+.fix-sel { font-size: 11px; overflow-wrap: anywhere; max-width: 40ch; }
+.fix-ba { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
+.fix-ba h5 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.fix-val { padding: 7px 9px; border-radius: 8px; background: var(--panel-2); font-size: 13px; overflow-wrap: anywhere; white-space: pre-wrap; min-height: 34px; }
+.fix-val.old { color: var(--muted); }
+.fix-ba textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); resize: vertical; }
+.fix-ba textarea.mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.fix-count { display: inline-block; margin-top: 3px; font-size: 11.5px; }
+.fix-count.ok { color: var(--ok); }
+.fix-count.warn { color: var(--warn); }
+.fix-plan { margin: 10px 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 13px; line-height: 1.55; }
+.fix-foot .err { color: var(--err); }
+.fix-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.fix-hist { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fix-hist th, .fix-hist td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.fix-hist td.wrap { overflow-wrap: anywhere; max-width: 32ch; }
+.fix-hist td.old { color: var(--muted); }
+.fix-hist .nowrap { white-space: nowrap; }
+#fixConnDialog .seg { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-weight: 600; }
+@media (max-width: 760px) {
+  .fix-ba { grid-template-columns: 1fr; }
+  .fix-groups th:nth-child(4), .fix-groups td:nth-child(4) { display: none; }
+  .fix-hist thead { display: none; }
+  .fix-hist tr { display: block; border-bottom: 1px solid var(--line); padding: 6px 0; }
+  .fix-hist td { display: block; border: 0; padding: 2px 4px; max-width: none; }
+}

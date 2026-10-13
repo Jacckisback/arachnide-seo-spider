@@ -3,42 +3,20 @@
 // renvoyée au navigateur, jamais journalisée, jamais exportée : elle ne part que vers l'API du fournisseur choisi.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { CONFIG_DIR } from '../sites.mjs';
+import { seal, unseal } from '../secret.mjs';
 import { AnthropicProvider } from './anthropic.mjs';
 import { OpenAIProvider } from './openai.mjs';
 
 const MODELS = createRequire(import.meta.url)('./models.json');
 const FILE = () => path.join(CONFIG_DIR, 'ai.json');
-const SECRET = () => path.join(CONFIG_DIR, '.secret');
 export const PROVIDERS = { anthropic: AnthropicProvider, openai: OpenAIProvider };
 // Variables d'environnement acceptées à la place d'une clé saisie.
 const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY' };
 
-async function machineKey() {
-  try {
-    return Buffer.from(await fs.readFile(SECRET(), 'utf8'), 'base64');
-  } catch {
-    const k = crypto.randomBytes(32);
-    await fs.mkdir(CONFIG_DIR, { recursive: true });
-    await fs.writeFile(SECRET(), k.toString('base64'), { mode: 0o600 });
-    return k;
-  }
-}
-
-async function encrypt(text) {
-  const iv = crypto.randomBytes(12);
-  const c = crypto.createCipheriv('aes-256-gcm', await machineKey(), iv);
-  const data = Buffer.concat([c.update(text, 'utf8'), c.final()]);
-  return { iv: iv.toString('base64'), tag: c.getAuthTag().toString('base64'), data: data.toString('base64') };
-}
-
-async function decrypt(box) {
-  const d = crypto.createDecipheriv('aes-256-gcm', await machineKey(), Buffer.from(box.iv, 'base64'));
-  d.setAuthTag(Buffer.from(box.tag, 'base64'));
-  return Buffer.concat([d.update(Buffer.from(box.data, 'base64')), d.final()]).toString('utf8');
-}
+const encrypt = seal;
+const decrypt = unseal;
 
 export async function readAiSettings() {
   let s = {};

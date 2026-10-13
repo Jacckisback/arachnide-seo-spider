@@ -1,13 +1,105 @@
 // Routes HTTP du module « Corriger en 1 clic » (paramètres IA, propositions, application, historique).
-import { publicAiSettings, saveAiSettings, testAiConnection } from '../ai/settings.mjs';
+import crypto from 'node:crypto';
+import { publicAiSettings, saveAiSettings, testAiConnection, getProvider, readAiSettings } from '../ai/settings.mjs';
+import { fixGroups, proposeFixes, estimateCost } from './engine.mjs';
+import { readFixes, saveFixes, replaceProposals, readConnection, saveConnection } from './store.mjs';
+import { applyFixes, rollbackFixes, reverifyFixes } from './apply.mjs';
+import { fixConnectorFor } from './connectors.mjs';
+import { fixesToCsv } from './export.mjs';
+
+const jobs = new Map();
+const siteOf = (R) => R.meta.finalStart || R.meta.startUrl;
 
 // Renvoie true si la route a été traitée.
-export async function handleFixRoutes(req, res, p, { send, readBody }) {
-  if (p === '/api/ai/settings' && req.method === 'GET') return send(res, 200, await publicAiSettings()), true;
-  if (p === '/api/ai/settings' && req.method === 'POST') return send(res, 200, await saveAiSettings(await readBody(req))), true;
+export async function handleFixRoutes(req, res, p, { send, readBody, broadcast, getResult }) {
+  const reply = (code, body) => (send(res, code, body), true);
+  if (p === '/api/ai/settings' && req.method === 'GET') return reply(200, await publicAiSettings());
+  if (p === '/api/ai/settings' && req.method === 'POST') return reply(200, await saveAiSettings(await readBody(req)));
   if (p === '/api/ai/test' && req.method === 'POST') {
     const { provider, apiKey } = await readBody(req);
-    return send(res, 200, await testAiConnection({ provider, apiKey })), true;
+    return reply(200, await testAiConnection({ provider, apiKey }));
+  }
+  if (!p.startsWith('/api/fix/')) return false;
+  const R = getResult();
+  if (!R) return reply(409, { error: 'No crawl loaded', key: 'fix.noCrawl' });
+  const site = siteOf(R);
+
+  if (p === '/api/fix/catalog') {
+    const provider = await getProvider().catch(() => null);
+    const groups = fixGroups(R).map((g) => ({ ...g, estimate: g.method === 'ai' ? estimateCost(R, [g.id], provider?.price) : null }));
+    return reply(200, { site, groups, provider: provider ? { id: provider.id, model: provider.model } : null, ai: await publicAiSettings(), connection: await readConnection(site) });
+  }
+  if (p === '/api/fix/list') return reply(200, { fixes: await readFixes(site) });
+
+  if (p === '/api/fix/propose' && req.method === 'POST') {
+    const { issueIds, urls, lang } = await readBody(req);
+    const provider = await getProvider();
+    const id = crypto.randomUUID();
+    jobs.set(id, { status: 'running' });
+    proposeFixes(R, { issueIds, urls, provider, lang, onProgress: (pr) => broadcast('fix-progress', { job: id, ...pr }) })
+      .then(async ({ fixes, errors }) => {
+        await replaceProposals(site, fixes);
+        jobs.set(id, { status: 'done', count: fixes.length, errors });
+        broadcast('fix-done', { job: id, count: fixes.length, errors });
+      })
+      .catch((e) => {
+        jobs.set(id, { status: 'error', error: e.message, code: e.code });
+        broadcast('fix-done', { job: id, error: e.message, code: e.code });
+      });
+    return reply(202, { job: id });
+  }
+  const jm = /^\/api\/fix\/job\/([\w-]+)$/.exec(p);
+  if (jm) return reply(jobs.has(jm[1]) ? 200 : 404, jobs.get(jm[1]) || { error: 'unknown job' });
+
+  if (p === '/api/fix/update' && req.method === 'POST') {
+    // Édition inline (→ edited), validation (→ approved), ignorer (→ ignored), remise en proposition.
+    const { updates } = await readBody(req);
+    const all = new Map((await readFixes(site)).map((f) => [f.id, f]));
+    const changed = [];
+    for (const u of updates || []) {
+      const f = all.get(u.id);
+      if (!f || ['applied', 'verified', 'rolled_back'].includes(f.status)) continue;
+      const next = { ...f };
+      if (u.newValue !== undefined && u.newValue !== f.newValue) Object.assign(next, { newValue: u.newValue, status: 'edited' });
+      if (['approved', 'ignored', 'proposed'].includes(u.status)) next.status = u.status;
+      changed.push(next);
+    }
+    return reply(200, { fixes: await saveFixes(site, changed).then(() => changed) });
+  }
+
+  if (p === '/api/fix/connection' && req.method === 'GET') return reply(200, await readConnection(site));
+  if (p === '/api/fix/connection' && req.method === 'POST') return reply(200, await saveConnection(site, await readBody(req)));
+  if (p === '/api/fix/connection/test' && req.method === 'POST') {
+    try {
+      const c = await fixConnectorFor(await readConnection(site, { withSecrets: true }));
+      return reply(200, await c.testConnection());
+    } catch (e) {
+      return reply(200, { ok: false, error: e.message, hint: e.hint });
+    }
+  }
+
+  if (p === '/api/fix/apply' && req.method === 'POST') {
+    const { ids } = await readBody(req);
+    const s = await readAiSettings();
+    // Écriture réelle seulement si le mode simulation est désactivé ET l'avertissement accepté.
+    const simulation = s.simulation !== false || !s.realConfirmed;
+    return reply(200, await applyFixes(site, ids || [], { simulation, onProgress: (pr) => broadcast('fix-apply', pr) }));
+  }
+  if (p === '/api/fix/verify' && req.method === 'POST') return reply(200, { fixes: await reverifyFixes(site, (await readBody(req)).ids || []) });
+  if (p === '/api/fix/rollback' && req.method === 'POST') {
+    const { ids, batch } = await readBody(req);
+    return reply(200, await rollbackFixes(site, { ids, batch }));
+  }
+  if (p === '/api/fix/export') {
+    const fmt = new URL(req.url, 'http://x').searchParams.get('format') || 'json';
+    const fixes = (await readFixes(site)).filter((f) => f.status !== 'ignored');
+    const name = `arachnide-fixes-${new URL(site).hostname}`;
+    if (fmt === 'csv') {
+      res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${name}.csv"` });
+      return res.end('﻿' + fixesToCsv(fixes)), true;
+    }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': `attachment; filename="${name}.json"` });
+    return res.end(JSON.stringify({ site, exportedAt: new Date().toISOString(), fixes }, null, 2)), true;
   }
   return false;
 }
