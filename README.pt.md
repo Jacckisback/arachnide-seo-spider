@@ -30,6 +30,18 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
   <img src="docs/screenshots/dashboard.png" alt="Painel: pontuação de saúde SEO, pontuação por categoria, códigos de resposta, profundidade de clique e prioridades" width="100%">
 </p>
 
+## 🛡️ Novidades da 3.3: auditoria de fiabilidade
+
+Uma auditoria completa (extração HTML, motor de rastreio, regras SEO e rastreios de 8 sites reais) eliminou os falsos positivos e falsos negativos que podiam enganar um profissional de SEO ou GEO.
+
+- **Sites protegidos contra robôs** (403 no user-agent do rastreador): o rastreio muda automaticamente para o Chrome e indica-o, em vez de mostrar todas as páginas com erro.
+- **Limitação de taxa (429/503)**: o Arachnide espera e tenta de novo; as páginas travadas já não contam como partidas. Os links para o LinkedIn ou sites protegidos pela Cloudflare são «não verificáveis», não «partidos».
+- **Diretivas lidas como o Google**: `max-image-preview:none` não é um noindex, o `X-Robots-Tag` de outro robô é ignorado, o meta refresh é um redirecionamento.
+- **O conteúdo tal como é**: `<title>` dos SVG ignorados, `alt=""` = imagem decorativa, imagens em lazy-load (`data-src`) analisadas, contagem de palavras em chinês, japonês e tailandês.
+- **Internacional e dados estruturados**: hreflang verificados com os verdadeiros códigos ISO, traduções e páginas paginadas não são duplicados, só são verificadas as propriedades schema.org exigidas pelo Google.
+- **Uma pontuação de saúde mais justa**: um link partido no menu já não deixa o site em 0, e um site que bloqueia o Googlebot já não obtém um A.
+- **Novas verificações**: soft 404, canonical fora do `<head>`, sitemap noutro host, URLs não verificáveis.
+
 ## 📈 Novidades da 3.2: dados Google e rastreios agendados
 
 - **Core Web Vitals de utilizadores reais** (PageSpeed Insights + CrUX: LCP, INP, CLS…) e pontuação Lighthouse das suas páginas principais.
