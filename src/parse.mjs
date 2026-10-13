@@ -123,6 +123,15 @@ function linkPosition($el) {
   return 'content';
 }
 
+// Dimensions réservées : attributs width/height numériques, ou largeur + hauteur (ou aspect-ratio) en style inline.
+function hasDimensions($el) {
+  const num = (v) => /^\s*\d/.test(v || '');
+  if (num($el.attr('width')) && num($el.attr('height'))) return true;
+  const style = ($el.attr('style') || '').toLowerCase();
+  const len = (prop) => new RegExp(`(^|;)\\s*${prop}\\s*:\\s*\\d`).test(style);
+  return (len('width') && len('height')) || /aspect-ratio\s*:\s*\d/.test(style);
+}
+
 // Extraction personnalisée : sélecteur CSS ou expression régulière, comme « Custom Extraction » de Screaming Frog.
 function runExtractors($, html, extractors) {
   const out = {};
@@ -247,7 +256,9 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   const images = [];
   $('img').each((_, el) => {
     const $el = $(el);
-    const attr = (n) => $el.attr(n) || $el.attr('data-' + n) || $el.attr('data-lazy-' + n) || '';
+    // Lazy-load (lazysizes, WP Rocket, Smush, jQuery.lazyload) : la vraie image est dans data-src / data-lazy-src /
+    // data-original, le src n'est qu'un espace réservé (GIF 1×1, data:) que Google remplace en exécutant le JS.
+    const attr = (n) => $el.attr('data-' + n) || $el.attr('data-lazy-' + n) || (n === 'src' && $el.attr('data-original')) || $el.attr(n) || '';
     const srcset = parseSrcset(attr('srcset'), base);
     const $picture = $el.parent().is('picture') ? $el.parent() : null;
     const sources = [];
@@ -268,7 +279,7 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     images.push({
       src,
       alt: alt === undefined ? null : alt.trim(),
-      hasDimensions: !!($el.attr('width') && $el.attr('height')),
+      hasDimensions: hasDimensions($el),
       lazy: ($el.attr('loading') || '').toLowerCase() === 'lazy',
       picture: !!$picture,
       responsive: srcset.length > 1 || sources.length > 0,
@@ -282,12 +293,14 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   // Contenu mixte (ressources http sur page https)
   let mixedContent = 0;
   if (isHttps) {
-    $('img[src], script[src], iframe[src], link[rel="stylesheet"][href], source[src], video[src], audio[src]').each((_, el) => {
-      const v = $(el).attr('src') || $(el).attr('href') || '';
-      if (/^http:\/\//i.test(v.trim())) mixedContent++;
-    });
-    $('img[srcset], source[srcset]').each((_, el) => {
-      if (/(^|,)\s*http:\/\//i.test($(el).attr('srcset'))) mixedContent++;
+    // Une ressource comptée une fois par élément, même si src et srcset sont tous deux en http.
+    const http = (v) => /^\s*http:\/\//i.test(v || '');
+    $('img, script[src], iframe[src], link[href], source, video, audio, embed[src], object[data]').each((_, el) => {
+      const $el = $(el);
+      if (el.tagName === 'link' && !/\b(stylesheet|preload|icon|modulepreload)\b/i.test($el.attr('rel') || '')) return;
+      const urls = [$el.attr('src'), $el.attr('href'), $el.attr('data'), $el.attr('poster')];
+      const srcset = $el.attr('srcset');
+      if (urls.some(http) || (srcset && /(^|,)\s*http:\/\//i.test(srcset))) mixedContent++;
     });
   }
 
