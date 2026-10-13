@@ -116,3 +116,29 @@ test('sitemap .gz servi avec Content-Encoding, URL du sitemap en http, robots.tx
     server.close();
   }
 });
+
+test('score de santé : un défaut de gabarit ne met pas le site à 0, Googlebot bloqué le fait chuter', async () => {
+  const mk = (mode) => http.createServer((req, res) => {
+    if (req.url === '/robots.txt') return res.end(mode === 'gbot' ? 'User-agent: Googlebot\nDisallow: /\n' : '');
+    const m = /^\/p(\d+)$/.exec(req.url);
+    if (req.url !== '/' && !m) {
+      res.writeHead(404, { 'content-type': 'text/html' });
+      return res.end('<title>404</title>');
+    }
+    const menu = Array.from({ length: 10 }, (_, k) => `<a href="/p${k + 1}">Page ${k + 1}</a>`).join('') + (mode === 'one404' ? '<a href="/manquante">Contact</a>' : '');
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(`<title>Page ${req.url} du site de démonstration</title><nav>${menu}</nav><h1>T ${req.url}</h1>`);
+  });
+  const scoreOf = async (mode) => {
+    const server = mk(mode);
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    try {
+      return (await new Crawler(`http://127.0.0.1:${server.address().port}/`, { useSitemaps: false }).start()).summary.score;
+    } finally {
+      server.close();
+    }
+  };
+  const [clean, one404, gbot] = [await scoreOf('clean'), await scoreOf('one404'), await scoreOf('gbot')];
+  assert.ok(one404 < clean && one404 >= clean - 35, `${clean} → ${one404}`);
+  assert.ok(gbot <= 15);
+});

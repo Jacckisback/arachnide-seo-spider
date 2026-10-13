@@ -30,6 +30,11 @@ const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
 // /index.html, /home, /accueil… → / : simple alias de l'accueil, pas une page supprimée.
 const HOME_ALIAS = /^\/((index|default|home|accueil|inicio|start|startseite)(\.(html?|php|aspx?))?\/?)?$/i;
 const UNVERIFIABLE = new Set([0, 401, 403, 429, 999]);
+// Score : plafond de points retirés par problème, poids par page touchée, facteur d'impact.
+const SCORE_CAP = { error: 30, warning: 12, notice: 0 };
+const PAGE_W = { error: 1, warning: 0.35, notice: 0 };
+const IMPACT_F = { high: 1, medium: 0.7, low: 0.4 };
+const PRIO_FLOOR = { error: 20, warning: 10, notice: 0 };
 const SEV_W = { error: 3, warning: 2, notice: 1 };
 const LVL_W = { high: 3, medium: 2, low: 1 };
 
@@ -585,36 +590,43 @@ export function analyze(crawler) {
   add('ai-bots-blocked', 'notice', 'ai', 'medium', 'low', blockedBots.filter((b) => b.bot !== 'Googlebot' && b.bot !== 'Bingbot').map((b) => ({ url: crawler.origin + '/robots.txt', detail: b.bot })));
   add('llms-missing', 'notice', 'ai', 'low', 'low', spider && !crawler.llmsTxt && html200.length ? [{ url: crawler.origin + '/llms.txt', detail: '404' }] : []);
 
+  // Problèmes de site (robots.txt, https, sitemap…) : leurs éléments ne sont pas des pages, ils touchent tout le site.
+  const pageSet = new Set(pages.map((p) => p.url));
+  for (const is of issues) is.scope = is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site';
+  const htmlN = Math.max(1, html200.length);
   for (const is of issues) {
-    is.priority = Math.round(((SEV_W[is.severity] * LVL_W[is.impact] * Math.log2(is.count + 1)) / LVL_W[is.effort]) * 10) / 10;
+    const n = is.scope === 'site' ? htmlN : is.count;
+    const raw = (SEV_W[is.severity] * LVL_W[is.impact] * Math.log2(n + 1)) / LVL_W[is.effort];
+    // Une erreur passe toujours avant un avertissement, un avertissement avant une remarque.
+    is.priority = Math.round((raw + PRIO_FLOOR[is.severity]) * 10) / 10;
   }
   issues.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || b.count - a.count);
 
-  // Score de santé : pénalité par page selon le niveau de gravité le plus élevé.
-  const worst = new Map();
-  for (const is of issues) {
-    for (const it of is.items) {
-      const prev = worst.get(it.url);
-      if (prev === undefined || SEV_ORDER[is.severity] < prev) worst.set(it.url, SEV_ORDER[is.severity]);
-    }
-  }
+  // Score de santé : chaque problème retire des points selon sa gravité, son impact et la part de pages touchées,
+  // plafonnés par problème. Un défaut de gabarit (un lien cassé dans le menu, présent sur toutes les pages) pèse donc
+  // comme un défaut, pas comme autant de défauts que de pages ; un problème de site compte comme touchant tout le site.
   const scored = pages.filter((p) => p.isHtml || p.status >= 300 || !p.status);
-  let penalty = 0;
-  for (const p of scored) {
-    const w = worst.get(p.url);
-    penalty += w === 0 ? 1 : w === 1 ? 0.35 : 0;
+  const N = Math.max(1, scored.length);
+  const scoredSet = new Set(scored.map((p) => p.url));
+  // Combinaison multiplicative : chaque problème retire un pourcentage de ce qui reste (pas de score négatif ni de
+  // plancher à 0 dès que plusieurs problèmes s'additionnent).
+  let keep = 1;
+  const keepByCat = {};
+  for (const is of issues) {
+    if (is.severity === 'notice') continue;
+    const share = is.scope === 'site' ? 1 : Math.min(1, new Set(is.items.map((it) => it.url).filter((u) => scoredSet.has(u))).size / N);
+    const pts = Math.min(SCORE_CAP[is.severity] * IMPACT_F[is.impact], 100 * PAGE_W[is.severity] * IMPACT_F[is.impact] * share);
+    keep *= 1 - pts / 100;
+    keepByCat[is.category] = (keepByCat[is.category] ?? 1) * (1 - pts / 40);
   }
-  const score = scored.length ? Math.max(0, Math.round(100 * (1 - penalty / scored.length))) : 0;
+  let score = scored.length ? Math.max(0, Math.round(100 * keep)) : 0;
+  // Googlebot ou Bingbot bloqué dans robots.txt : le site ne peut pas être référencé, quelle que soit la qualité des pages.
+  if (issues.some((i) => i.id === 'search-bots-blocked')) score = Math.min(score, 15);
 
-  // Score par catégorie (part des pages HTML sans erreur ni avertissement dans la catégorie)
+  // Score par catégorie : une erreur majeure (30 points) laisse 25 % ; un avertissement plafonné (12 points) 70 %.
   const categories = [...new Set(issues.map((i) => i.category))];
   const categoryScores = {};
-  const htmlCount = Math.max(1, html200.length);
-  for (const c of categories) {
-    const hit = new Set();
-    for (const is of issues) if (is.category === c && is.severity !== 'notice') is.items.forEach((it) => hit.add(it.url));
-    categoryScores[c] = Math.max(0, Math.round(100 * (1 - Math.min(hit.size, htmlCount) / htmlCount)));
-  }
+  for (const c of categories) categoryScores[c] = Math.max(0, Math.round(100 * (keepByCat[c] ?? 1)));
 
   const statusBuckets = { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0, blocked: 0, none: 0 };
   for (const p of pages) {
