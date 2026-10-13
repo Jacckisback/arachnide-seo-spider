@@ -27,7 +27,7 @@
 Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul tuo computer.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Dashboard: punteggio di salute SEO, punteggio per categoria, codici di risposta, profondità di clic e priorità" width="100%">
+  <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
 
 ## ✨ Novità della 3.5: correggi in 1 clic con Claude o ChatGPT
@@ -161,7 +161,7 @@ La sicurezza prima di tutto: anteprima prima di ogni scrittura, richiesta di aut
 | **Configurazione › Limiti** | **Configurazione › robots.txt (con tester)** |
 | <img src="docs/screenshots/config-limits.png" alt="Impostazioni dei limiti dello spider"> | <img src="docs/screenshots/config-robots.png" alt="Modalità robots.txt, robots.txt personalizzato e tester"> |
 | **Schermata iniziale** | **Modalità scura** |
-| <img src="docs/screenshots/home.png" alt="Schermata iniziale con i crawl recenti"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard in modalità scura"> |
+| <img src="docs/screenshots/home.png" alt="Schermata iniziale con i crawl recenti"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard su tablet"> |
 
 ## 🚀 Installazione
 

@@ -27,7 +27,7 @@
 Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihrem Rechner.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO Health Score, Bewertung nach Kategorie, Statuscodes, Klicktiefe und Prioritäten" width="100%">
+  <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
 
 ## ✨ Neu in 3.5: Mit 1 Klick korrigieren – mit Claude oder ChatGPT
@@ -161,7 +161,7 @@ Sicherheit geht vor: Vorschau vor jedem Schreibvorgang, Berechtigungsabfrage fü
 | **Konfiguration › Limits** | **Konfiguration › robots.txt (mit Tester)** |
 | <img src="docs/screenshots/config-limits.png" alt="Einstellungen für die Spider-Limits"> | <img src="docs/screenshots/config-robots.png" alt="robots.txt-Modi, benutzerdefinierte robots.txt und Tester"> |
 | **Startbildschirm** | **Dunkelmodus** |
-| <img src="docs/screenshots/home.png" alt="Startbildschirm mit den letzten Crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard im Dunkelmodus"> |
+| <img src="docs/screenshots/home.png" alt="Startbildschirm mit den letzten Crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard auf dem Tablet"> |
 
 ## 🚀 Installation
 

@@ -1,6 +1,6 @@
 {
   "name": "arachnide-seo-spider",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "description": "Free, open-source technical SEO crawler (Screaming Frog alternative) with an MCP server: Claude audits your site and applies the fixes on WordPress, Shopify, Wix, Webflow, Joomla, Drupal, PrestaShop, static sites or any site behind Cloudflare.",
   "author": "Thierry Gustin (https://thierrygustin.com)",
   "license": "MIT",

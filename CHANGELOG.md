@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.6.0 — 2026-10-13
+
+### New: dark dashboard redesign
+- **New layout**: grouped sidebar (Steering: Overview, Issues, Action plan, Fixes · Explore: Internal pages, Links & linking, Content, Images, Indexability), every other tab under “More analyses”, History and Settings at the bottom; counters only where they match the section. Becomes a drawer on tablet and mobile.
+- **Topbar**: domain field with the crawl status (running / partial / complete), export menu (report, JSON), open / scheduled crawls menu, and a primary “Run the crawl again” button.
+- **Overview**: “Your SEO at a glance.” with domain, last crawl date and the real analysis state; compact banner when the audit is partial (stopped or limit reached) with a shortcut to adjust the limit.
+- **SEO health in four concentric rings**: Technical, Content, Internal linking and Performance. Each arc is exactly the pillar score, with the overall score in the centre, a status per pillar, hover / focus highlighting, and a click opens the issues filtered on that pillar. A pillar without data shows a neutral “Not measured” ring (internal linking in list mode, performance without response times). Performance is labelled “server time only” unless browser measurements or Core Web Vitals are available.
+- **Your priorities**: error / warning / notice summary, top 3 actions with a short explanation, the number of unique pages (never the sum of occurrences) or “Whole site”, and a link to the action plan. Editorial items are shown as “To review”.
+- **Key indicators** (URLs crawled, indexable URLs, median server response, internal links), **What works well** (only checks actually passed on the crawled scope) and **Your next goal**.
+- **Animations**: rings fill in ~1.1 s, staggered; counters count up; values move from the previous crawl on refresh; everything is static with `prefers-reduced-motion`, and final values are exposed to assistive technologies immediately.
+- Dark theme by default (light theme still available), new palette and Inter typography; translations in the 6 languages, with singular / plural forms.
+- Pillar scores are computed by a shared module (`public/shared/pillars.js`) used by the engine (`summary.pillars`) and the interface.
+
 ## 3.5.0 — 2026-10-13
 
 ### New: Fix in 1 click with Claude or ChatGPT

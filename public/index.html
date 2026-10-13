@@ -8,27 +8,50 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
+  <div class="shell">
+  <aside class="sidebar" id="sidebar" aria-label="Navigation">
     <div class="brand"><span class="logo" data-icon="spider"></span><span class="name">Arachnide <small>SEO Spider</small></span><span id="version" class="ver"></span></div>
+    <nav id="tabs" class="tabs" aria-label="Sections"></nav>
+    <div class="side-foot">
+      <button id="historyBtn" class="side-link" type="button" data-icon="history"><span data-i18n="nav.history">History</span></button>
+      <button id="optionsBtn" class="side-link" type="button" aria-expanded="false" data-icon="settings"><span data-i18n="nav.settings">Settings</span></button>
+    </div>
+  </aside>
+  <div class="sidebar-scrim" id="sidebarScrim" hidden></div>
+  <div class="main">
+  <header class="topbar">
+    <button id="navToggle" class="btn icon nav-toggle" type="button" data-icon="list" data-i18n-title="nav.menu" aria-controls="sidebar" aria-expanded="false"></button>
     <form id="crawlForm" class="crawl-form" autocomplete="off">
-      <div class="seg mode" id="modeSeg">
-        <button type="button" data-mode="spider" data-i18n="opt.modeSpider">Spider</button>
-        <button type="button" data-mode="list" data-i18n="opt.modeList">List</button>
+      <div class="domain-pill">
+        <span class="dp-ic" data-icon="globe"></span>
+        <div class="seg mode" id="modeSeg">
+          <button type="button" data-mode="spider" data-i18n="opt.modeSpider">Spider</button>
+          <button type="button" data-mode="list" data-i18n="opt.modeList">List</button>
+        </div>
+        <input id="urlInput" type="text" inputmode="url" data-i18n-ph="ui.urlPlaceholder" placeholder="https://www.example.com" required aria-label="URL">
+        <textarea id="listInput" rows="1" data-i18n-ph="ui.listPlaceholder" hidden></textarea>
+        <span id="crawlStatus" class="crawl-status" role="status"></span>
       </div>
-      <input id="urlInput" type="text" inputmode="url" data-i18n-ph="ui.urlPlaceholder" placeholder="https://www.example.com" required>
-      <textarea id="listInput" rows="1" data-i18n-ph="ui.listPlaceholder" hidden></textarea>
-      <button id="startBtn" class="btn primary" type="submit" data-icon="play"><span data-i18n="ui.crawl">Crawl</span></button>
-      <button id="stopBtn" class="btn danger" type="button" data-icon="stop" hidden><span data-i18n="ui.stop">Stop</span></button>
-      <button id="optionsBtn" class="btn" type="button" aria-expanded="false" data-icon="settings"><span data-i18n="ui.options">Options</span></button>
     </form>
     <div class="top-actions">
-      <button id="reportBtn" class="btn accent" type="button" data-icon="report" disabled><span data-i18n="ui.report">Report</span></button>
-      <button id="historyBtn" class="btn icon" type="button" data-icon="history" data-i18n-title="ui.history"></button>
-      <button id="scheduleBtn" class="btn icon" type="button" data-icon="calendar" data-i18n-title="sched.title"></button>
-      <label class="btn icon" data-icon="folder" data-i18n-title="ui.open"><input id="importInput" type="file" accept=".json,application/json" hidden></label>
-      <button id="exportJsonBtn" class="btn icon" type="button" data-icon="download" data-i18n-title="ui.exportJson" disabled></button>
+      <button id="themeBtn" class="btn icon ghost" type="button" data-icon="moon" data-i18n-title="ui.theme"></button>
       <label class="lang" data-icon="globe"><select id="langSel" aria-label="Language"></select></label>
-      <button id="themeBtn" class="btn icon" type="button" data-icon="moon" data-i18n-title="ui.theme"></button>
+      <details class="menu" id="moreMenu">
+        <summary class="btn icon ghost" data-icon="folder" data-i18n-title="nav.more"></summary>
+        <div class="menu-list">
+          <label class="menu-item" data-icon="folder"><input id="importInput" type="file" accept=".json,application/json" hidden><span data-i18n="ui.open">Open a crawl</span></label>
+          <button id="scheduleBtn" class="menu-item" type="button" data-icon="calendar"><span data-i18n="sched.title">Scheduled crawls</span></button>
+        </div>
+      </details>
+      <details class="menu" id="exportMenu">
+        <summary class="btn" data-icon="download"><span data-i18n="nav.export">Export</span></summary>
+        <div class="menu-list">
+          <button id="reportBtn" class="menu-item" type="button" data-icon="report" disabled><span data-i18n="ui.report">Report</span></button>
+          <button id="exportJsonBtn" class="menu-item" type="button" data-icon="code" disabled><span data-i18n="ui.exportJson">JSON</span></button>
+        </div>
+      </details>
+      <button id="stopBtn" class="btn danger" type="button" data-icon="stop" hidden><span data-i18n="ui.stop">Stop</span></button>
+      <button id="startBtn" class="btn primary cta" type="submit" form="crawlForm" data-icon="play"><span id="startLbl" data-i18n="ui.crawl">Crawl</span></button>
     </div>
   </header>
 
@@ -170,12 +193,13 @@
   </div>
 
   <main class="layout">
-    <nav id="tabs" class="tabs" aria-label="Tabs"></nav>
     <section class="content">
       <div id="view" class="view"></div>
       <div id="detail" class="detail" hidden></div>
     </section>
   </main>
+  </div>
+  </div>
 
   <dialog id="historyDialog">
     <form method="dialog" class="dialog-head"><h2 data-i18n="ui.history">History</h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>

@@ -27,7 +27,7 @@
 Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur votre machine.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Tableau de bord : score de santé SEO, score par catégorie, codes de réponse, profondeur de clic et priorités" width="100%">
+  <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
 
 ## ✨ Nouveau en 3.5 : corriger en 1 clic avec Claude ou ChatGPT
@@ -173,7 +173,7 @@ La sécurité avant tout : aperçu avant chaque écriture, demande d'autorisatio
 | **Configuration › Limites** | **Configuration › robots.txt (avec testeur)** |
 | <img src="docs/screenshots/config-limits.png" alt="Réglages des limites du spider"> | <img src="docs/screenshots/config-robots.png" alt="Modes robots.txt, robots.txt personnalisé et testeur"> |
 | **Écran d’accueil** | **Mode sombre** |
-| <img src="docs/screenshots/home.png" alt="Écran d’accueil avec les crawls récents"> | <img src="docs/screenshots/dashboard-dark.png" alt="Tableau de bord en mode sombre"> |
+| <img src="docs/screenshots/home.png" alt="Écran d’accueil avec les crawls récents"> | <img src="docs/screenshots/dashboard-dark.png" alt="Tableau de bord sur tablette"> |
 
 ## 🚀 Installation
 
