@@ -3,6 +3,7 @@
 import { titlePixels, descPixels } from './pixel.mjs';
 import { similarity } from './text.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
+import { issuePoints, computePillars } from '../public/shared/pillars.js';
 import { imageFormat } from './parse.mjs';
 
 export const THRESHOLDS = {
@@ -31,9 +32,6 @@ const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
 const HOME_ALIAS = /^\/((index|default|home|accueil|inicio|start|startseite)(\.(html?|php|aspx?))?\/?)?$/i;
 const UNVERIFIABLE = new Set([0, 401, 403, 429, 999]);
 // Score : plafond de points retirés par problème, poids par page touchée, facteur d'impact.
-const SCORE_CAP = { error: 30, warning: 12, notice: 0 };
-const PAGE_W = { error: 1, warning: 0.35, notice: 0 };
-const IMPACT_F = { high: 1, medium: 0.7, low: 0.4 };
 const PRIO_FLOOR = { error: 20, warning: 10, notice: 0 };
 const SEV_W = { error: 3, warning: 2, notice: 1 };
 const LVL_W = { high: 3, medium: 2, low: 1 };
@@ -641,7 +639,7 @@ export function analyze(crawler) {
   for (const is of issues) {
     if (is.severity === 'notice') continue;
     const share = is.scope === 'site' ? 1 : Math.min(1, new Set(is.items.map((it) => it.url).filter((u) => scoredSet.has(u))).size / N);
-    const pts = Math.min(SCORE_CAP[is.severity] * IMPACT_F[is.impact], 100 * PAGE_W[is.severity] * IMPACT_F[is.impact] * share);
+    const pts = issuePoints(is, share);
     keep *= 1 - pts / 100;
     keepByCat[is.category] = (keepByCat[is.category] ?? 1) * (1 - pts / 40);
   }
@@ -710,6 +708,8 @@ export function analyze(crawler) {
       score,
       grade: grade(score),
       categoryScores,
+      // Piliers du tableau de bord (Technique, Contenu, Maillage, Performance) ; score null = non mesuré.
+      pillars: computePillars({ pages, issues, meta: { mode: crawler.opts.mode, psi: psiMeta, rendered: !!crawler.renderer } }).map(({ issues: _i, ...pl }) => pl),
       totalUrls: pages.length,
       htmlPages: html200.length,
       indexable: indexableHtml.length,

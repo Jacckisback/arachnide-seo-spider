@@ -27,7 +27,7 @@ O **Arachnide** é um crawler de SEO técnico gratuito que funciona no seu próp
 Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu computador.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Painel: pontuação de saúde SEO, pontuação por categoria, códigos de resposta, profundidade de clique e prioridades" width="100%">
+  <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
 
 ## ✨ Novidades da 3.5: corrigir em 1 clique com o Claude ou o ChatGPT
@@ -161,7 +161,7 @@ Segurança em primeiro lugar: pré-visualização antes de cada escrita, pedido 
 | **Configuração › Limites** | **Configuração › robots.txt (com testador)** |
 | <img src="docs/screenshots/config-limits.png" alt="Definições de limites do spider"> | <img src="docs/screenshots/config-robots.png" alt="Modos do robots.txt, robots.txt personalizado e testador"> |
 | **Ecrã inicial** | **Modo escuro** |
-| <img src="docs/screenshots/home.png" alt="Ecrã inicial com os rastreamentos recentes"> | <img src="docs/screenshots/dashboard-dark.png" alt="Painel em modo escuro"> |
+| <img src="docs/screenshots/home.png" alt="Ecrã inicial com os rastreamentos recentes"> | <img src="docs/screenshots/dashboard-dark.png" alt="Painel em tablet"> |
 
 ## 🚀 Instalação
 

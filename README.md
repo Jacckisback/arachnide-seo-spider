@@ -27,7 +27,7 @@
 There is no account, no cloud and no page limit, and your data stays on your machine.
 
 <p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
+  <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
 
 ## ✨ New in 3.5: Fix in 1 click with Claude or ChatGPT
@@ -173,7 +173,7 @@ Safety first: preview before every write, permission prompt for each write, per-
 | **Configuration › Limits** | **Configuration › robots.txt (with tester)** |
 | <img src="docs/screenshots/config-limits.png" alt="Spider limits settings"> | <img src="docs/screenshots/config-robots.png" alt="robots.txt modes, custom robots.txt and tester"> |
 | **Home screen** | **Dark mode** |
-| <img src="docs/screenshots/home.png" alt="Home screen with recent crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard in dark mode"> |
+| <img src="docs/screenshots/home.png" alt="Home screen with recent crawls"> | <img src="docs/screenshots/dashboard-dark.png" alt="Dashboard on a tablet"> |
 
 ## 🚀 Installation
 

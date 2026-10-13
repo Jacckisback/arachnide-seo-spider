@@ -5,6 +5,7 @@ import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
 import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.js';
+import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
 import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -220,16 +221,51 @@ const visibleTabs = () => {
 };
 
 /* ---------- Barre latérale ---------- */
-function renderTabs() {
+// Pilotage et exploration en tête ; toutes les autres analyses restent accessibles dans « Plus d'analyses ».
+const NAV = [
+  { group: 'grp.pilot', items: ['dashboard', 'issues', 'plan', 'fix', 'fixHistory'] },
+  { group: 'grp.explore', items: ['internal', 'linking', 'content', 'images', 'directives'] },
+];
+const NAV_IDS = new Set(NAV.flatMap((g) => g.items));
+const SUB_ITEMS = new Set(['fixHistory']); // affiché en retrait sous « Corrections »
+const NO_COUNT = new Set(['dashboard', 'plan', 'fix', 'fixHistory']); // pas de compteur qui ne veuille rien dire
+const navLabel = (id) => {
+  const k = 'nav.' + id;
+  const v = t(k);
+  return v && v !== k ? v : t('tab.' + id);
+};
+
+function tabButton(x) {
   const R = state.R;
-  $('#tabs').innerHTML = visibleTabs().map((x) => {
-    if (x.group) return `<div class="group">${esc(t(x.group))}</div>`;
-    let count = '';
+  let count = '';
+  if (!NO_COUNT.has(x.id)) {
     if (R && x.count) count = x.count(R);
     else if (R && x.rows) count = x.rows(R).length;
     else if (!R && x.id === 'internal' && state.live.length) count = state.live.length;
-    return `<button data-tab="${x.id}" class="${state.tab === x.id ? 'active' : ''}" ${!R && !['dashboard', 'internal'].includes(x.id) ? 'disabled' : ''}>${icon(x.icon)}<span class="lbl">${esc(t('tab.' + x.id))}</span><span class="count">${num(count)}</span></button>`;
-  }).join('');
+  }
+  const active = state.tab === x.id;
+  const disabled = !R && !['dashboard', 'internal'].includes(x.id);
+  return `<button data-tab="${x.id}" class="${active ? 'active' : ''}${SUB_ITEMS.has(x.id) ? ' sub' : ''}" ${active ? 'aria-current="page"' : ''} ${disabled ? 'disabled' : ''}>${icon(x.icon)}<span class="lbl">${esc(navLabel(x.id))}</span>${count !== '' ? `<span class="count">${num(count)}</span>` : ''}</button>`;
+}
+
+function renderTabs() {
+  const vis = visibleTabs();
+  const byId = new Map(vis.filter((x) => x.id).map((x) => [x.id, x]));
+  let html = NAV.map((g) => `<div class="group">${esc(t(g.group))}</div>${g.items.filter((id) => byId.has(id)).map((id) => tabButton(byId.get(id))).join('')}`).join('');
+  // Autres analyses, regroupées comme avant (Crawl, Contenu, Technique, Google, Architecture).
+  const more = [];
+  let cur = null;
+  for (const x of vis) {
+    if (x.group) cur = { group: x.group, items: [] };
+    else if (!NAV_IDS.has(x.id) && cur) {
+      if (!more.includes(cur)) more.push(cur);
+      cur.items.push(x);
+    }
+  }
+  const open = store.get('navMore') === '1' || (state.tab && !NAV_IDS.has(state.tab));
+  html += `<details class="nav-more" ${open ? 'open' : ''}><summary>${icon('chevronRight')}<span>${esc(t('grp.more'))}</span></summary>${more.map((g) => `<div class="subgroup">${esc(t(g.group))}</div>${g.items.map(tabButton).join('')}`).join('')}</details>`;
+  $('#tabs').innerHTML = html;
+  $('#tabs .nav-more').addEventListener('toggle', (e) => store.set('navMore', e.target.open ? '1' : '0'));
 }
 $('#tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-tab]');
@@ -237,6 +273,7 @@ $('#tabs').addEventListener('click', (e) => {
   goTab(b.dataset.tab);
 });
 function goTab(id) {
+  closeNav();
   state.tab = id;
   state.search = '';
   state.page = 0;
@@ -404,17 +441,6 @@ function renderTable(view, tab, allRows, opts = {}) {
 }
 
 /* ---------- Tableau de bord ---------- */
-function gauge(score, grade, size = 150) {
-  const r = 60;
-  const c = 2 * Math.PI * r;
-  const color = score >= 75 ? 'var(--ok)' : score >= 50 ? 'var(--warn)' : 'var(--err)';
-  return `<svg viewBox="0 0 150 150" width="${size}" height="${size}" role="img" aria-label="${score}/100">
-    <circle cx="75" cy="75" r="${r}" fill="none" stroke="var(--panel-2)" stroke-width="12"/>
-    <circle cx="75" cy="75" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * score) / 100} ${c}" transform="rotate(-90 75 75)"/>
-    <text x="75" y="80" text-anchor="middle" font-size="38" font-weight="800" fill="var(--text)">${score}</text>
-    <text x="75" y="104" text-anchor="middle" font-size="14" font-weight="700" fill="${color}">${grade || ''}</text></svg>`;
-}
-
 function bars(entries, colorFn = () => 'var(--accent)') {
   const list = entries.filter(([, v]) => v > 0);
   const max = Math.max(1, ...list.map(([, v]) => v));
@@ -432,44 +458,40 @@ function issueRows(issues) {
 function renderDashboard(view) {
   const R = state.R;
   const S = R.summary;
-  const prev = state.compare;
-  const statusColor = (k) => ({ '2xx': 'var(--ok)', '3xx': 'var(--warn)', '4xx': 'var(--err)', '5xx': 'var(--err)' })[k] || 'var(--muted)';
-  const depth = Object.entries(S.depthBuckets).sort(([a], [b]) => (a === 'n/a') - (b === 'n/a') || parseInt(a) - parseInt(b)).map(([k, v]) => [k === 'n/a' ? t('dash.notLinked') : t('dash.level', { n: k }), v]);
-  const cats = Object.entries(S.categoryScores || {}).sort((a, b) => a[1] - b[1]);
-  const top = [...R.issues].sort((a, b) => b.priority - a.priority).slice(0, 6);
-  view.innerHTML = `
-    <div class="toolbar"><div class="tb-title"><h2>${esc(R.meta.startUrl)}</h2><p class="help">${esc(t('dash.crawledOn', { date: t.date(R.meta.finishedAt) }))}${R.meta.stopped ? ' · ' + esc(t('dash.interrupted')) : ''}${R.meta.rendered ? ' · ' + esc(t('dash.jsRendered')) : ''}${R.meta.mode === 'list' ? ' · ' + esc(t('opt.modeList')) : ''}</p></div>
-      <div class="tb-actions"><button class="btn primary" id="dashReport">${icon('report')} ${esc(t('ui.report'))}</button></div></div>
-    ${(R.meta.warnings || []).map((w) => `<div class="banner warn">${icon('alert')} ${esc(t(w.key, w.params))}</div>`).join('')}
-    ${skippedBanner(R)}
-    <div class="dash-row">
-      <div class="card score"><h3>${esc(t('dash.health'))}</h3>${gauge(S.score, S.grade)}
-        <div class="label">${esc(t('grade.' + S.grade))}</div>
-        ${prev ? `<div class="delta ${prev.scoreDelta >= 0 ? 'up' : 'down'}">${prev.scoreDelta >= 0 ? '▲' : '▼'} ${Math.abs(prev.scoreDelta)} ${esc(t('dash.vsPrevious'))}</div>` : ''}
-      </div>
-      <div class="card"><h3>${esc(t('dash.categories'))}</h3><div class="bars cats">${cats.map(([c, v]) => `<div class="b"><span>${esc(t('cat.' + c))}</span><div class="track"><div class="fill" style="width:${v}%;background:${v >= 80 ? 'var(--ok)' : v >= 50 ? 'var(--warn)' : 'var(--err)'}"></div></div><span class="n">${v}%</span></div>`).join('') || `<p class="muted">—</p>`}</div></div>
-      <div class="card"><h3>${esc(t('dash.status'))}</h3><div class="bars">${bars(Object.entries(S.statusBuckets).map(([k, v]) => [k === 'blocked' ? t('st.blocked') : k === 'none' ? t('st.none') : k, v]), (k) => statusColor(k))}</div>
-        <h3 class="mt">${esc(t('dash.depth'))}</h3><div class="bars">${bars(depth)}</div></div>
-    </div>
-    <div class="dash-grid">
-      ${[['dash.urls', S.totalUrls], ['dash.html', S.htmlPages], ['dash.indexable', S.indexable], ['dash.nonIndexable', S.nonIndexable], ['dash.responseTime', `${num(S.avgResponseTime)} ms`], ['dash.words', S.avgWords], ['dash.internalLinks', S.internalLinks], ['dash.sitemapUrls', R.meta.sitemapUrlCount]]
-        .map(([l, v]) => `<div class="card kpi"><div class="v">${typeof v === 'number' ? num(v) : esc(v)}</div><div class="l">${esc(t(l))}</div></div>`).join('')}
-    </div>
-    <div class="dash-two">
-      <div class="card"><h3>${esc(t('dash.priorities'))}</h3>
-        <ol class="prio">${top.map((i) => `<li data-issue="${i.id}"><span class="il-main">${esc(t('issue.' + i.id + '.label', i.params))}<small>${esc(t('issue.' + i.id + '.fix', i.params))}</small></span><span class="prio-meta">${sevChip(i.severity)}<b>${num(i.count)}</b></span></li>`).join('')}</ol>
-        <p><a href="#" id="toPlan">${esc(t('dash.fullPlan'))} →</a></p>
-      </div>
-      <div class="card"><h3>${esc(t('dash.issues'))}</h3>
-        <div class="sev-tot"><span class="chip error">${num(S.errors)} ${esc(t('sev.errors'))}</span><span class="chip warning">${num(S.warnings)} ${esc(t('sev.warnings'))}</span><span class="chip notice">${num(S.notices)} ${esc(t('sev.notices'))}</span></div>
-        ${issueRows(R.issues.slice(0, 8))}
-        <p><a href="#" id="allIssues">${esc(t('dash.allIssues', { n: R.issues.length }))} →</a></p>
-      </div>
-    </div>`;
-  view.querySelectorAll('[data-issue]').forEach((li) => li.addEventListener('click', () => openIssue(li.dataset.issue)));
-  $('#allIssues')?.addEventListener('click', (e) => { e.preventDefault(); openIssue(null); });
-  $('#toPlan')?.addEventListener('click', (e) => { e.preventDefault(); goTab('plan'); });
-  $('#dashReport').addEventListener('click', openReportDialog);
+  const pillars = pillarsOf(R);
+  const key = R.meta.finishedAt + '|' + R.meta.startUrl;
+  // Animation au premier affichage d'un résultat (depuis les valeurs précédentes s'il y en avait), pas à chaque retour.
+  const animate = state.ovShown !== key;
+  const from = animate ? state.ovPrev || { score: 0, pillars: {}, kpis: {} } : null;
+  const prevDelta = state.compare && state.compare.reliable !== false ? state.compare.scoreDelta : null;
+  view.innerHTML = overviewHtml(R, { t, esc, icon, num, prevDelta }, { pillars, actions: topActions(R), good: strengths(R), partial: isPartial(R), from });
+  playOverview(view, num, { animate });
+  wireHighlight(view);
+  state.ovShown = key;
+  state.ovPrev = { score: S.score, pillars: Object.fromEntries(pillars.map((p) => [p.id, p.score ?? 0])), kpis: { crawled: S.totalUrls, indexable: S.indexable, response: S.medianResponseTime || 0, links: S.internalLinks } };
+  const on = (sel, fn) => view.querySelectorAll(sel).forEach((el) => el.addEventListener('click', () => fn(el)));
+  on('[data-pillar]', (el) => {
+    const p = pillars.find((x) => x.id === el.dataset.pillar);
+    state.pillarFilter = { id: p.id, color: p.color, categories: pillarCategories(p.id) };
+    state.sevFilter = 'all';
+    state.issue = null;
+    goTab('issues');
+  });
+  on('[data-issue]', (el) => openIssue(el.dataset.issue));
+  on('[data-sev]', (el) => {
+    state.pillarFilter = null;
+    state.sevFilter = el.dataset.sev;
+    state.issue = null;
+    goTab('issues');
+  });
+  on('.good[data-tab]', (el) => goTab(el.dataset.tab));
+  on('#ovDetail', () => openIssue());
+  on('#ovAllIssues', () => openIssue());
+  on('#ovPlan', () => goTab('plan'));
+  on('#ovLimits', () => {
+    configDialog.showModal();
+    $('#configDialog [data-cfg="limits"]')?.click();
+  });
 }
 
 function skippedBanner(R) {
@@ -480,6 +502,7 @@ function skippedBanner(R) {
 }
 
 function openIssue(id) {
+  state.pillarFilter = null;
   state.issue = id || state.R.issues[0]?.id || null;
   goTab('issues');
 }
@@ -491,12 +514,19 @@ function renderIssues(view) {
     view.innerHTML = `<div class="empty">${icon('check')}<h2>${esc(t('issues.none'))}</h2></div>`;
     return;
   }
-  const list = R.issues.filter((i) => state.sevFilter === 'all' || i.severity === state.sevFilter);
+  // Filtre par pilier (clic sur un anneau du tableau de bord) : seulement les contrôles de ses catégories.
+  const pf = state.pillarFilter;
+  const list = R.issues.filter((i) => (state.sevFilter === 'all' || i.severity === state.sevFilter) && (!pf || pf.categories.includes(i.category)));
+  if (pf && !list.length) {
+    view.innerHTML = `<div class="empty">${icon('check')}<h2>${esc(t('dash.pillarClean', { pillar: t('pillar.' + pf.id) }))}</h2><button class="btn" id="clearPillar">${esc(t('dash.allIssues'))}</button></div>`;
+    $('#clearPillar').onclick = () => ((state.pillarFilter = null), render());
+    return;
+  }
   if (!list.find((i) => i.id === state.issue)) state.issue = list[0]?.id || R.issues[0].id;
   const issue = R.issues.find((i) => i.id === state.issue);
   const counts = { all: R.issues.length, error: 0, warning: 0, notice: 0 };
   R.issues.forEach((i) => counts[i.severity]++);
-  view.innerHTML = `<div class="issues-layout">
+  view.innerHTML = `${pf ? `<div class="filter-chip-row"><span class="pill-filter c-${pf.color}">${esc(t('pillar.' + pf.id))} <button class="link" id="clearPillar" aria-label="${esc(t('ui.close'))}">${icon('x')}</button></span></div>` : ''}<div class="issues-layout">
     <div class="card il-col">
       <div class="seg full">${['all', 'error', 'warning', 'notice'].map((s) => `<button data-sev="${s}" class="${state.sevFilter === s ? 'on' : ''}">${esc(s === 'all' ? t('f.all') : cap(t('sev.' + s + 's')))} <span>${counts[s]}</span></button>`).join('')}</div>
       ${issueRows(list)}
@@ -511,6 +541,7 @@ function renderIssues(view) {
       <div id="issueTable"></div>
     </div></div>`;
   view.querySelectorAll('[data-sev]').forEach((b) => b.addEventListener('click', () => { state.sevFilter = b.dataset.sev; render(); }));
+  if ($('#clearPillar')) $('#clearPillar').onclick = () => ((state.pillarFilter = null), render());
   view.querySelectorAll('[data-issue]').forEach((li) => li.addEventListener('click', () => { state.issue = li.dataset.issue; state.search = ''; state.page = 0; render(); }));
   const items = issue.items.map((it) => ({ url: it.url, detail: detailText(it.detail, t) }));
   renderTable($('#issueTable'), { id: 'issue-' + issue.id, cols: [C.url, { k: 'detail', l: 'col.detail', cls: 'wrap' }] }, items, { title: t('issues.affected'), help: '' });
@@ -865,6 +896,7 @@ async function loadResult(R) {
   $('#exportJsonBtn').disabled = false;
   $('#reportBtn').disabled = false;
   $('#urlInput').value = R.meta.mode === 'list' ? '' : R.meta.startUrl;
+  updateTopbar();
   const saved = store.get('tab');
   state.tab = saved && TAB_BY_ID[saved] && (!TAB_BY_ID[saved].show || TAB_BY_ID[saved].show(R)) ? saved : 'dashboard';
   renderTabs();
@@ -1171,7 +1203,50 @@ function setRunning(running) {
   $('#stopBtn').hidden = !running;
   $('#urlInput').disabled = running;
   $('#progress').hidden = !running;
+  updateTopbar();
 }
+
+// Barre supérieure : statut de l'analyse à côté du domaine, « Relancer le crawl » quand l'URL est celle du résultat.
+const isPartial = (R) => !!R && (R.meta.stopped || Object.values(R.meta.skipped || {}).some((n) => n > 0));
+function updateTopbar() {
+  const R = state.R;
+  const st = $('#crawlStatus');
+  const kind = state.running ? 'running' : !R ? '' : isPartial(R) ? 'partial' : 'done';
+  st.className = 'crawl-status ' + kind;
+  st.innerHTML = kind === 'running' ? '<span class="spin"></span>' : kind === 'partial' ? icon('alert') : kind === 'done' ? icon('check') : '';
+  st.title = kind ? t('status.' + kind) : '';
+  st.setAttribute('aria-label', st.title);
+  const same = R && R.meta.mode !== 'list' && $('#urlInput').value.trim().replace(/\/$/, '') === String(R.meta.startUrl).replace(/\/$/, '');
+  $('#startLbl').textContent = t(same ? 'ui.recrawl' : 'ui.crawl');
+}
+$('#urlInput').addEventListener('input', () => updateTopbar());
+
+// Menu latéral sur mobile et tablette.
+function closeNav() {
+  document.body.classList.remove('nav-open');
+  $('#navToggle').setAttribute('aria-expanded', 'false');
+  $('#sidebarScrim').hidden = true;
+}
+$('#navToggle').addEventListener('click', () => {
+  const open = !document.body.classList.contains('nav-open');
+  document.body.classList.toggle('nav-open', open);
+  $('#navToggle').setAttribute('aria-expanded', String(open));
+  $('#sidebarScrim').hidden = !open;
+});
+$('#sidebarScrim').addEventListener('click', closeNav);
+// Menus déroulants (Exporter, Plus) : un seul ouvert, fermés au clic sur un élément, à l'extérieur ou avec Échap.
+$$('details.menu').forEach((d) => d.addEventListener('toggle', () => d.open && $$('details.menu').forEach((o) => o !== d && (o.open = false))));
+document.addEventListener('click', (e) => {
+  $$('details.menu[open]').forEach((d) => {
+    if (!d.contains(e.target) || e.target.closest('.menu-item:not(label)')) d.open = false;
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    $$('details.menu[open]').forEach((d) => (d.open = false));
+    closeNav();
+  }
+});
 
 function showProgress(p) {
   if (!p) return;
@@ -1237,6 +1312,7 @@ function connect() {
 /* ---------- Thème & langue ---------- */
 const savedTheme = store.get('theme');
 if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+else document.documentElement.dataset.theme = 'dark'; // thème sombre par défaut (direction graphique du tableau de bord)
 $('#themeBtn').addEventListener('click', () => {
   const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const next = cur === 'dark' ? 'light' : 'dark';
@@ -1258,6 +1334,7 @@ async function setLang(code) {
   render();
   renderDetail();
   refreshFixTexts();
+  updateTopbar();
 }
 $('#langSel').innerHTML = LANGS.map((l) => `<option value="${l.code}">${l.flag} ${l.code.toUpperCase()}</option>`).join('');
 $('#langSel').addEventListener('change', (e) => setLang(e.target.value));

@@ -24,7 +24,10 @@ export async function getT(code) {
 
 export function createT(dict, fallback, lang) {
   const nf = new Intl.NumberFormat(lang.locale);
+  const pr = new Intl.PluralRules(lang.locale);
   const t = (key, params = {}) => {
+    // Pluriel : une variante « clé.one » est utilisée quand {n} est au singulier dans la langue (fr : 0 et 1).
+    if (typeof params.n === 'number' && pr.select(params.n) === 'one' && (dict[key + '.one'] ?? fallback?.[key + '.one']) !== undefined) key += '.one';
     const s = dict[key] ?? fallback?.[key] ?? key;
     return s.replace(/\{(\w+)\}/g, (m, k) => (params[k] === undefined || params[k] === null ? m : typeof params[k] === 'number' ? nf.format(params[k]) : String(params[k])));
   };
