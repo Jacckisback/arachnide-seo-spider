@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Crawler, USER_AGENTS, DEFAULT_UA } from '../src/crawler.mjs';
 import { parseHtml } from '../src/parse.mjs';
+import { findChrome } from '../src/renderer.mjs';
 
 test('titre et titres Hn : SVG inline, noscript et template ne comptent pas', () => {
   const r = parseHtml(`<html><head><title>Cours de français</title></head><body>
@@ -141,4 +142,73 @@ test('score de santé : un défaut de gabarit ne met pas le site à 0, Googlebot
   const [clean, one404, gbot] = [await scoreOf('clean'), await scoreOf('one404'), await scoreOf('gbot')];
   assert.ok(one404 < clean && one404 >= clean - 35, `${clean} → ${one404}`);
   assert.ok(gbot <= 15);
+});
+
+test('redirection JavaScript (si Chrome est installé) : traitée comme une redirection, cible explorée', { skip: !findChrome() && 'Chrome introuvable' }, async () => {
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    if (req.url === '/') return res.end('<title>Accueil</title><h1>A</h1><a href="/ancienne">ancienne</a>');
+    if (req.url === '/ancienne') return res.end('<title>Ancienne</title><script>location.href="/nouvelle"</script>');
+    res.end('<title>Nouvelle page</title><h1>Nouvelle</h1>');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false, render: true }).start();
+    const old = R.pages.find((p) => p.url === base + '/ancienne');
+    assert.equal(old.jsRedirectUrl, base + '/nouvelle');
+    assert.equal(old.indexabilityReason, 'jsRedirect');
+    assert.ok(R.pages.some((p) => p.url === base + '/nouvelle' && p.status === 200));
+    assert.ok(R.issues.some((i) => i.id === 'js-redirect'));
+  } finally {
+    server.close();
+  }
+});
+
+test('liens cassés : une ligne par paire page → cible, avec toutes les ancres', async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/') {
+      res.writeHead(404, { 'content-type': 'text/html' });
+      return res.end('<title>404</title>');
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end('<title>Accueil</title><h1>A</h1><a href="/support">Support</a> <a href="/support">Obtenir du support</a>');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false }).start();
+    const broken = R.issues.find((i) => i.id === 'broken-internal');
+    assert.equal(broken.count, 1);
+    assert.match(broken.items[0].detail, /« Support », « Obtenir du support »/);
+  } finally {
+    server.close();
+  }
+});
+
+test('hreflang : les versions linguistiques sont explorées et vérifiées (404, noindex)', async () => {
+  let base;
+  const alt = () => `<link rel="alternate" hreflang="fr" href="${base}/"><link rel="alternate" hreflang="es" href="${base}/es/"><link rel="alternate" hreflang="de" href="${base}/de/"><link rel="alternate" hreflang="it" href="${base}/it/">`;
+  const server = http.createServer((req, res) => {
+    if (req.url === '/de/') {
+      res.writeHead(404, { 'content-type': 'text/html' });
+      return res.end('<title>404</title>');
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    const noindex = req.url === '/it/' ? '<meta name="robots" content="noindex">' : '';
+    res.end(`<html><head><title>Page ${req.url}</title>${alt()}${noindex}</head><body><h1>${req.url}</h1></body></html>`);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false }).start();
+    // Aucune page n'est liée par <a> : elles ont été découvertes par hreflang.
+    assert.ok(R.pages.some((p) => p.url === base + '/es/' && p.status === 200));
+    const ids = (id) => R.issues.find((i) => i.id === id)?.items.map((i) => i.detail) || [];
+    assert.ok(ids('hreflang-target-error').some((d) => d.includes('/de/') && d.includes('404')));
+    assert.ok(ids('hreflang-target-non-indexable').some((d) => d.includes('/it/') && d.includes('noindex')));
+    assert.ok(!ids('hreflang-return').length);
+  } finally {
+    server.close();
+  }
 });

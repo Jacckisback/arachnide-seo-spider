@@ -8,7 +8,7 @@ import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey } from './google.mjs';
 
-export const VERSION = '3.3.0';
+export const VERSION = '3.4.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -89,6 +89,8 @@ function searchRegex(q) {
     return null;
   }
 }
+
+const normalizeTarget = (u, c) => (u ? c.normalize(u) : null);
 
 // Entités XML d'un <loc> : &amp; &lt; &gt; &quot; &apos; et numériques (&#38; &#x26;).
 function decodeXml(v) {
@@ -710,8 +712,16 @@ export class Crawler extends EventEmitter {
         const raw = data;
         try {
           const r = await this.withRenderSlot(() => this.renderer.render(item.url));
-          // Redirection JavaScript ou meta refresh : la page rendue est une autre URL, on garde le HTML brut.
-          if (this.normalize(r.finalUrl) !== item.url) throw new Error(`JS redirect → ${r.finalUrl}`);
+          // La page rendue est une autre URL : redirection JavaScript (location.href…) ou meta refresh. Google la traite
+          // comme une redirection : la page n'est pas indexée et la cible est explorée. On garde le HTML brut.
+          const landed = this.normalize(r.finalUrl);
+          if (landed && landed !== item.url) {
+            if (normalizeTarget(raw.metaRefreshUrl, this) !== landed) {
+              rec.jsRedirectUrl = landed;
+              if (this.opts.mode !== 'list') this.enqueue(landed, item.depth, 'redirect', (item.hops || 0) + 1);
+            }
+            throw new Error(`JS redirect → ${r.finalUrl}`);
+          }
           data = parseHtml(r.html, item.url, popts);
           const rawLinks = new Set(raw.links.map((l) => l.to));
           rec.js = {
@@ -789,6 +799,8 @@ export class Crawler extends EventEmitter {
         }
       }
       if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
+      // Versions linguistiques déclarées en hreflang : explorées pour vérifier qu'elles répondent 200, sont indexables et renvoient le lien.
+      if (follow && this.opts.crawlCanonicals) for (const h of rec.hreflang || []) this.enqueue(h.href, item.depth + 1, 'hreflang');
       if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
       if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
       this.pages.set(item.url, rec);

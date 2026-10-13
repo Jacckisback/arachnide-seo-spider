@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.3.0-3d5f17" alt="Versión 3.3.0">
+  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Versión 3.4.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,13 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panel: puntuación de salud SEO, puntuación por categoría, códigos de respuesta, profundidad de clics y prioridades" width="100%">
 </p>
+
+## 🔎 Novedades de la 3.4: fiabilidad hasta el final
+
+- **Redirecciones JavaScript** detectadas al renderizar: tratadas como redirecciones, destino rastreado.
+- **Enlaces agrupados por página y destino**, con todos sus anclajes, en lugar de una fila por anclaje.
+- **Comparación de rastreos URL por URL**: «corregido» solo si la URL se rastreó de nuevo sin el problema, con un aviso cuando los dos rastreos no son comparables.
+- **Versiones hreflang rastreadas y comprobadas**: destinos con error, redirigidos o no indexables señalados.
 
 ## 🛡️ Novedades de la 3.3: auditoría de fiabilidad
 

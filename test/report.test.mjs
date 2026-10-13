@@ -30,3 +30,17 @@ test('rapport HTML dans les 6 langues, avec comparaison', async () => {
     assert.ok(!leak, code + ': ' + leak?.[0]);
   }
 });
+
+test('comparaison URL par URL : corrigé, non revérifié, déplacé, fiabilité', async () => {
+  const { compareResults } = await import('../public/shared/compare.js');
+  const R = (urls, issues, extra = {}) => ({ meta: { finishedAt: '2026-10-01', ...extra }, summary: { score: 70 }, pages: urls.map((url) => ({ url })), issues: issues.map(([id, severity, items]) => ({ id, severity, count: items.length, items: items.map((url) => ({ url })) })) });
+  const prev = R(['/a', '/b', '/c', '/d', '/e'], [['title-missing', 'error', ['/a', '/b']], ['h1-missing', 'warning', ['/c']], ['desc-missing', 'warning', ['/d']]]);
+  // /d n'a pas été recrawlée ; h1-missing passe de /c à /e (même nombre, autre URL).
+  const cur = R(['/a', '/b', '/c', '/e'], [['h1-missing', 'warning', ['/e']]]);
+  const c = compareResults(cur, prev);
+  assert.deepEqual(c.fixed.map((i) => i.id), ['title-missing']);
+  assert.deepEqual(c.unverified.map((i) => i.id), ['desc-missing']);
+  assert.deepEqual(c.changed.map((i) => [i.id, i.fixedCount, i.newCount]), [['h1-missing', 1, 1]]);
+  assert.equal(c.reliable, true); // 5 → 4 URL : écart de 20 %, limite incluse
+  assert.equal(compareResults(R(['/a'], [], { stopped: true }), prev).reliable, false);
+});
