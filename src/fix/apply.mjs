@@ -5,6 +5,7 @@ import { readLive } from '../live.mjs';
 import { DEFAULT_UA } from '../crawler.mjs';
 import { readFixes, saveFixes, readConnection } from './store.mjs';
 import { fixConnectorFor } from './connectors.mjs';
+import { getProvider } from '../ai/settings.mjs';
 
 const norm = (v) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().replace(/\/+$/, '') : v);
 const LIVE_FIELDS = new Set(['seo_title', 'meta_description', 'h1', 'canonical', 'noindex', 'image_alt', 'redirect']);
@@ -35,9 +36,23 @@ export async function verifyFix(fix, { fetch = globalThis.fetch } = {}) {
 
 const batchId = () => `${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}-${crypto.randomBytes(2).toString('hex')}`;
 
-export async function applyFixes(siteUrl, ids, { simulation = true, fetch = globalThis.fetch, onProgress } = {}) {
+async function connectorFor(siteUrl, { fetch, githubApi } = {}) {
   const conn = await readConnection(siteUrl, { withSecrets: true });
-  const connector = await fixConnectorFor(conn, { fetch });
+  // L'IA (si configurée) aide le connecteur GitHub à localiser une valeur quand l'emplacement est ambigu.
+  const provider = conn.type === 'github' ? await getProvider({ fetch }).catch(() => null) : null;
+  return { conn, connector: await fixConnectorFor(conn, { fetch, provider, githubApi }) };
+}
+
+// Aperçu avant écriture : diff des fichiers (GitHub) ou liste de ce qui serait appliqué.
+export async function previewFixes(siteUrl, ids, opts = {}) {
+  const { conn, connector } = await connectorFor(siteUrl, opts);
+  const todo = (await readFixes(siteUrl)).filter((f) => ids.includes(f.id) && f.status === 'approved' && connector.canApply(f));
+  if (connector.preview) return { connector: conn.type, ...(await connector.preview(todo)) };
+  return { connector: conn.type, items: todo.map((f) => ({ id: f.id, url: f.url, kind: f.target.kind, oldValue: f.oldValue, newValue: f.newValue })) };
+}
+
+export async function applyFixes(siteUrl, ids, { simulation = true, fetch = globalThis.fetch, onProgress, githubApi } = {}) {
+  const { conn, connector } = await connectorFor(siteUrl, { fetch, githubApi });
   const all = await readFixes(siteUrl);
   const todo = all.filter((f) => ids.includes(f.id) && f.status === 'approved' && f.target.kind !== 'action_plan');
   const skipped = todo.filter((f) => !connector.canApply(f)).map((f) => f.id);
@@ -48,7 +63,11 @@ export async function applyFixes(siteUrl, ids, { simulation = true, fetch = glob
   if (connector.constructor.batch) {
     // GitHub : toutes les corrections du lot dans une seule Pull Request.
     const r = await connector.applyBatch(ready, { batch });
-    for (const f of ready) done.push({ ...f, status: r.ok ? 'applied' : 'failed', appliedAt: new Date().toISOString(), connector: conn.type, batch, error: r.ok ? undefined : r.error, rationale: f.rationale });
+    const missing = new Set(r.unresolved || []);
+    for (const f of ready) {
+      const ok = r.ok && !missing.has(f.id);
+      done.push({ ...f, status: ok ? 'applied' : 'failed', appliedAt: ok ? new Date().toISOString() : null, connector: conn.type, batch, prUrl: r.pr, error: ok ? undefined : missing.has(f.id) ? 'not_found_in_code' : r.error });
+    }
     await saveFixes(siteUrl, done);
     return { simulated: false, batch, pr: r.pr, results: done, skipped };
   }
@@ -87,9 +106,8 @@ export async function reverifyFixes(siteUrl, ids, { fetch = globalThis.fetch } =
 }
 
 // Annulation d'une correction ou d'un lot entier : la valeur d'avant est remise.
-export async function rollbackFixes(siteUrl, { ids, batch } = {}, { fetch = globalThis.fetch } = {}) {
-  const conn = await readConnection(siteUrl, { withSecrets: true });
-  const connector = await fixConnectorFor(conn, { fetch });
+export async function rollbackFixes(siteUrl, { ids, batch } = {}, { fetch = globalThis.fetch, githubApi } = {}) {
+  const { connector } = await connectorFor(siteUrl, { fetch, githubApi });
   const list = (await readFixes(siteUrl)).filter((f) => ['applied', 'verified'].includes(f.status) && ((ids && ids.includes(f.id)) || (batch && f.batch === batch)));
   const out = [];
   if (connector.constructor.batch && list.length) {

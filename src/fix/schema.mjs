@@ -26,6 +26,7 @@ export const FixSchema = z.object({
   connector: z.enum(['wordpress', 'github', 'export']).nullable().default(null),
   error: z.string().optional(),
   batch: z.string().optional(),
+  prUrl: z.string().optional(),
 });
 
 // Ce que le modèle doit renvoyer (le reste du Fix est rempli par le moteur).

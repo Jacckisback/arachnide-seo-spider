@@ -1251,4 +1251,11 @@ export default {
   'fix.export.step3': 'Eine 301-Weiterleitung legen Sie im CMS oder beim Hoster an; bei einem Link ändern Sie dessen Adresse im Inhalt.',
   'fix.export.step4': 'Starten Sie zur Kontrolle einen neuen Arachnide-Crawl.',
   'fix.status404': 'Seite nicht gefunden (404)',
+  'fix.previewPr': 'Änderungen vor dem Pull Request prüfen',
+  'fix.previewApply': 'Vor dem Schreiben auf die Website prüfen',
+  'fix.notInCode': '{n} Korrektur(en) im Code nicht gefunden: Sie werden als fehlgeschlagen markiert (manuell anwenden).',
+  'fix.cancel': 'Abbrechen',
+  'fix.createPr': 'Pull Request erstellen',
+  'fix.applyNow': 'Auf die Website schreiben',
+  'fix.err.not_found_in_code': 'Im Code des Repositorys nicht gefunden: manuell anwenden.',
 };

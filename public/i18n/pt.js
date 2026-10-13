@@ -1251,4 +1251,11 @@ export default {
   'fix.export.step3': 'Para um redirecionamento 301, crie-o no CMS ou no alojamento; para um link, altere o endereço no conteúdo.',
   'fix.export.step4': 'Execute de novo um rastreio Arachnide para verificar.',
   'fix.status404': 'Página não encontrada (404)',
+  'fix.previewPr': 'Reveja as alterações antes do pull request',
+  'fix.previewApply': 'Reveja antes de escrever no site',
+  'fix.notInCode': '{n} correção(ões) não localizada(s) no código: serão marcadas como falhadas (aplique-as à mão).',
+  'fix.cancel': 'Cancelar',
+  'fix.createPr': 'Criar o pull request',
+  'fix.applyNow': 'Escrever no site',
+  'fix.err.not_found_in_code': 'Não encontrado no código do repositório: aplique à mão.',
 };

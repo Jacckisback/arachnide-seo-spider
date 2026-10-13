@@ -250,11 +250,41 @@ async function setSimulation(on) {
   paint();
 }
 
+// Diff lisible : lignes retirées (−) et ajoutées (+), sans les lignes identiques.
+function lineDiff(before, after) {
+  const a = before.split('\n');
+  const b = after.split('\n');
+  const inB = new Set(b);
+  const inA = new Set(a);
+  return [...a.filter((l) => !inB.has(l)).map((l) => ['del', l]), ...b.filter((l) => !inA.has(l)).map((l) => ['add', l])];
+}
+
+// Aperçu avant toute écriture réelle : diff des fichiers (GitHub) ou avant → après (WordPress). Résout true si confirmé.
+async function previewDialog(ids) {
+  const pv = await api('/api/fix/preview', { ids });
+  let dlg = $('#fixPreviewDialog');
+  if (!dlg) {
+    dlg = document.createElement('dialog');
+    dlg.id = 'fixPreviewDialog';
+    dlg.className = 'wide';
+    document.body.append(dlg);
+  }
+  const files = pv.files
+    ? pv.files.map((f) => `<h4><code>${esc(f.path)}</code></h4><pre class="fix-diff">${lineDiff(f.before, f.after).map(([k, l]) => `<span class="${k}">${k === 'add' ? '+' : '−'} ${esc(l)}</span>`).join('\n')}</pre>`).join('') +
+      (pv.unresolved?.length ? `<p class="banner warn">${C.icon('alert')} ${esc(T('fix.notInCode', { n: pv.unresolved.length }))}</p>` : '')
+    : `<ul class="fix-prev">${pv.items.map((i) => `<li><code>${esc(i.url)}</code> · ${esc(T('fix.kind.' + i.kind))}<br><s>${esc(show(i.oldValue))}</s> → <b>${esc(show(i.newValue))}</b></li>`).join('')}</ul>`;
+  dlg.innerHTML = `<form method="dialog"><div class="dialog-head"><h3>${C.icon('wand')} ${esc(T(pv.files ? 'fix.previewPr' : 'fix.previewApply'))}</h3><button class="icon-btn" value="cancel">${C.icon('x')}</button></div>
+    <div class="dialog-body">${pv.repo ? `<p class="muted">${esc(pv.repo)} · ${esc(pv.base)} · ${esc(pv.framework)}</p>` : ''}${files}</div>
+    <div class="dialog-foot"><span class="spacer"></span><button class="btn" value="cancel">${esc(T('fix.cancel'))}</button><button class="btn primary" value="ok" ${pv.files && !pv.files.length ? 'disabled' : ''}>${esc(T(pv.files ? 'fix.createPr' : 'fix.applyNow'))}</button></div></form>`;
+  dlg.showModal();
+  return new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue === 'ok'), { once: true }));
+}
+
 async function applyApproved() {
   const ids = FS.fixes.filter((f) => f.status === 'approved' && f.target.kind !== 'action_plan').map((f) => f.id);
   const sim = FS.catalog.ai.simulation;
-  if (!sim && !confirm(T('fix.confirmApply', { n: ids.length, conn: T('fix.conn.' + FS.catalog.connection.type) }))) return;
   try {
+    if (!sim && FS.catalog.connection.type !== 'export' && !(await previewDialog(ids))) return;
     const r = await api('/api/fix/apply', { ids });
     if (r.simulated) C.toast(T('fix.simResult', { n: r.wouldApply.length, skipped: r.skipped.length }), 'info');
     else {

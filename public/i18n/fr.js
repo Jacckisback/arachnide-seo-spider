@@ -1251,4 +1251,11 @@ export default {
   'fix.export.step3': 'Pour une redirection 301, créez-la dans votre CMS ou chez votre hébergeur ; pour un lien, modifiez son adresse dans le contenu.',
   'fix.export.step4': 'Relancez un crawl Arachnide pour vérifier.',
   'fix.status404': 'Page introuvable (404)',
+  'fix.previewPr': 'Vérifiez les modifications avant la Pull Request',
+  'fix.previewApply': 'Vérifiez avant d’écrire sur le site',
+  'fix.notInCode': '{n} correction(s) introuvable(s) dans le code : elles seront marquées en échec (à appliquer à la main).',
+  'fix.cancel': 'Annuler',
+  'fix.createPr': 'Créer la Pull Request',
+  'fix.applyNow': 'Écrire sur le site',
+  'fix.err.not_found_in_code': 'Introuvable dans le code du dépôt : à appliquer à la main.',
 };

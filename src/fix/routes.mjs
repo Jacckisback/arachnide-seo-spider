@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { publicAiSettings, saveAiSettings, testAiConnection, getProvider, readAiSettings } from '../ai/settings.mjs';
 import { fixGroups, proposeFixes, estimateCost } from './engine.mjs';
 import { readFixes, saveFixes, replaceProposals, readConnection, saveConnection } from './store.mjs';
-import { applyFixes, rollbackFixes, reverifyFixes } from './apply.mjs';
+import { applyFixes, rollbackFixes, reverifyFixes, previewFixes } from './apply.mjs';
 import { fixConnectorFor } from './connectors.mjs';
 import { fixesToCsv } from './export.mjs';
 import { zipDirectory } from '../zip.mjs';
@@ -94,6 +94,13 @@ export async function handleFixRoutes(req, res, p, { send, readBody, broadcast, 
     // Écriture réelle seulement si le mode simulation est désactivé ET l'avertissement accepté.
     const simulation = s.simulation !== false || !s.realConfirmed;
     return reply(200, await applyFixes(site, ids || [], { simulation, onProgress: (pr) => broadcast('fix-apply', pr) }));
+  }
+  if (p === '/api/fix/preview' && req.method === 'POST') {
+    try {
+      return reply(200, await previewFixes(site, (await readBody(req)).ids || []));
+    } catch (e) {
+      return reply(400, { error: e.message });
+    }
   }
   if (p === '/api/fix/verify' && req.method === 'POST') return reply(200, { fixes: await reverifyFixes(site, (await readBody(req)).ids || []) });
   if (p === '/api/fix/rollback' && req.method === 'POST') {

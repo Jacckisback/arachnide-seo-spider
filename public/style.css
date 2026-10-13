@@ -475,3 +475,8 @@ button.link:hover { color: var(--accent); }
   .fix-hist tr { display: block; border-bottom: 1px solid var(--line); padding: 6px 0; }
   .fix-hist td { display: block; border: 0; padding: 2px 4px; max-width: none; }
 }
+.fix-diff { font: 12px/1.5 ui-monospace, Menlo, monospace; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; overflow: auto; max-height: 320px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fix-diff .del { color: var(--err); }
+.fix-diff .add { color: var(--ok); }
+.fix-prev { padding-left: 18px; font-size: 13px; }
+.fix-prev li { margin: 8px 0; overflow-wrap: anywhere; }

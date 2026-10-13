@@ -1251,4 +1251,11 @@ export default {
   'fix.export.step3': 'Per un reindirizzamento 301, createlo nel CMS o presso l’hosting; per un link, modificatene l’indirizzo nel contenuto.',
   'fix.export.step4': 'Avviate di nuovo una scansione Arachnide per verificare.',
   'fix.status404': 'Pagina non trovata (404)',
+  'fix.previewPr': 'Controllate le modifiche prima della pull request',
+  'fix.previewApply': 'Controllate prima di scrivere sul sito',
+  'fix.notInCode': '{n} correzione/i non trovata/e nel codice: saranno segnate come non riuscite (applicatele a mano).',
+  'fix.cancel': 'Annulla',
+  'fix.createPr': 'Crea la pull request',
+  'fix.applyNow': 'Scrivi sul sito',
+  'fix.err.not_found_in_code': 'Non trovato nel codice del repository: applicate a mano.',
 };

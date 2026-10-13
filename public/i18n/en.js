@@ -1251,4 +1251,11 @@ export default {
   'fix.export.step3': 'For a 301 redirect, create it in your CMS or at your host; for a link, change its address in the content.',
   'fix.export.step4': 'Run an Arachnide crawl again to check.',
   'fix.status404': 'Page not found (404)',
+  'fix.previewPr': 'Review the changes before the pull request',
+  'fix.previewApply': 'Review before writing to the site',
+  'fix.notInCode': '{n} fix(es) could not be located in the code: they will be marked as failed (apply them by hand).',
+  'fix.cancel': 'Cancel',
+  'fix.createPr': 'Create the pull request',
+  'fix.applyNow': 'Write to the site',
+  'fix.err.not_found_in_code': 'Not found in the repository code: apply by hand.',
 };
