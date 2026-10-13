@@ -413,6 +413,17 @@ export function analyze(crawler) {
   const add = (id, severity, category, impact, effort, items, params = {}) => {
     if (items.length) issues.push({ id, severity, category, impact, effort, params, count: items.length, items });
   };
+  // Liens : une ligne par paire page → cible, même si le lien apparaît plusieurs fois avec des ancres différentes
+  // (« Support », « Obtenir du support ») ; les ancres sont listées dans le détail.
+  const byPair = (links, detail) => {
+    const m = new Map();
+    for (const l of links) {
+      const k = l.from + '\u0000' + l.to;
+      if (!m.has(k)) m.set(k, { ...l, anchors: new Set() });
+      if (l.anchor) m.get(k).anchors.add(l.anchor);
+    }
+    return [...m.values()].map((l) => ({ url: l.from, detail: detail(l) + (l.anchors.size ? ` · « ${[...l.anchors].slice(0, 5).join(' », « ')} »` : '') }));
+  };
   const u = (arr, detail = () => '') => arr.map((p) => ({ url: p.url, detail: detail(p) }));
   const robotsHas = (p, s) => robotsFlags(p.metaRobots, p.xRobotsTag)[s];
   const imgs = [...crawler.images.values()];
@@ -423,9 +434,9 @@ export function analyze(crawler) {
   add('5xx', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => p.status >= 500 && !p.rateLimited), (p) => String(p.status)));
   add('no-response', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => !p.status && !p.blockedByRobots), (p) => p.error));
   add('rate-limited', 'notice', 'codes', 'medium', 'low', u(pages.filter((p) => p.rateLimited), (p) => String(p.status)));
-  add('broken-internal', 'error', 'links', 'high', 'low', brokenLinks.filter((l) => !l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
-  add('broken-external', 'warning', 'links', 'medium', 'low', brokenLinks.filter((l) => l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
-  add('external-unverified', 'notice', 'links', 'low', 'low', unverifiedExternal.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
+  add('broken-internal', 'error', 'links', 'high', 'low', byPair(brokenLinks.filter((l) => !l.external), (l) => `→ ${l.to} (${l.status || l.statusText})`));
+  add('broken-external', 'warning', 'links', 'medium', 'low', byPair(brokenLinks.filter((l) => l.external), (l) => `→ ${l.to} (${l.status || l.statusText})`));
+  add('external-unverified', 'notice', 'links', 'low', 'low', byPair(unverifiedExternal, (l) => `→ ${l.to} (${l.status || l.statusText})`));
   add('redirect-loop', 'error', 'redirects', 'high', 'low', redirects.filter((r) => r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
   // Une chaîne n'est signalée qu'une fois, depuis son début : les étapes intermédiaires sans lien entrant ni sitemap
   // n'existent que comme maillons de la chaîne.
@@ -433,7 +444,7 @@ export function analyze(crawler) {
   const chainStart = (r) => !midHops.has(r.url) || byUrl.get(r.url)?.inSitemap || (byUrl.get(r.url)?.via && byUrl.get(r.url).via !== 'redirect');
   add('redirect-chain', 'warning', 'redirects', 'medium', 'low', redirects.filter((r) => r.hops > 1 && !r.loop && chainStart(r)).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
   add('redirect-to-home', 'warning', 'redirects', 'medium', 'medium', redirects.filter((r) => !r.loop && homes.has(r.finalUrl) && !homes.has(r.url) && !HOME_ALIAS.test(new URL(r.url).pathname)).map((r) => ({ url: r.url, detail: `${r.status} → ${r.finalUrl}` })));
-  add('links-to-redirect', 'warning', 'links', 'medium', 'medium', linksToRedirects.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status} → ${l.target})` })));
+  add('links-to-redirect', 'warning', 'links', 'medium', 'medium', byPair(linksToRedirects, (l) => `→ ${l.to} (${l.status} → ${l.target})`));
   // Google traite un 302 comme un 301 pour le PageRank ; il reste légitime pour une redirection de langue ou de pays.
   add('redirect-302', 'notice', 'redirects', 'low', 'low', u(pages.filter((p) => p.status === 302 || p.status === 307), (p) => `${p.status} → ${p.redirectUrl}`));
   add('js-redirect', 'warning', 'redirects', 'medium', 'low', u(html200.filter((p) => p.jsRedirectUrl), (p) => `→ ${p.jsRedirectUrl}`));
@@ -494,7 +505,7 @@ export function analyze(crawler) {
   add('blocked-robots', 'notice', 'directives', 'medium', 'low', u(pages.filter((p) => p.blockedByRobots || p.robotsBlocked)));
 
   // Liens & ancres
-  add('nofollow-internal', 'notice', 'links', 'low', 'low', nofollowInternal.map((l) => ({ url: l.from, detail: `→ ${l.to}` })));
+  add('nofollow-internal', 'notice', 'links', 'low', 'low', byPair(nofollowInternal, (l) => `→ ${l.to}`));
   add('generic-anchors', 'notice', 'links', 'low', 'low', [...genericAnchors].map(([url, set]) => ({ url, detail: [...set].map((a) => `« ${a} »`).join(', ') })));
   add('empty-anchors', 'warning', 'links', 'medium', 'low', [...emptyAnchors].map(([url, n]) => ({ url, detail: D('d.links', { n }) })));
   add('too-many-links', 'notice', 'links', 'low', 'medium', u(indexableHtml.filter((p) => p.internalOutlinks + p.externalOutlinks > T.maxLinks), (p) => D('d.links', { n: p.internalOutlinks + p.externalOutlinks })), { max: T.maxLinks });

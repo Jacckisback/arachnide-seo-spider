@@ -164,3 +164,24 @@ test('redirection JavaScript (si Chrome est installé) : traitée comme une redi
     server.close();
   }
 });
+
+test('liens cassés : une ligne par paire page → cible, avec toutes les ancres', async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url !== '/') {
+      res.writeHead(404, { 'content-type': 'text/html' });
+      return res.end('<title>404</title>');
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end('<title>Accueil</title><h1>A</h1><a href="/support">Support</a> <a href="/support">Obtenir du support</a>');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false }).start();
+    const broken = R.issues.find((i) => i.id === 'broken-internal');
+    assert.equal(broken.count, 1);
+    assert.match(broken.items[0].detail, /« Support », « Obtenir du support »/);
+  } finally {
+    server.close();
+  }
+});
