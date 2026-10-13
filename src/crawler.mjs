@@ -93,16 +93,29 @@ function searchRegex(q) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const HTML_TYPES = /text\/html|application\/xhtml\+xml/i;
 
-function decodeBody(buf, contentType) {
+// Décodage comme un navigateur : BOM d'abord, puis l'en-tête HTTP, puis <meta charset> (hors commentaires, 8 Ko),
+// sinon UTF-8 s'il est valide, et windows-1252 en dernier recours (pages anciennes sans déclaration).
+export function decodeBody(buf, contentType) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return new TextDecoder('utf-8').decode(b);
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(b);
   let charset = /charset=["']?([\w-]+)/i.exec(contentType || '')?.[1];
   if (!charset) {
-    const head = Buffer.from(buf.subarray(0, 2048)).toString('latin1');
-    charset = /<meta[^>]+charset=["']?([\w-]+)/i.exec(head)?.[1];
+    const head = Buffer.from(b.subarray(0, 8192)).toString('latin1').replace(/<!--[\s\S]*?-->/g, '');
+    charset = /<meta[^>]+charset\s*=\s*["']?\s*([\w-]+)/i.exec(head)?.[1];
+  }
+  if (charset) {
+    try {
+      return new TextDecoder(charset).decode(b);
+    } catch {
+      /* jeu de caractères inconnu : détection ci-dessous */
+    }
   }
   try {
-    return new TextDecoder(charset || 'utf-8').decode(buf);
+    return new TextDecoder('utf-8', { fatal: true }).decode(b);
   } catch {
-    return new TextDecoder('utf-8').decode(buf);
+    return new TextDecoder('windows-1252').decode(b);
   }
 }
 
