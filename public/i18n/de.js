@@ -1102,4 +1102,7 @@ export default {
   'issue.sitemap-host-mismatch.label': 'Sitemap-URLs auf anderem Protokoll oder Host',
   'issue.sitemap-host-mismatch.desc': 'Die Sitemap listet http://- oder www/Nicht-www-URLs, während die Website unter einer anderen Adresse ausgeliefert wird. Google ignoriert Sitemap-URLs, die nicht exakt auf der Adresse der Website liegen.',
   'issue.sitemap-host-mismatch.fix': 'Erzeugen Sie die Sitemap mit den endgültigen URLs neu (https, mit oder ohne www wie auf der Website).',
+  'issue.soft-404.label': 'Soft-404-Seiten',
+  'issue.soft-404.desc': 'Die Seite antwortet mit 200 OK, gibt aber an, nicht zu existieren („Seite nicht gefunden“ im Titel oder H1). Google behandelt sie als Fehlerseite und verschwendet Crawl-Budget.',
+  'issue.soft-404.fix': 'Liefern Sie für fehlende Inhalte einen echten 404- (oder 410-)Status oder leiten Sie auf die passendste Seite weiter.',
 };

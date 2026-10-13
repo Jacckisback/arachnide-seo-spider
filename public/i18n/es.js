@@ -1102,4 +1102,7 @@ export default {
   'issue.sitemap-host-mismatch.label': 'URL del sitemap en otro protocolo o host',
   'issue.sitemap-host-mismatch.desc': 'El sitemap enumera URL en http:// o con/sin www mientras el sitio se sirve en otra dirección. Google ignora las URL del sitemap que no están en la dirección exacta del sitio.',
   'issue.sitemap-host-mismatch.fix': 'Regenere el sitemap con las URL finales (https, con o sin www como en el sitio).',
+  'issue.soft-404.label': 'Páginas soft 404',
+  'issue.soft-404.desc': 'La página responde 200 OK pero indica que no existe («página no encontrada» en el título o el H1). Google la trata como una página de error y malgasta presupuesto de rastreo.',
+  'issue.soft-404.fix': 'Devuelva un estado 404 (o 410) real para el contenido inexistente, o redirija a la página relevante más cercana.',
 };

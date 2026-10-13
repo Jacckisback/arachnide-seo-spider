@@ -9,7 +9,6 @@ export const ISSUE_FIELDS = {
   'title-duplicate': 'seo_title',
   'title-long': 'seo_title',
   'title-short': 'seo_title',
-  'title-eq-h1': 'seo_title',
   'js-title-changed': 'seo_title',
   'desc-missing': 'meta_description',
   'desc-duplicate': 'meta_description',
@@ -77,6 +76,8 @@ export function buildOpportunities(R, { url, fields, limit = 50, offset = 0 } = 
     const seen = new Set();
     for (const is of issues.sort((a, b) => SEV[a.severity] - SEV[b.severity])) {
       if (!is.field || seen.has(is.field) || (fields && !fields.includes(is.field))) continue;
+      // Page du sitemap canonicalisée, redirigée ou en erreur : la solution est de la retirer du sitemap, jamais un noindex.
+      if (is.id === 'sitemap-non-indexable' && p.indexabilityReason !== 'noindex') continue;
       seen.add(is.field);
       const current = { seo_title: p.title || null, meta_description: p.metaDescription || null, h1: p.h1?.[0] || null, canonical: p.canonical || null, noindex: robotsFlags(p.metaRobots, p.xRobotsTag).noindex }[is.field];
       if (is.field === 'image_alt') {

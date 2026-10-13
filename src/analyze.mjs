@@ -462,6 +462,9 @@ export function analyze(crawler) {
   add('heading-skip', 'notice', 'headings', 'low', 'low', u(indexableHtml.filter((p) => p.headingSkips?.length), (p) => [...new Set(p.headingSkips)].join(', ')));
 
   // Contenu
+  // Soft 404 : la page répond 200 mais annonce qu'elle n'existe pas (titre ou H1), comme Google la classe.
+  const SOFT_404 = /\b(404|page not found|not found|page introuvable|page non trouvée|página no encontrada|no se ha encontrado|seite nicht gefunden|nicht gefunden|pagina non trovata|página não encontrada|page doesn.t exist|no longer available)\b/i;
+  add('soft-404', 'warning', 'codes', 'high', 'low', u(html200.filter((p) => !homes.has(p.url) && (SOFT_404.test(p.title || '') || SOFT_404.test(p.h1?.[0] || ''))), (p) => p.title || p.h1?.[0]));
   add('thin-content', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => contentWords(p) < T.thinWords), (p) => D('d.words', { n: contentWords(p) })), { min: T.thinWords });
   add('duplicate-content', 'error', 'content', 'high', 'medium', u(html200.filter((p) => p.duplicateContent), (p) => `×${dupContent.count(p)}`));
   add('near-duplicate', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => p.nearDuplicates), (p) => `≈${p.closestSimilarity} % · ${p.closestMatch}`), { min: T.nearDuplicate });
@@ -524,7 +527,7 @@ export function analyze(crawler) {
   add('deep', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth !== null && p.depth >= T.deepLevel), (p) => D('d.depth', { n: p.depth })) : [], { min: T.deepLevel });
   add('one-inlink', 'notice', 'architecture', 'medium', 'low', spider ? u(indexableHtml.filter((p) => p.uniqueInlinks === 1)) : []);
   add('no-content-inlinks', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.uniqueInlinks > 0 && !p.contentInlinks && !homes.has(p.url))) : []);
-  add('unreachable', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth === null)) : []);
+  add('unreachable', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth === null && !(p.inSitemap && p.uniqueInlinks === 0))) : []);
 
   // Performance
   add('slow', 'warning', 'performance', 'medium', 'high', u(html200.filter((p) => p.responseTime > T.slowMs), (p) => `${p.responseTime} ms`), { max: T.slowMs });
