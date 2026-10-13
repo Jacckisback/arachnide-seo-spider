@@ -82,43 +82,51 @@ function metaContent($, names, { og = false } = {}) {
   return out;
 }
 
-// Propriétés minimales attendues par Google pour les résultats enrichis les plus courants.
+// Propriétés REQUISES par Google pour obtenir le résultat enrichi (les propriétés seulement recommandées ne
+// bloquent rien : Article, Organization, WebSite n'ont aucune propriété requise). Un tableau = l'une des propriétés.
 export const SCHEMA_REQUIRED = {
-  Article: ['headline', 'image', 'datePublished', 'author'],
-  NewsArticle: ['headline', 'image', 'datePublished', 'author'],
-  BlogPosting: ['headline', 'image', 'datePublished', 'author'],
-  Product: ['name', 'image', ['offers', 'review', 'aggregateRating']],
+  Product: ['name', ['offers', 'review', 'aggregateRating']],
   FAQPage: ['mainEntity'],
   BreadcrumbList: ['itemListElement'],
-  Organization: ['name', 'url'],
   LocalBusiness: ['name', 'address'],
   Event: ['name', 'startDate', 'location'],
   Recipe: ['name', 'image'],
-  Course: ['name', 'description', 'provider'],
+  Course: ['name', 'description'],
   Review: ['itemReviewed', 'reviewRating', 'author'],
   VideoObject: ['name', 'thumbnailUrl', 'uploadDate'],
-  JobPosting: ['title', 'description', 'datePosted', 'hiringOrganization'],
-  HowTo: ['name', 'step'],
+  JobPosting: ['title', 'description', 'datePosted', 'hiringOrganization', ['jobLocation', 'jobLocationType']],
   SoftwareApplication: ['name', ['offers', 'aggregateRating', 'review']],
-  WebSite: ['name', 'url'],
 };
 
-function collectSchema(node, types, entities) {
+// « https://schema.org/Product », « schema:Product », « Product » → « Product ».
+const schemaType = (t) => String(t).trim().replace(/^(https?:\/\/)?(www\.)?schema\.org\/|^schema:/i, '').replace(/\/+$/, '');
+
+// Types relevés partout ; propriétés requises vérifiées seulement sur les entités racines (bloc JSON-LD, membres de
+// @graph, mainEntity) : un auteur ou un éditeur imbriqué n'est pas candidat à un résultat enrichi.
+function collectSchema(node, types, entities, top = true) {
   if (!node || typeof node !== 'object') return;
-  if (Array.isArray(node)) return node.forEach((n) => collectSchema(n, types, entities));
+  if (Array.isArray(node)) return node.forEach((n) => collectSchema(n, types, entities, top));
   const t = node['@type'];
+  const keys = Object.keys(node).filter((k) => k !== '@context');
+  const isRef = '@id' in node && keys.every((k) => k === '@id' || k === '@type');
   if (t) {
-    for (const x of Array.isArray(t) ? t : [t]) {
-      types.add(String(x));
-      if (SCHEMA_REQUIRED[x]) {
+    for (const raw of Array.isArray(t) ? t : [t]) {
+      const x = schemaType(raw);
+      if (!x) continue;
+      types.add(x);
+      if (top && !isRef && SCHEMA_REQUIRED[x]) {
         const missing = SCHEMA_REQUIRED[x]
           .filter((req) => (Array.isArray(req) ? !req.some((r) => node[r] != null) : node[req] == null))
           .map((req) => (Array.isArray(req) ? req.join('|') : req));
-        if (missing.length) entities.push({ type: String(x), missing });
+        const key = x + ':' + missing.join(',');
+        if (missing.length && !entities.some((e) => e.type + ':' + e.missing.join(',') === key)) entities.push({ type: x, missing });
       }
     }
   }
-  for (const [k, v] of Object.entries(node)) if (k !== '@context' && v && typeof v === 'object') collectSchema(v, types, entities);
+  for (const [k, v] of Object.entries(node)) {
+    if (k === '@context' || !v || typeof v !== 'object') continue;
+    collectSchema(v, types, entities, k === '@graph' || (k === 'mainEntity' && top));
+  }
 }
 
 function linkPosition($el) {
@@ -237,16 +245,22 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   const schemaTypes = new Set();
   const schemaMissing = [];
   let schemaErrors = 0;
-  $('script[type="application/ld+json"]').each((_, el) => {
+  $('script[type]').each((_, el) => {
+    if (!/^application\/ld\+json\b/i.test(($(el).attr('type') || '').trim())) return;
+    // Enveloppes tolérées par Google : commentaires HTML, CDATA. Un script vide n'est pas une erreur.
+    const json = $(el).contents().text().trim().replace(/^(<!--|\/\*\s*<!\[CDATA\[\s*\*\/)|(-->|\/\*\s*\]\]>\s*\*\/)$/g, '').trim();
+    if (!json) return;
     try {
-      collectSchema(JSON.parse($(el).contents().text()), schemaTypes, schemaMissing);
+      collectSchema(JSON.parse(json), schemaTypes, schemaMissing);
     } catch {
       schemaErrors++;
     }
   });
   $('[itemtype]').each((_, el) => {
-    const t = ($(el).attr('itemtype') || '').split('/').pop();
-    if (t) schemaTypes.add(t + ' (microdata)');
+    for (const t of ($(el).attr('itemtype') || '').split(/\s+/)) {
+      const x = schemaType(t).split('/').pop();
+      if (x) schemaTypes.add(x + ' (microdata)');
+    }
   });
 
   const og = {
