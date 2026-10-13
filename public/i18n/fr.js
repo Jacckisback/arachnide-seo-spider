@@ -1105,4 +1105,8 @@ export default {
   'issue.soft-404.label': 'Pages soft 404',
   'issue.soft-404.desc': 'La page répond 200 OK mais annonce qu’elle n’existe pas (« page introuvable » dans le titre ou le H1). Google la traite comme une page d’erreur et y gaspille du budget de crawl.',
   'issue.soft-404.fix': 'Renvoyez un vrai statut 404 (ou 410) pour un contenu absent, ou redirigez vers la page pertinente la plus proche.',
+  'idx.jsRedirect': 'Redirection JavaScript',
+  'issue.js-redirect.label': 'Redirections JavaScript',
+  'issue.js-redirect.desc': 'La page envoie les visiteurs vers une autre URL en JavaScript. Google ne la suit qu’après le rendu, plus tard et moins sûrement qu’une redirection serveur ; la page elle-même n’est pas indexée.',
+  'issue.js-redirect.fix': 'Remplacez-la par une redirection serveur 301 (ou 302 si elle est temporaire).',
 };

@@ -1105,4 +1105,8 @@ export default {
   'issue.soft-404.label': 'Pagine soft 404',
   'issue.soft-404.desc': 'La pagina risponde 200 OK ma dichiara di non esistere («pagina non trovata» nel titolo o nell’H1). Google la tratta come una pagina di errore e spreca budget di scansione.',
   'issue.soft-404.fix': 'Restituite un vero stato 404 (o 410) per i contenuti mancanti, o reindirizzate alla pagina pertinente più vicina.',
+  'idx.jsRedirect': 'Reindirizzamento JavaScript',
+  'issue.js-redirect.label': 'Reindirizzamenti JavaScript',
+  'issue.js-redirect.desc': 'La pagina manda i visitatori a un altro URL con JavaScript. Google lo segue solo dopo il rendering, più tardi e in modo meno affidabile di un reindirizzamento server; la pagina stessa non viene indicizzata.',
+  'issue.js-redirect.fix': 'Sostituitelo con un reindirizzamento server 301 (o 302 se temporaneo).',
 };

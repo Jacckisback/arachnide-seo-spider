@@ -1105,4 +1105,8 @@ export default {
   'issue.soft-404.label': 'Soft-404-Seiten',
   'issue.soft-404.desc': 'Die Seite antwortet mit 200 OK, gibt aber an, nicht zu existieren („Seite nicht gefunden“ im Titel oder H1). Google behandelt sie als Fehlerseite und verschwendet Crawl-Budget.',
   'issue.soft-404.fix': 'Liefern Sie für fehlende Inhalte einen echten 404- (oder 410-)Status oder leiten Sie auf die passendste Seite weiter.',
+  'idx.jsRedirect': 'JavaScript-Weiterleitung',
+  'issue.js-redirect.label': 'JavaScript-Weiterleitungen',
+  'issue.js-redirect.desc': 'Die Seite leitet Besucher per JavaScript auf eine andere URL weiter. Google folgt ihr erst nach dem Rendering, später und weniger zuverlässig als einer Server-Weiterleitung; die Seite selbst wird nicht indexiert.',
+  'issue.js-redirect.fix': 'Ersetzen Sie sie durch eine serverseitige 301 (oder 302, wenn temporär).',
 };

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Crawler, USER_AGENTS, DEFAULT_UA } from '../src/crawler.mjs';
 import { parseHtml } from '../src/parse.mjs';
+import { findChrome } from '../src/renderer.mjs';
 
 test('titre et titres Hn : SVG inline, noscript et template ne comptent pas', () => {
   const r = parseHtml(`<html><head><title>Cours de français</title></head><body>
@@ -141,4 +142,25 @@ test('score de santé : un défaut de gabarit ne met pas le site à 0, Googlebot
   const [clean, one404, gbot] = [await scoreOf('clean'), await scoreOf('one404'), await scoreOf('gbot')];
   assert.ok(one404 < clean && one404 >= clean - 35, `${clean} → ${one404}`);
   assert.ok(gbot <= 15);
+});
+
+test('redirection JavaScript (si Chrome est installé) : traitée comme une redirection, cible explorée', { skip: !findChrome() && 'Chrome introuvable' }, async () => {
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    if (req.url === '/') return res.end('<title>Accueil</title><h1>A</h1><a href="/ancienne">ancienne</a>');
+    if (req.url === '/ancienne') return res.end('<title>Ancienne</title><script>location.href="/nouvelle"</script>');
+    res.end('<title>Nouvelle page</title><h1>Nouvelle</h1>');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false, render: true }).start();
+    const old = R.pages.find((p) => p.url === base + '/ancienne');
+    assert.equal(old.jsRedirectUrl, base + '/nouvelle');
+    assert.equal(old.indexabilityReason, 'jsRedirect');
+    assert.ok(R.pages.some((p) => p.url === base + '/nouvelle' && p.status === 200));
+    assert.ok(R.issues.some((i) => i.id === 'js-redirect'));
+  } finally {
+    server.close();
+  }
 });

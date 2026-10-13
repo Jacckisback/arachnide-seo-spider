@@ -1105,4 +1105,8 @@ export default {
   'issue.soft-404.label': 'Soft 404 pages',
   'issue.soft-404.desc': 'The page answers 200 OK but says it does not exist (“page not found” in the title or H1). Google treats it as an error page and wastes crawl budget on it.',
   'issue.soft-404.fix': 'Return a real 404 (or 410) status for missing content, or redirect it to the closest relevant page.',
+  'idx.jsRedirect': 'JavaScript redirect',
+  'issue.js-redirect.label': 'JavaScript redirects',
+  'issue.js-redirect.desc': 'The page sends visitors to another URL with JavaScript. Google follows it only after rendering, later and less reliably than a server redirect; the page itself is not indexed.',
+  'issue.js-redirect.fix': 'Replace it with a server-side 301 (or 302 if temporary).',
 };

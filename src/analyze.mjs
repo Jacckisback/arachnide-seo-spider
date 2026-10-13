@@ -57,6 +57,7 @@ function indexability(p) {
   if (p.status >= 500) return 'serverError';
   if (robotsFlags(p.metaRobots, p.xRobotsTag).noindex) return 'noindex';
   if (p.metaRefreshUrl && p.metaRefreshUrl !== p.url) return 'metaRefresh';
+  if (p.jsRedirectUrl) return 'jsRedirect';
   if (p.isHtml && p.canonical && p.canonical !== p.url) return 'canonicalised';
   return '';
 }
@@ -148,7 +149,7 @@ export function analyze(crawler) {
   // Les redirections (HTTP ou meta refresh) ne sont pas des clics : arêtes de poids 0 pour la profondeur.
   const hop = new Map();
   for (const p of pages) {
-    const target = p.redirectUrl || p.metaRefreshUrl;
+    const target = p.redirectUrl || p.metaRefreshUrl || p.jsRedirectUrl;
     if (target) hop.set(p.url, norm(target));
     if (p.canonical && p.canonical !== p.url && p.indexabilityReason === 'canonicalised') {
       if (!adj.has(p.url)) adj.set(p.url, new Set());
@@ -435,6 +436,7 @@ export function analyze(crawler) {
   add('links-to-redirect', 'warning', 'links', 'medium', 'medium', linksToRedirects.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status} → ${l.target})` })));
   // Google traite un 302 comme un 301 pour le PageRank ; il reste légitime pour une redirection de langue ou de pays.
   add('redirect-302', 'notice', 'redirects', 'low', 'low', u(pages.filter((p) => p.status === 302 || p.status === 307), (p) => `${p.status} → ${p.redirectUrl}`));
+  add('js-redirect', 'warning', 'redirects', 'medium', 'low', u(html200.filter((p) => p.jsRedirectUrl), (p) => `→ ${p.jsRedirectUrl}`));
   add('meta-refresh', 'warning', 'redirects', 'medium', 'low', u(html200.filter((p) => p.metaRefresh), (p) => p.metaRefresh));
   add('redirect-3xx', 'notice', 'redirects', 'low', 'low', u(pages.filter((p) => p.status >= 300 && p.status < 400), (p) => `${p.status} → ${p.redirectUrl}`));
 
