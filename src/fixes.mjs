@@ -1,5 +1,6 @@
 // Opportunités de correction : traduit les problèmes d'un crawl en modifications concrètes possibles
 // (champ, valeur actuelle, contraintes, contexte) pour que Claude rédige les nouvelles valeurs.
+import { robotsFlags } from '../public/shared/directives.js';
 import { THRESHOLDS } from './analyze.mjs';
 
 // Problème → champ que l'on peut corriger directement dans le CMS.
@@ -77,7 +78,7 @@ export function buildOpportunities(R, { url, fields, limit = 50, offset = 0 } = 
     for (const is of issues.sort((a, b) => SEV[a.severity] - SEV[b.severity])) {
       if (!is.field || seen.has(is.field) || (fields && !fields.includes(is.field))) continue;
       seen.add(is.field);
-      const current = { seo_title: p.title || null, meta_description: p.metaDescription || null, h1: p.h1?.[0] || null, canonical: p.canonical || null, noindex: /noindex|none/i.test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`) }[is.field];
+      const current = { seo_title: p.title || null, meta_description: p.metaDescription || null, h1: p.h1?.[0] || null, canonical: p.canonical || null, noindex: robotsFlags(p.metaRobots, p.xRobotsTag).noindex }[is.field];
       if (is.field === 'image_alt') {
         for (const src of p.imagesMissingAltSrc || []) suggestions.push({ field: 'image_alt', target: src, current: null, because: [is.id], constraints: C.image_alt });
         if (!p.imagesMissingAltSrc?.length) suggestions.push({ field: 'image_alt', target: null, note: 'Re-crawl with Arachnide 3.0+ to get the image sources, or use arachnide_fetch_page.', because: [is.id], constraints: C.image_alt });

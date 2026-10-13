@@ -2,6 +2,7 @@
 import { EventEmitter } from 'node:events';
 import zlib from 'node:zlib';
 import { parseHtml, resolveUrl } from './parse.mjs';
+import { robotsFlags } from '../public/shared/directives.js';
 import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
@@ -629,7 +630,7 @@ export class Crawler extends EventEmitter {
       rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
       rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
 
-      const followAll = !/nofollow/i.test(rec.metaRobots + ' ' + rec.xRobotsTag);
+      const followAll = !robotsFlags(rec.metaRobots, rec.xRobotsTag).nofollow;
       const follow = this.opts.mode !== 'list';
       if (links.length > this.opts.maxLinksPerPage) {
         rec.linksTruncated = links.length;
@@ -721,7 +722,7 @@ export class Crawler extends EventEmitter {
   // puis les pages qui reçoivent le plus de liens internes.
   async runPageSpeed() {
     this.setPhase('psi');
-    const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !/noindex/i.test(`${p.metaRobots} ${p.xRobotsTag}`));
+    const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !robotsFlags(p.metaRobots, p.xRobotsTag).noindex);
     const inl = new Map();
     for (const l of this.links) if (l.internal && l.from !== l.to) inl.set(l.to, (inl.get(l.to) || 0) + 1);
     const clicks = new Map((this.gsc?.rows || []).map((r) => [r.url, r.clicks || 0]));

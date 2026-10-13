@@ -2,6 +2,7 @@
 // redirections et liste des problèmes SEO. Les textes sont des clés de traduction (public/i18n).
 import { titlePixels, descPixels } from './pixel.mjs';
 import { similarity } from './text.mjs';
+import { robotsFlags } from '../public/shared/directives.js';
 import { imageFormat } from './parse.mjs';
 
 export const THRESHOLDS = {
@@ -45,7 +46,7 @@ function indexability(p) {
   if (p.status >= 300 && p.status < 400) return 'redirect';
   if (p.status >= 400 && p.status < 500) return 'clientError';
   if (p.status >= 500) return 'serverError';
-  if (/noindex|none/i.test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`)) return 'noindex';
+  if (robotsFlags(p.metaRobots, p.xRobotsTag).noindex) return 'noindex';
   if (p.isHtml && p.canonical && p.canonical !== p.url) return 'canonicalised';
   return '';
 }
@@ -348,7 +349,7 @@ export function analyze(crawler) {
     if (items.length) issues.push({ id, severity, category, impact, effort, params, count: items.length, items });
   };
   const u = (arr, detail = () => '') => arr.map((p) => ({ url: p.url, detail: detail(p) }));
-  const robotsHas = (p, s) => new RegExp(s, 'i').test(`${p.metaRobots || ''} ${p.xRobotsTag || ''}`);
+  const robotsHas = (p, s) => robotsFlags(p.metaRobots, p.xRobotsTag)[s];
   const imgs = [...crawler.images.values()];
   const imgRole = (i) => (i.role === 'src' ? '' : ` [${i.role === 'source' ? '<picture>' : 'srcset'}${i.descriptor ? ' ' + i.descriptor : ''}]`);
 
@@ -412,8 +413,8 @@ export function analyze(crawler) {
   add('img-srcset-no-sizes', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoSizes > 0), (p) => `${p.imagesNoSizes}/${p.imagesCount}`));
 
   // Directives
-  add('noindex', 'notice', 'directives', 'medium', 'low', u(html200.filter((p) => robotsHas(p, 'noindex|none')), (p) => p.metaRobots || p.xRobotsTag));
-  add('nofollow-page', 'notice', 'directives', 'low', 'low', u(html200.filter((p) => robotsHas(p, 'nofollow|none'))));
+  add('noindex', 'notice', 'directives', 'medium', 'low', u(html200.filter((p) => robotsHas(p, 'noindex')), (p) => p.metaRobots || p.xRobotsTag));
+  add('nofollow-page', 'notice', 'directives', 'low', 'low', u(html200.filter((p) => robotsHas(p, 'nofollow'))));
   add('blocked-robots', 'notice', 'directives', 'medium', 'low', u(pages.filter((p) => p.blockedByRobots || p.robotsBlocked)));
 
   // Liens & ancres
@@ -467,7 +468,7 @@ export function analyze(crawler) {
 
   // JavaScript (mode rendu)
   const rendered = html200.filter((p) => p.js?.rendered);
-  add('js-noindex-changed', 'error', 'javascript', 'high', 'medium', u(rendered.filter((p) => /noindex/i.test(p.js.rawMetaRobots) !== /noindex/i.test(p.metaRobots)), (p) => `${p.js.rawMetaRobots || '—'} → ${p.metaRobots || '—'}`));
+  add('js-noindex-changed', 'error', 'javascript', 'high', 'medium', u(rendered.filter((p) => robotsFlags(p.js.rawMetaRobots).noindex !== robotsFlags(p.metaRobots).noindex), (p) => `${p.js.rawMetaRobots || '—'} → ${p.metaRobots || '—'}`));
   add('js-canonical-changed', 'warning', 'javascript', 'high', 'medium', u(rendered.filter((p) => p.js.rawCanonical !== p.canonical), (p) => `${p.js.rawCanonical || '—'} → ${p.canonical || '—'}`));
   add('js-title-changed', 'notice', 'javascript', 'medium', 'medium', u(rendered.filter((p) => p.js.rawTitle !== p.title), (p) => `${p.js.rawTitle || '—'} → ${p.title || '—'}`));
   add('js-content', 'warning', 'javascript', 'high', 'high', u(rendered.filter((p) => p.wordCount - p.js.rawWordCount > 100 && p.wordCount > p.js.rawWordCount * 1.5), (p) => D('d.jsWords', { raw: p.js.rawWordCount, n: p.wordCount })));

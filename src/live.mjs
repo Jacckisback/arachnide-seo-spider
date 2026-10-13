@@ -2,6 +2,7 @@
 // de lecture et pour vérifier qu'une modification est bien visible sur le site.
 import * as cheerio from 'cheerio';
 import { DEFAULT_UA } from './crawler.mjs';
+import { robotsFlags } from '../public/shared/directives.js';
 
 export function readFieldFromHtml(html, field, { target, url } = {}) {
   const $ = cheerio.load(html);
@@ -22,7 +23,7 @@ export function readFieldFromHtml(html, field, { target, url } = {}) {
     case 'canonical':
       return abs($('link[rel="canonical" i]').first().attr('href')?.trim()) || null;
     case 'noindex':
-      return $('meta[name="robots" i], meta[name="googlebot" i]').toArray().some((el) => /noindex|none/i.test($(el).attr('content') || ''));
+      return $('meta[name="robots" i], meta[name="googlebot" i]').toArray().some((el) => robotsFlags($(el).attr('content')).noindex);
     case 'image_alt': {
       const want = abs(target);
       const file = (s) => s?.split('?')[0].split('/').pop();
@@ -49,7 +50,7 @@ export async function readLive(url, field, { target, fetch = globalThis.fetch, c
     return null;
   }
   const html = await res.text();
-  if (field === 'noindex' && /noindex|none/i.test(res.headers.get('x-robots-tag') || '')) return true;
+  if (field === 'noindex' && robotsFlags(res.headers.get('x-robots-tag')).noindex) return true;
   return readFieldFromHtml(html, field, { target, url });
 }
 
