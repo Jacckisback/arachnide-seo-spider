@@ -47,6 +47,7 @@ function indexability(p) {
   if (p.status >= 400 && p.status < 500) return 'clientError';
   if (p.status >= 500) return 'serverError';
   if (robotsFlags(p.metaRobots, p.xRobotsTag).noindex) return 'noindex';
+  if (p.metaRefreshUrl && p.metaRefreshUrl !== p.url) return 'metaRefresh';
   if (p.isHtml && p.canonical && p.canonical !== p.url) return 'canonicalised';
   return '';
 }
@@ -432,7 +433,10 @@ export function analyze(crawler) {
     const t = byUrl.get(norm(p.canonical));
     return t && (t.status !== 200 || !t.indexable);
   }), (p) => { const t = byUrl.get(norm(p.canonical)); return `→ ${p.canonical} (${t.status || '—'})`; }));
-  add('canonical-multiple', 'warning', 'canonicals', 'medium', 'low', u(html200.filter((p) => p.canonicalCount > 1)));
+  // Plusieurs canonicals qui pointent vers des URL différentes : Google les ignore toutes. Identiques : sans effet.
+  add('canonical-multiple', 'warning', 'canonicals', 'medium', 'low', u(html200.filter((p) => p.canonicalCount > 1 && p.canonicalConflict !== false), (p) => `×${p.canonicalCount}`));
+  add('canonical-duplicate-tag', 'notice', 'canonicals', 'low', 'low', u(html200.filter((p) => p.canonicalCount > 1 && p.canonicalConflict === false), (p) => `×${p.canonicalCount}`));
+  add('canonical-outside-head', 'warning', 'canonicals', 'medium', 'low', u(html200.filter((p) => p.canonicalOutsideHead > 0)));
 
   // Sitemap
   const hasSitemap = crawler.sitemapUrls.size > 0;

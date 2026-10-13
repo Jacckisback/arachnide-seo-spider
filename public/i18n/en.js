@@ -360,6 +360,7 @@ export default {
   'idx.serverError': 'Server error (5xx)',
   'idx.noindex': 'Noindex',
   'idx.canonicalised': 'Canonicalised',
+  'idx.metaRefresh': 'Meta refresh redirect',
   'st.blocked': 'Blocked',
   'st.none': 'No response',
   'sev.error': 'Error',
@@ -1078,4 +1079,10 @@ export default {
   'viz.error': 'Error',
   'viz.folder': 'Folder',
   'viz.children': '{n} item(s)',
+  'issue.canonical-duplicate-tag.label': 'Canonical tag repeated (same URL)',
+  'issue.canonical-duplicate-tag.desc': 'Several canonical tags point to the same URL. Google handles this fine; it usually comes from a theme and an SEO plugin both adding the tag.',
+  'issue.canonical-duplicate-tag.fix': 'Optional cleanup: keep a single canonical tag (disable it in the theme or the plugin).',
+  'issue.canonical-outside-head.label': 'Canonical outside <head>',
+  'issue.canonical-outside-head.desc': 'A canonical tag is placed in the <body>: Google ignores it.',
+  'issue.canonical-outside-head.fix': 'Move the canonical tag into the <head>.',
 };

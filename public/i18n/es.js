@@ -1078,4 +1078,11 @@ export default {
   'viz.error': 'Error',
   'viz.folder': 'Carpeta',
   'viz.children': '{n} elemento(s)',
+  'idx.metaRefresh': 'Redirección meta refresh',
+  'issue.canonical-duplicate-tag.label': 'Etiqueta canonical repetida (misma URL)',
+  'issue.canonical-duplicate-tag.desc': 'Varias etiquetas canonical apuntan a la misma URL. Google lo gestiona sin problema; suele deberse a que el tema y un plugin SEO añaden la etiqueta.',
+  'issue.canonical-duplicate-tag.fix': 'Limpieza opcional: deje una sola etiqueta canonical (desactívela en el tema o en el plugin).',
+  'issue.canonical-outside-head.label': 'Canonical fuera del <head>',
+  'issue.canonical-outside-head.desc': 'Una etiqueta canonical está en el <body>: Google la ignora.',
+  'issue.canonical-outside-head.fix': 'Mueva la etiqueta canonical al <head>.',
 };

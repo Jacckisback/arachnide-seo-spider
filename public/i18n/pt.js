@@ -1078,4 +1078,11 @@ export default {
   'viz.error': 'Erro',
   'viz.folder': 'Pasta',
   'viz.children': '{n} elemento(s)',
+  'idx.metaRefresh': 'Redirecionamento meta refresh',
+  'issue.canonical-duplicate-tag.label': 'Tag canonical repetida (mesmo URL)',
+  'issue.canonical-duplicate-tag.desc': 'Várias tags canonical apontam para o mesmo URL. O Google lida bem com isso; normalmente o tema e um plugin de SEO adicionam a tag.',
+  'issue.canonical-duplicate-tag.fix': 'Limpeza opcional: mantenha uma única tag canonical (desative-a no tema ou no plugin).',
+  'issue.canonical-outside-head.label': 'Canonical fora do <head>',
+  'issue.canonical-outside-head.desc': 'Uma tag canonical está no <body>: o Google a ignora.',
+  'issue.canonical-outside-head.fix': 'Mova a tag canonical para o <head>.',
 };

@@ -2,10 +2,10 @@
 import * as cheerio from 'cheerio';
 import crypto from 'node:crypto';
 import { tokenize, topKeywords, simhash, countWords } from './text.mjs';
+import { isValidHreflang } from './iso-codes.mjs';
 
 const BLOCKS = 'p, div, li, td, th, h1, h2, h3, h4, h5, h6, br, section, article, header, footer, nav, aside, main, blockquote, dt, dd, figcaption, option, label, button, ul, ol, dl, table, tr, figure, form, fieldset, address, pre, hr';
 const SKIP_SCHEMES = /^(mailto:|tel:|javascript:|data:|sms:|ftp:|whatsapp:|skype:|#)/i;
-const HREFLANG_RE = /^(x-default|[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|\d{3}))?)$/i;
 
 export function resolveUrl(href, base) {
   if (!href) return null;
@@ -68,11 +68,16 @@ export function imageFormat(url) {
   }
 }
 
-function metaContent($, names) {
+// Valeurs d'une meta : description / robots / viewport se lisent sur name= (pas property=, que Google ignore) ;
+// og:* sur property= (ou name=). Espaces normalisés, valeurs vides écartées.
+function metaContent($, names, { og = false } = {}) {
   const out = [];
   $('meta').each((_, el) => {
-    const n = ($(el).attr('name') || $(el).attr('property') || '').toLowerCase().trim();
-    if (names.includes(n)) out.push(($(el).attr('content') || '').trim());
+    const $el = $(el);
+    const n = ((og ? $el.attr('property') || $el.attr('name') : $el.attr('name')) || '').toLowerCase().trim();
+    if (!names.includes(n)) return;
+    const v = ($el.attr('content') || '').replace(/\s+/g, ' ').trim();
+    if (v) out.push(v);
   });
   return out;
 }
@@ -179,23 +184,29 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   const titles = $('title').filter(isHtmlEl).map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
   const descs = metaContent($, ['description']);
   const robots = metaContent($, ['robots', 'googlebot']);
-  const canonicals = $('link[rel]')
-    .filter((_, el) => ($(el).attr('rel') || '').toLowerCase().split(/\s+/).includes('canonical'))
-    .map((_, el) => resolveUrl($(el).attr('href'), base))
-    .get()
-    .filter(Boolean);
-  const hreflang = $('link[rel="alternate"][hreflang]')
+  const relHas = (el, token) => ($(el).attr('rel') || '').toLowerCase().split(/\s+/).includes(token);
+  // Google ignore une canonical placée dans <body> ; plusieurs balises identiques (Yoast + thème) ne sont pas un conflit.
+  const canonEls = $('link[rel]').filter((_, el) => relHas(el, 'canonical'));
+  const inHead = (el) => !$(el).closest('body').length;
+  const canonicals = canonEls.filter((_, el) => inHead(el)).map((_, el) => resolveUrl($(el).attr('href'), base)).get().filter(Boolean);
+  const canonicalOutsideHead = canonEls.filter((_, el) => !inHead(el)).length;
+  const seenLang = new Set();
+  const hreflang = $('link[hreflang]')
+    .filter((_, el) => relHas(el, 'alternate'))
     .map((_, el) => ({ lang: ($(el).attr('hreflang') || '').trim(), href: resolveUrl($(el).attr('href'), base) }))
     .get()
-    .filter((h) => h.href);
-  const hreflangInvalid = hreflang.filter((h) => !HREFLANG_RE.test(h.lang)).map((h) => h.lang);
+    .filter((h) => h.href && !seenLang.has(h.lang.toLowerCase() + ' ' + h.href) && seenLang.add(h.lang.toLowerCase() + ' ' + h.href));
+  const hreflangInvalid = hreflang.filter((h) => !isValidHreflang(h.lang)).map((h) => h.lang);
   const relNext = resolveUrl($('link[rel="next"]').attr('href'), base);
   const relPrev = resolveUrl($('link[rel="prev"]').attr('href'), base);
 
+  // Meta refresh : le premier compte (comme dans un navigateur) ; sans URL c'est un simple rechargement, pas une redirection.
   let metaRefresh = '';
   $('meta[http-equiv]').each((_, el) => {
-    if (($(el).attr('http-equiv') || '').toLowerCase() === 'refresh') metaRefresh = ($(el).attr('content') || '').trim();
+    if (!metaRefresh && ($(el).attr('http-equiv') || '').toLowerCase() === 'refresh') metaRefresh = ($(el).attr('content') || '').trim();
   });
+  const refreshMatch = /^\s*(\d+(?:\.\d+)?)?\s*[;,]?\s*url\s*=\s*['"]?([^'"]+)/i.exec(metaRefresh);
+  const metaRefreshUrl = refreshMatch ? resolveUrl(refreshMatch[2].trim(), base) || '' : '';
 
   // Texte d'un titre tel que Google le lit : texte + alt des images (logo dans le H1) ; un titre vide n'est pas un titre.
   const headingText = (el) => {
@@ -239,10 +250,10 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   });
 
   const og = {
-    title: metaContent($, ['og:title'])[0] || '',
-    description: metaContent($, ['og:description'])[0] || '',
-    image: metaContent($, ['og:image'])[0] || '',
-    twitterCard: metaContent($, ['twitter:card'])[0] || '',
+    title: metaContent($, ['og:title'], { og: true })[0] || '',
+    description: metaContent($, ['og:description'], { og: true })[0] || '',
+    image: resolveUrl(metaContent($, ['og:image'], { og: true })[0], base) || metaContent($, ['og:image'], { og: true })[0] || '',
+    twitterCard: metaContent($, ['twitter:card'], { og: true })[0] || '',
   };
 
   // Liens
@@ -356,9 +367,12 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     metaDescription: descs[0] || '',
     metaDescriptionCount: descs.length,
     metaRobots: robots.join(', '),
-    metaRefresh,
+    metaRefresh: metaRefreshUrl ? metaRefresh : '',
+    metaRefreshUrl,
     canonical: canonicals[0] || '',
     canonicalCount: canonicals.length,
+    canonicalConflict: new Set(canonicals).size > 1,
+    canonicalOutsideHead,
     hreflang,
     hreflangInvalid,
     relNext: relNext || '',

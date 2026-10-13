@@ -1078,4 +1078,11 @@ export default {
   'viz.error': 'Errore',
   'viz.folder': 'Cartella',
   'viz.children': '{n} elementi',
+  'idx.metaRefresh': 'Reindirizzamento meta refresh',
+  'issue.canonical-duplicate-tag.label': 'Tag canonical ripetuto (stesso URL)',
+  'issue.canonical-duplicate-tag.desc': 'Più tag canonical indicano lo stesso URL. Google lo gestisce senza problemi; di solito sia il tema sia un plugin SEO aggiungono il tag.',
+  'issue.canonical-duplicate-tag.fix': 'Pulizia facoltativa: mantenete un solo tag canonical (disattivatelo nel tema o nel plugin).',
+  'issue.canonical-outside-head.label': 'Canonical fuori dall’<head>',
+  'issue.canonical-outside-head.desc': 'Un tag canonical si trova nel <body>: Google lo ignora.',
+  'issue.canonical-outside-head.fix': 'Spostate il tag canonical nell’<head>.',
 };

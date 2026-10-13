@@ -1078,4 +1078,11 @@ export default {
   'viz.error': 'Fehler',
   'viz.folder': 'Ordner',
   'viz.children': '{n} Element(e)',
+  'idx.metaRefresh': 'Meta-Refresh-Weiterleitung',
+  'issue.canonical-duplicate-tag.label': 'Canonical-Tag wiederholt (gleiche URL)',
+  'issue.canonical-duplicate-tag.desc': 'Mehrere Canonical-Tags verweisen auf dieselbe URL. Google kommt damit zurecht; meist fügen Theme und SEO-Plugin beide das Tag ein.',
+  'issue.canonical-duplicate-tag.fix': 'Optionale Bereinigung: nur ein Canonical-Tag behalten (im Theme oder Plugin deaktivieren).',
+  'issue.canonical-outside-head.label': 'Canonical außerhalb von <head>',
+  'issue.canonical-outside-head.desc': 'Ein Canonical-Tag steht im <body>: Google ignoriert es.',
+  'issue.canonical-outside-head.fix': 'Verschieben Sie das Canonical-Tag in den <head>.',
 };

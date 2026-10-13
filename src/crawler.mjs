@@ -671,6 +671,7 @@ export class Crawler extends EventEmitter {
       }
       if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
       if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
+      if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
       this.pages.set(item.url, rec);
       this.emit('page', rec);
     } finally {

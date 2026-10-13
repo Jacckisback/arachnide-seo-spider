@@ -360,6 +360,7 @@ export default {
   'idx.serverError': 'Erreur serveur (5xx)',
   'idx.noindex': 'Noindex',
   'idx.canonicalised': 'Canonicalisée',
+  'idx.metaRefresh': 'Redirection meta refresh',
   'st.blocked': 'Bloqué',
   'st.none': 'Sans réponse',
   'sev.error': 'Erreur',
@@ -1078,4 +1079,10 @@ export default {
   'viz.error': 'Erreur',
   'viz.folder': 'Dossier',
   'viz.children': '{n} élément(s)',
+  'issue.canonical-duplicate-tag.label': 'Balise canonical répétée (même URL)',
+  'issue.canonical-duplicate-tag.desc': 'Plusieurs balises canonical désignent la même URL. Google le gère sans problème ; cela vient souvent d’un thème et d’un plugin SEO qui ajoutent tous deux la balise.',
+  'issue.canonical-duplicate-tag.fix': 'Nettoyage facultatif : ne gardez qu’une balise canonical (désactivez-la dans le thème ou le plugin).',
+  'issue.canonical-outside-head.label': 'Canonical hors du <head>',
+  'issue.canonical-outside-head.desc': 'Une balise canonical est placée dans le <body> : Google l’ignore.',
+  'issue.canonical-outside-head.fix': 'Déplacez la balise canonical dans le <head>.',
 };
