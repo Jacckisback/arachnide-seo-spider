@@ -115,6 +115,10 @@ export function analyze(crawler) {
   const adj = new Map();
   for (const l of crawler.links) {
     if (!l.internal) continue;
+    // Un lien vers soi-même n'est pas un lien entrant ; Google ne suit pas les liens d'une page en erreur.
+    if (l.from === l.to) continue;
+    const src = byUrl.get(l.from);
+    if (src && src.status >= 400) continue;
     const t = byUrl.get(l.to);
     if (t) t.inlinks++;
     if (!inFrom.has(l.to)) inFrom.set(l.to, new Set());
@@ -136,11 +140,11 @@ export function analyze(crawler) {
     const t = byUrl.get(to);
     if (t) t.contentInlinks = set.size;
   }
+  // Les redirections (HTTP ou meta refresh) ne sont pas des clics : arêtes de poids 0 pour la profondeur.
+  const hop = new Map();
   for (const p of pages) {
-    if (p.redirectUrl) {
-      if (!adj.has(p.url)) adj.set(p.url, new Set());
-      adj.get(p.url).add(norm(p.redirectUrl));
-    }
+    const target = p.redirectUrl || p.metaRefreshUrl;
+    if (target) hop.set(p.url, norm(target));
     if (p.canonical && p.canonical !== p.url && p.indexabilityReason === 'canonicalised') {
       if (!adj.has(p.url)) adj.set(p.url, new Set());
       adj.get(p.url).add(norm(p.canonical));
@@ -149,14 +153,22 @@ export function analyze(crawler) {
 
   // Profondeur réelle (plus court chemin depuis l'accueil, ou depuis chaque URL en mode liste)
   for (const p of pages) p.depth = null;
+  // Parcours 0-1 : l'accueil après redirection (http → https, www) reste au niveau 0.
   const roots = crawler.listUrls ? crawler.listUrls : [start];
-  const q = [...roots];
   const dist = new Map(roots.map((r) => [r, 0]));
-  for (let i = 0; i < q.length; i++) {
-    for (const v of adj.get(q[i]) || []) {
-      if (!dist.has(v)) {
-        dist.set(v, dist.get(q[i]) + 1);
-        q.push(v);
+  const dq = [...roots];
+  while (dq.length) {
+    const cur = dq.shift();
+    const d = dist.get(cur);
+    const h = hop.get(cur);
+    if (h && (!dist.has(h) || dist.get(h) > d)) {
+      dist.set(h, d);
+      dq.unshift(h);
+    }
+    for (const v of adj.get(cur) || []) {
+      if (!dist.has(v) || dist.get(v) > d + 1) {
+        dist.set(v, d + 1);
+        dq.push(v);
       }
     }
   }
@@ -169,6 +181,7 @@ export function analyze(crawler) {
   const nodes = pages.map((p) => p.url);
   const adjCrawled = new Map();
   for (const [u, set] of adj) adjCrawled.set(u, new Set([...set].filter((v) => byUrl.has(v))));
+  for (const [u, v] of hop) if (byUrl.has(v)) adjCrawled.set(u, new Set([...(adjCrawled.get(u) || []), v]));
   const pr = pageRank(nodes, adjCrawled);
   for (const p of pages) p.linkScore = pr.get(p.url) ?? 0;
 
