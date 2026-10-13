@@ -4,6 +4,7 @@ import { icon } from './shared/icons.js';
 import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
+import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.js';
 import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -132,6 +133,8 @@ const TABS = [
   { id: 'dashboard', icon: 'dashboard' },
   { id: 'issues', icon: 'alert', count: (R) => R.issues.length },
   { id: 'plan', icon: 'target', count: (R) => Math.min(R.issues.length, 20) },
+  { id: 'fix', icon: 'wand' },
+  { id: 'fixHistory', icon: 'history' },
   { group: 'grp.crawl' },
   { id: 'internal', icon: 'list', rows: (R) => R.pages, cols: [C.url, C.type, C.status, C.indexability, C.title, C.words, C.depth, C.inlinks, C.linkScore, C.rt, C.size],
     filters: { all: () => true, html: (p) => p.isHtml, indexable: (p) => p.indexable && p.isHtml, nonIndexable: (p) => !p.indexable, otherFiles: (p) => !p.isHtml && p.status >= 200 && p.status < 300 } },
@@ -260,6 +263,8 @@ function render() {
   if (state.tab === 'plan') return renderPlan(view);
   if (state.tab === 'robots') return renderRobots(view);
   if (state.tab === 'viz') return renderViz(view);
+  if (state.tab === 'fix') return renderFixTab(view);
+  if (state.tab === 'fixHistory') return renderFixHistory(view);
   let tab = TAB_BY_ID[state.tab];
   if (!tab || (tab.show && !tab.show(state.R))) return goTab('dashboard');
   if (tab.id === 'extraction') {
@@ -1252,6 +1257,7 @@ async function setLang(code) {
   renderTabs();
   render();
   renderDetail();
+  refreshFixTexts();
 }
 $('#langSel').innerHTML = LANGS.map((l) => `<option value="${l.code}">${l.flag} ${l.code.toUpperCase()}</option>`).join('');
 $('#langSel').addEventListener('change', (e) => setLang(e.target.value));
@@ -1280,6 +1286,7 @@ document.addEventListener('keydown', (e) => {
   state.env = await fetch('/api/env').then((r) => r.json()).catch(() => ({}));
   if (state.env.version) $('#version').textContent = 'v' + state.env.version;
   await setLang(detectLang(store.get('lang')));
+  initFix({ t: () => t, esc, icon, toast, getResult: () => state.R, rerender: () => { renderTabs(); render(); } }).catch(() => {});
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());

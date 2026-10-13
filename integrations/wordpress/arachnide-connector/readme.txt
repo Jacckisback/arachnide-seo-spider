@@ -1,14 +1,14 @@
 === Arachnide Connector ===
 Contributors: thierrygustin
 Tags: seo, rest api, redirects, yoast, rank math
-Requires at least: 5.6
+Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Lets Arachnide SEO Spider apply SEO fixes (title, meta description, canonical, noindex, 301 redirects) to your site through the REST API.
+Lets Arachnide SEO Spider apply SEO fixes (title, meta description, canonical, noindex, 301 redirects, JSON-LD, internal links) to your site through the REST API.
 
 == Description ==
 
@@ -51,6 +51,13 @@ No. It only adds REST routes. Without an SEO plugin it also prints the SEO value
 Deactivate and delete the plugin. Values written into your SEO plugin's fields stay there, as if you had typed them yourself.
 
 == Changelog ==
+
+= 1.1.0 =
+* JSON-LD structured data per post, page or term, output in wp_head (validated and re-encoded: no script injection).
+* Internal link rewriting in post content (POST /link), with a WordPress revision so the previous content stays restorable.
+* History of the last 200 changes with their previous value (GET /history).
+* Translations: French, Spanish, German, Italian, Portuguese (Portugal and Brazil).
+* Requires WordPress 6.0+.
 
 = 1.0.0 =
 * First release.

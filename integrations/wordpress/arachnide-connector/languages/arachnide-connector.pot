@@ -1,0 +1,56 @@
+msgid ""
+msgstr "Project-Id-Version: Arachnide Connector\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nX-Domain: arachnide-connector\n"
+
+msgid "All in One SEO Lite does not store SEO data for terms (AIOSEO Pro required)."
+msgstr ""
+
+msgid "All in One SEO could not save: "
+msgstr ""
+
+msgid "All in One SEO models are not available (unsupported AIOSEO version)."
+msgstr ""
+
+msgid "Canonical must be an absolute http(s) URL."
+msgstr ""
+
+msgid "Invalid URL."
+msgstr ""
+
+msgid "Invalid source (the home page cannot be redirected)."
+msgstr ""
+
+msgid "Invalid source."
+msgstr ""
+
+msgid "No post, page or term matches this URL."
+msgstr ""
+
+msgid "Post not found."
+msgstr ""
+
+msgid "Redirection has no enabled group: finish the Redirection setup first."
+msgstr ""
+
+msgid "Redirection: "
+msgstr ""
+
+msgid "Target must be an absolute http(s) URL."
+msgstr ""
+
+msgid "Term not found."
+msgstr ""
+
+msgid "Value must be a string or null."
+msgstr ""
+
+msgid "from and to must be absolute http(s) URLs."
+msgstr ""
+
+msgid "json_ld must be a JSON object or array."
+msgstr ""
+
+msgid "noindex must be true, false or null."
+msgstr ""
+
+msgid "Lets Arachnide SEO Spider read and apply SEO fixes (SEO title, meta description, canonical, noindex, 301 redirects, JSON-LD structured data, internal links) through the REST API, using Yoast SEO, Rank Math, All in One SEO, SEOPress or Redirection when they are active."
+msgstr ""

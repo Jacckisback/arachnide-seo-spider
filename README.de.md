@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Version 3.4.0">
+  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Version 3.5.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,19 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO Health Score, Bewertung nach Kategorie, Statuscodes, Klicktiefe und Prioritäten" width="100%">
 </p>
+
+## ✨ Neu in 3.5: Mit 1 Klick korrigieren – mit Claude oder ChatGPT
+
+Nach einem Crawl gruppiert der Tab **Mit 1 Klick korrigieren** die Probleme nach Wirkung, mit dem Hinweis **Per KI korrigierbar**, **Automatisch** oder **Manuell**.
+
+- **Korrigieren** / **Alle korrigieren**: Claude oder ChatGPT schreibt Title, Meta-Beschreibung, H1, Alt-Texte und JSON-LD in der Sprache der Seite (die geschätzten Kosten werden vorher angezeigt). 301-Weiterleitungen für interne 404, Canonicals, versehentliches noindex und Links auf Weiterleitungen werden ohne KI berechnet.
+- **Prüfung**: Vorher / Nachher nebeneinander, Zeichenzähler, direkte Bearbeitung, Freigeben / Neu erzeugen / Ignorieren.
+- **Anwenden** auf WordPress (Begleit-Plugin), über einen GitHub-Pull-Request (Lovable, Bolt.new, React, Next.js, Astro, HTML) oder Export als CSV / JSON / PDF. **Der Simulationsmodus ist standardmäßig aktiv.**
+- Jede korrigierte URL wird **erneut gecrawlt** (geprüft ✓); im **Korrekturverlauf** lässt sich jede Korrektur oder ein ganzer Stapel rückgängig machen.
+
+Einrichtung (KI-Schlüssel, WordPress-Anwendungspasswort, GitHub-Token): siehe [README (EN)](README.md#-new-in-35-fix-in-1-click-with-claude-or-chatgpt) und [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+<p align="center"><img src="docs/screenshots/fix-review.png" alt="Prüfung: Vorher / Nachher, Zeichenzähler" width="100%"></p>
 
 ## 🔎 Neu in 3.4: Zuverlässigkeit bis ins Detail
 

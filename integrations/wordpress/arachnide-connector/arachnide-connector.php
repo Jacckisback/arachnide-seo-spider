@@ -2,9 +2,10 @@
 /**
  * Plugin Name:       Arachnide Connector
  * Plugin URI:        https://github.com/Jacckisback/arachnide-seo-spider
- * Description:       Lets Arachnide SEO Spider read and apply SEO fixes (SEO title, meta description, canonical, noindex, 301 redirects) through the REST API, using Yoast SEO, Rank Math, All in One SEO, SEOPress or Redirection when they are active.
- * Version:           1.0.0
- * Requires at least: 5.6
+ * Description:       Lets Arachnide SEO Spider read and apply SEO fixes (SEO title, meta description, canonical, noindex, 301 redirects, JSON-LD structured data, internal links) through the REST API, using Yoast SEO, Rank Math, All in One SEO, SEOPress or Redirection when they are active.
+ * Domain Path:       /languages
+ * Version:           1.1.0
+ * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Thierry Gustin
  * Author URI:        https://thierrygustin.com
@@ -29,9 +30,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  *   POST /redirect { source, target }  target null = suppression
  */
 final class Arachnide_Connector {
-	const VERSION          = '1.0.0';
+	const VERSION          = '1.1.0';
 	const REST_NS          = 'arachnide/v1';
 	const REDIRECTS_OPTION = 'arachnide_redirects';
+	const JSONLD_KEY       = '_arachnide_json_ld';
+	const HISTORY_OPTION   = 'arachnide_history';
 
 	/** Méta natives utilisées quand aucune extension SEO n'est active. */
 	const NATIVE_KEYS = array(
@@ -42,7 +45,10 @@ final class Arachnide_Connector {
 	);
 
 	public static function init() {
+		load_plugin_textdomain( 'arachnide-connector', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 		add_action( 'rest_api_init', array( __CLASS__, 'register_routes' ) );
+		// Données structurées ajoutées par Arachnide : toujours émises, quelle que soit l'extension SEO.
+		add_action( 'wp_head', array( __CLASS__, 'head_json_ld' ), 30 );
 		if ( null === self::seo_plugin() ) {
 			add_filter( 'pre_get_document_title', array( __CLASS__, 'filter_title' ), 20 );
 			add_filter( 'get_canonical_url', array( __CLASS__, 'filter_canonical' ), 20, 2 );
@@ -82,6 +88,7 @@ final class Arachnide_Connector {
 	// ---------------------------------------------------------------- Routes
 
 	public static function register_routes() {
+		self::register_extra_routes();
 		register_rest_route(
 			self::REST_NS,
 			'/status',
@@ -141,7 +148,7 @@ final class Arachnide_Connector {
 						array(
 							'field' => array(
 								'type'     => 'string',
-								'enum'     => array_keys( self::NATIVE_KEYS ),
+								'enum'     => array_merge( array_keys( self::NATIVE_KEYS ), array( 'json_ld' ) ),
 								'required' => true,
 							),
 						)
@@ -169,6 +176,49 @@ final class Arachnide_Connector {
 					'callback'            => array( __CLASS__, 'rest_set_redirect' ),
 					'permission_callback' => array( __CLASS__, 'can_manage_redirects' ),
 				),
+			)
+		);
+	}
+
+	private static function register_extra_routes() {
+		register_rest_route(
+			self::REST_NS,
+			'/link',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'rest_replace_link' ),
+				'permission_callback' => array( __CLASS__, 'can_edit_object' ),
+				'args'                => array(
+					'kind' => array(
+						'type'     => 'string',
+						'enum'     => array( 'post' ),
+						'required' => true,
+					),
+					'id'   => array(
+						'type'     => 'integer',
+						'minimum'  => 1,
+						'required' => true,
+					),
+					'from' => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+					'to'   => array(
+						'type'     => 'string',
+						'required' => true,
+					),
+				),
+			)
+		);
+		register_rest_route(
+			self::REST_NS,
+			'/history',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( __CLASS__, 'rest_history' ),
+				'permission_callback' => function () {
+					return current_user_can( 'edit_posts' );
+				},
 			)
 		);
 	}
@@ -230,7 +280,7 @@ final class Arachnide_Connector {
 		$url = esc_url_raw( (string) $request['url'] );
 		$n   = self::normalize_url( $url );
 		if ( '' === $n ) {
-			return new WP_Error( 'arachnide_bad_url', 'Invalid URL.', array( 'status' => 400 ) );
+			return new WP_Error( 'arachnide_bad_url', __( 'Invalid URL.', 'arachnide-connector' ), array( 'status' => 400 ) );
 		}
 
 		if ( self::normalize_url( home_url( '/' ) ) === $n ) {
@@ -276,7 +326,7 @@ final class Arachnide_Connector {
 				}
 			}
 		}
-		return new WP_Error( 'arachnide_not_found', 'No post, page or term matches this URL.', array( 'status' => 404 ) );
+		return new WP_Error( 'arachnide_not_found', __( 'No post, page or term matches this URL.', 'arachnide-connector' ), array( 'status' => 404 ) );
 	}
 
 	private static function post_payload( $post_id ) {
@@ -297,13 +347,13 @@ final class Arachnide_Connector {
 		if ( 'term' === $kind ) {
 			$term = get_term( $id );
 			if ( ! $term || is_wp_error( $term ) ) {
-				return new WP_Error( 'arachnide_not_found', 'Term not found.', array( 'status' => 404 ) );
+				return new WP_Error( 'arachnide_not_found', __( 'Term not found.', 'arachnide-connector' ), array( 'status' => 404 ) );
 			}
 			return $term;
 		}
 		$post = get_post( $id );
 		if ( ! $post ) {
-			return new WP_Error( 'arachnide_not_found', 'Post not found.', array( 'status' => 404 ) );
+			return new WP_Error( 'arachnide_not_found', __( 'Post not found.', 'arachnide-connector' ), array( 'status' => 404 ) );
 		}
 		return $post;
 	}
@@ -323,6 +373,7 @@ final class Arachnide_Connector {
 			}
 			$out[ $field ] = $v;
 		}
+		$out['json_ld']    = self::get_json_ld( $kind, $id );
 		$out['seo_plugin'] = self::seo_plugin();
 		return rest_ensure_response( $out );
 	}
@@ -337,14 +388,25 @@ final class Arachnide_Connector {
 		}
 		$params = $request->get_json_params();
 		$raw    = is_array( $params ) && array_key_exists( 'value', $params ) ? $params['value'] : $request['value'];
+		if ( 'json_ld' === $field ) {
+			$old = self::get_json_ld( $kind, $id );
+			$res = self::set_json_ld( $kind, $id, $raw );
+			if ( is_wp_error( $res ) ) {
+				return $res;
+			}
+			self::log( $kind, $id, 'json_ld', $old, self::get_json_ld( $kind, $id ) );
+			return rest_ensure_response( array( 'json_ld' => self::get_json_ld( $kind, $id ) ) );
+		}
 		$value  = self::sanitize( $field, $raw );
 		if ( is_wp_error( $value ) ) {
 			return $value;
 		}
+		$old = self::read( $kind, $obj, $field );
 		$res = self::write( $kind, $obj, $field, $value );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}
+		self::log( $kind, $id, $field, is_wp_error( $old ) ? null : $old, $value );
 		if ( 'term' === $kind ) {
 			clean_term_cache( $id );
 		} else {
@@ -367,15 +429,15 @@ final class Arachnide_Connector {
 			if ( in_array( $value, array( 'false', '0', 0 ), true ) ) {
 				return false;
 			}
-			return new WP_Error( 'arachnide_bad_value', 'noindex must be true, false or null.', array( 'status' => 400 ) );
+			return new WP_Error( 'arachnide_bad_value', __( 'noindex must be true, false or null.', 'arachnide-connector' ), array( 'status' => 400 ) );
 		}
 		if ( ! is_scalar( $value ) ) {
-			return new WP_Error( 'arachnide_bad_value', 'Value must be a string or null.', array( 'status' => 400 ) );
+			return new WP_Error( 'arachnide_bad_value', __( 'Value must be a string or null.', 'arachnide-connector' ), array( 'status' => 400 ) );
 		}
 		if ( 'canonical' === $field ) {
 			$url = esc_url_raw( trim( (string) $value ), array( 'http', 'https' ) );
 			if ( '' === $url ) {
-				return new WP_Error( 'arachnide_bad_value', 'Canonical must be an absolute http(s) URL.', array( 'status' => 400 ) );
+				return new WP_Error( 'arachnide_bad_value', __( 'Canonical must be an absolute http(s) URL.', 'arachnide-connector' ), array( 'status' => 400 ) );
 			}
 			return $url;
 		}
@@ -585,12 +647,12 @@ final class Arachnide_Connector {
 	private static function aioseo_model( $kind, $id ) {
 		if ( 'term' === $kind ) {
 			if ( ! class_exists( '\AIOSEO\Plugin\Pro\Models\Term' ) ) {
-				return self::unsupported( 'All in One SEO Lite does not store SEO data for terms (AIOSEO Pro required).' );
+				return self::unsupported( __( 'All in One SEO Lite does not store SEO data for terms (AIOSEO Pro required).', 'arachnide-connector' ) );
 			}
 			return \AIOSEO\Plugin\Pro\Models\Term::getTerm( $id );
 		}
 		if ( ! class_exists( '\AIOSEO\Plugin\Common\Models\Post' ) ) {
-			return self::unsupported( 'All in One SEO models are not available (unsupported AIOSEO version).' );
+			return self::unsupported( __( 'All in One SEO models are not available (unsupported AIOSEO version).', 'arachnide-connector' ) );
 		}
 		return \AIOSEO\Plugin\Common\Models\Post::getPost( $id );
 	}
@@ -638,7 +700,7 @@ final class Arachnide_Connector {
 		}
 		$m->save();
 		if ( ! empty( $m->lastError ) ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName
-			return new WP_Error( 'arachnide_aioseo', 'All in One SEO could not save: ' . $m->lastError, array( 'status' => 500 ) ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName
+			return new WP_Error( 'arachnide_aioseo', __( 'All in One SEO could not save: ', 'arachnide-connector' ) . $m->lastError, array( 'status' => 500 ) ); // phpcs:ignore WordPress.NamingConventions.ValidVariableName
 		}
 		return true;
 	}
@@ -728,7 +790,7 @@ final class Arachnide_Connector {
 	public static function rest_get_redirect( WP_REST_Request $request ) {
 		$source = self::normalize_source( $request['source'] );
 		if ( '' === $source ) {
-			return new WP_Error( 'arachnide_bad_value', 'Invalid source.', array( 'status' => 400 ) );
+			return new WP_Error( 'arachnide_bad_value', __( 'Invalid source.', 'arachnide-connector' ), array( 'status' => 400 ) );
 		}
 		if ( self::redirection_active() ) {
 			$row = self::redirection_find( $source );
@@ -755,15 +817,17 @@ final class Arachnide_Connector {
 		$source = self::normalize_source( isset( $params['source'] ) ? $params['source'] : '' );
 		$target = isset( $params['target'] ) ? $params['target'] : null;
 		if ( '' === $source || '/' === $source ) {
-			return new WP_Error( 'arachnide_bad_value', 'Invalid source (the home page cannot be redirected).', array( 'status' => 400 ) );
+			return new WP_Error( 'arachnide_bad_value', __( 'Invalid source (the home page cannot be redirected).', 'arachnide-connector' ), array( 'status' => 400 ) );
 		}
 		if ( null !== $target ) {
 			$target = esc_url_raw( trim( (string) $target ), array( 'http', 'https' ) );
 			if ( '' === $target ) {
-				return new WP_Error( 'arachnide_bad_value', 'Target must be an absolute http(s) URL.', array( 'status' => 400 ) );
+				return new WP_Error( 'arachnide_bad_value', __( 'Target must be an absolute http(s) URL.', 'arachnide-connector' ), array( 'status' => 400 ) );
 			}
 		}
 
+		$before = self::rest_get_redirect( new WP_REST_Request( 'GET', '/' . self::REST_NS . '/redirect', array( 'source' => $source ) ) );
+		self::log( 'redirect', 0, $source, is_wp_error( $before ) ? null : $before->get_data()['target'], $target );
 		if ( self::redirection_active() ) {
 			$res = self::redirection_write( $source, $target );
 			if ( is_wp_error( $res ) ) {
@@ -818,7 +882,7 @@ final class Arachnide_Connector {
 			$group = (int) $wpdb->get_var( "SELECT id FROM {$wpdb->prefix}redirection_groups WHERE status = 'enabled' AND module_id = 1 ORDER BY id ASC LIMIT 1" );
 		}
 		if ( ! $group ) {
-			return new WP_Error( 'arachnide_redirection', 'Redirection has no enabled group: finish the Redirection setup first.', array( 'status' => 500 ) );
+			return new WP_Error( 'arachnide_redirection', __( 'Redirection has no enabled group: finish the Redirection setup first.', 'arachnide-connector' ), array( 'status' => 500 ) );
 		}
 		$body = array(
 			'status'      => 'enabled',
@@ -845,7 +909,7 @@ final class Arachnide_Connector {
 		}
 		if ( $response->is_error() ) {
 			$err = $response->as_error();
-			return new WP_Error( 'arachnide_redirection', 'Redirection: ' . $err->get_error_message(), array( 'status' => 500 ) );
+			return new WP_Error( 'arachnide_redirection', __( 'Redirection: ', 'arachnide-connector' ) . $err->get_error_message(), array( 'status' => 500 ) );
 		}
 		return true;
 	}
@@ -863,6 +927,103 @@ final class Arachnide_Connector {
 			wp_redirect( esc_url_raw( $target ), 301, 'Arachnide' ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect
 			exit;
 		}
+	}
+
+	// ---------------------------------------------------------------- Données structurées (JSON-LD)
+
+	/** JSON-LD ajouté par Arachnide pour un contenu ou un terme (chaîne JSON) ou null. */
+	private static function get_json_ld( $kind, $id ) {
+		$v = 'term' === $kind ? get_term_meta( $id, self::JSONLD_KEY, true ) : get_post_meta( $id, self::JSONLD_KEY, true );
+		return '' === $v || false === $v ? null : (string) $v;
+	}
+
+	/**
+	 * Enregistre un JSON-LD : décodé puis réencodé (objet ou tableau JSON valide uniquement), ce qui empêche toute
+	 * injection de balise dans la page. null supprime le bloc.
+	 */
+	private static function set_json_ld( $kind, $id, $raw ) {
+		if ( null === $raw || '' === $raw ) {
+			return self::update_meta( $kind, $id, self::JSONLD_KEY, null );
+		}
+		$data = is_string( $raw ) ? json_decode( $raw, true ) : $raw;
+		if ( ! is_array( $data ) ) {
+			return new WP_Error( 'arachnide_bad_value', __( 'json_ld must be a JSON object or array.', 'arachnide-connector' ), array( 'status' => 400 ) );
+		}
+		return self::update_meta( $kind, $id, self::JSONLD_KEY, wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) );
+	}
+
+	public static function head_json_ld() {
+		$o = self::current_object();
+		if ( ! $o ) {
+			return;
+		}
+		$json = self::get_json_ld( $o[0], $o[1] );
+		$data = $json ? json_decode( $json, true ) : null;
+		if ( is_array( $data ) ) {
+			// JSON_HEX_TAG : « </script> » dans une valeur ne peut pas fermer la balise.
+			echo '<script type="application/ld+json" class="arachnide-json-ld">' . wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG ) . "</script>\n";
+		}
+	}
+
+	// ---------------------------------------------------------------- Liens internes
+
+	/**
+	 * POST /link { kind: post, id, from, to } : remplace les liens href="from" par href="to" dans le contenu.
+	 * WordPress crée une révision : le contenu d'avant reste consultable et restaurable.
+	 */
+	public static function rest_replace_link( WP_REST_Request $request ) {
+		$id   = (int) $request['id'];
+		$post = get_post( $id );
+		if ( ! $post || 'post' !== $request['kind'] ) {
+			return new WP_Error( 'arachnide_not_found', __( 'Post not found.', 'arachnide-connector' ), array( 'status' => 404 ) );
+		}
+		$from = esc_url_raw( (string) $request['from'] );
+		$to   = esc_url_raw( (string) $request['to'] );
+		if ( ! $from || ! $to || ! wp_http_validate_url( $to ) ) {
+			return new WP_Error( 'arachnide_bad_value', __( 'from and to must be absolute http(s) URLs.', 'arachnide-connector' ), array( 'status' => 400 ) );
+		}
+		// Le lien peut être écrit en absolu ou en relatif à la racine du site.
+		$variants = array_unique( array( $from, untrailingslashit( $from ), wp_make_link_relative( $from ) ) );
+		$count    = 0;
+		$content  = $post->post_content;
+		foreach ( $variants as $v ) {
+			if ( '' === $v || '/' === $v ) {
+				continue;
+			}
+			$content = preg_replace( '/(href\s*=\s*["\'])' . preg_quote( $v, '/' ) . '(["\'])/i', '${1}' . str_replace( '$', '\$', $to ) . '${2}', $content, -1, $n );
+			$count  += $n;
+		}
+		if ( $count ) {
+			self::log( 'post', $id, 'link', $from, $to );
+			$res = wp_update_post( wp_slash( array( 'ID' => $id, 'post_content' => $content ) ), true );
+			if ( is_wp_error( $res ) ) {
+				return $res;
+			}
+		}
+		return rest_ensure_response( array( 'replaced' => $count ) );
+	}
+
+	// ---------------------------------------------------------------- Journal
+
+	/** Chaque écriture garde l'ancienne valeur (200 dernières), en plus du journal d'Arachnide côté application. */
+	private static function log( $kind, $id, $field, $old, $new ) {
+		$h   = get_option( self::HISTORY_OPTION, array() );
+		$h   = is_array( $h ) ? $h : array();
+		$h[] = array(
+			'at'    => gmdate( 'c' ),
+			'user'  => get_current_user_id(),
+			'kind'  => $kind,
+			'id'    => (int) $id,
+			'field' => $field,
+			'old'   => $old,
+			'new'   => $new,
+		);
+		update_option( self::HISTORY_OPTION, array_slice( $h, -200 ), false );
+	}
+
+	public static function rest_history() {
+		$h = get_option( self::HISTORY_OPTION, array() );
+		return rest_ensure_response( is_array( $h ) ? array_reverse( $h ) : array() );
 	}
 }
 

@@ -1,0 +1,56 @@
+msgid ""
+msgstr "Project-Id-Version: Arachnide Connector\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nLanguage: es_ES\nPlural-Forms: nplurals=2; plural=n != 1;\nX-Domain: arachnide-connector\n"
+
+msgid "All in One SEO Lite does not store SEO data for terms (AIOSEO Pro required)."
+msgstr "All in One SEO Lite no guarda datos SEO para los términos (se requiere AIOSEO Pro)."
+
+msgid "All in One SEO could not save: "
+msgstr "All in One SEO no pudo guardar: "
+
+msgid "All in One SEO models are not available (unsupported AIOSEO version)."
+msgstr "Los modelos de All in One SEO no están disponibles (versión de AIOSEO no compatible)."
+
+msgid "Canonical must be an absolute http(s) URL."
+msgstr "La canonical debe ser una URL absoluta http(s)."
+
+msgid "Invalid URL."
+msgstr "URL no válida."
+
+msgid "Invalid source (the home page cannot be redirected)."
+msgstr "Origen no válido (la página de inicio no se puede redirigir)."
+
+msgid "Invalid source."
+msgstr "Origen no válido."
+
+msgid "No post, page or term matches this URL."
+msgstr "Ninguna entrada, página o término corresponde a esta URL."
+
+msgid "Post not found."
+msgstr "Contenido no encontrado."
+
+msgid "Redirection has no enabled group: finish the Redirection setup first."
+msgstr "Redirection no tiene ningún grupo activo: termine primero la configuración de Redirection."
+
+msgid "Redirection: "
+msgstr "Redirection: "
+
+msgid "Target must be an absolute http(s) URL."
+msgstr "El destino debe ser una URL absoluta http(s)."
+
+msgid "Term not found."
+msgstr "Término no encontrado."
+
+msgid "Value must be a string or null."
+msgstr "El valor debe ser una cadena o null."
+
+msgid "from and to must be absolute http(s) URLs."
+msgstr "from y to deben ser URL absolutas http(s)."
+
+msgid "json_ld must be a JSON object or array."
+msgstr "json_ld debe ser un objeto o una matriz JSON."
+
+msgid "noindex must be true, false or null."
+msgstr "noindex debe ser true, false o null."
+
+msgid "Lets Arachnide SEO Spider read and apply SEO fixes (SEO title, meta description, canonical, noindex, 301 redirects, JSON-LD structured data, internal links) through the REST API, using Yoast SEO, Rank Math, All in One SEO, SEOPress or Redirection when they are active."
+msgstr "Permite que Arachnide SEO Spider lea y aplique correcciones SEO (title SEO, meta description, canonical, noindex, redirecciones 301, datos estructurados JSON-LD, enlaces internos) mediante la API REST, usando Yoast SEO, Rank Math, All in One SEO, SEOPress o Redirection cuando están activos."

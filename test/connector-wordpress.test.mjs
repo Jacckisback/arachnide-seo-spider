@@ -134,8 +134,18 @@ function fakeWordPress({ plugin = true, pretty = true, admin = true } = {}) {
           return send(200, { [json.field]: db.meta[k][json.field] ?? null });
         }
         const o = { seo_plugin: 'yoast' };
-        for (const f of ['seo_title', 'meta_description', 'canonical', 'noindex']) o[f] = db.meta[k][f] ?? null;
+        for (const f of ['seo_title', 'meta_description', 'canonical', 'noindex', 'json_ld']) o[f] = db.meta[k][f] ?? null;
         return send(200, o);
+      }
+      if (route === '/arachnide/v1/link' && req.method === 'POST') {
+        // Comme le plugin 1.1 : remplace href="from" (absolu ou relatif) par href="to" dans le contenu.
+        const p = db.posts.find((x) => x.id === +json.id);
+        if (!p) return send(404, { code: 'arachnide_not_found', message: 'Post not found.', data: { status: 404 } });
+        let n = 0;
+        for (const v of new Set([json.from, new URL(json.from).pathname])) {
+          p.content = p.content.replace(new RegExp(`href="${v.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}"`, 'g'), () => (n++, `href="${json.to}"`));
+        }
+        return send(200, { replaced: n });
       }
       if (route === '/arachnide/v1/redirect') {
         if (!admin) return send(403, { code: 'rest_forbidden', message: 'Sorry, you are not allowed to do that.', data: { status: 403 } });
@@ -286,4 +296,38 @@ test('WordPress sans permaliens : découverte de ?rest_route= par l’en-tête L
   await withWp({ site: { restBase: 'http://127.0.0.1:1/wp-json/' } }, async (c) => {
     assert.equal(await c.restRoot(), 'http://127.0.0.1:1/wp-json');
   });
+});
+
+test('Corriger en 1 clic — connecteur WordPress : JSON-LD, lien interne, meta description, annulation', async () => {
+  const { WordPressFixConnector } = await import('../src/fix/connectors.mjs');
+  const { makeFix } = await import('../src/fix/schema.mjs');
+  const wp = await fakeWordPress();
+  try {
+    const page = wp.db.posts.find((p) => p.id === 11);
+    page.content = `<p>Voir <a href="${wp.origin}/ancienne/">l’ancienne page</a> et <a href="/ancienne/">encore</a>.</p>`;
+    const c = new WordPressFixConnector({ type: 'wordpress', url: wp.origin, user: USER, appPassword: PASS });
+    assert.equal((await c.testConnection()).ok, true);
+    const url = wp.origin + '/about/contact/';
+    const ld = JSON.stringify({ '@context': 'https://schema.org', '@type': 'Organization', name: 'Blog' });
+    const fixes = [
+      makeFix({ issueType: 'schema-missing', url, kind: 'json_ld', oldValue: null, newValue: ld, method: 'ai', provider: 'anthropic', confidence: 0.8, rationale: 'r', status: 'approved' }),
+      makeFix({ issueType: 'links-to-redirect', url, kind: 'link', selector: wp.origin + '/ancienne/', oldValue: wp.origin + '/ancienne/', newValue: wp.origin + '/nouvelle/', method: 'deterministic', confidence: 0.95, rationale: 'fix.r.linkFinal', status: 'approved' }),
+      makeFix({ issueType: 'desc-missing', url, kind: 'meta_description', oldValue: null, newValue: 'Écrivez-nous', method: 'ai', provider: 'openai', confidence: 0.9, rationale: 'r', status: 'approved' }),
+    ];
+    for (const f of fixes) assert.equal(c.canApply(f), true, f.target.kind);
+    const prev = [];
+    for (const f of fixes) prev.push((await c.apply(f)).previous);
+    assert.deepEqual(prev, [null, wp.origin + '/ancienne/', null]);
+    assert.equal(wp.db.meta['post:11'].json_ld, ld);
+    assert.equal(wp.db.meta['post:11'].meta_description, 'Écrivez-nous');
+    assert.equal((page.content.match(/\/nouvelle\//g) || []).length, 2);
+    assert.equal(await c.read(fixes[1]), null); // l'ancien lien n'est plus dans le contenu
+    // Annulation : chaque champ retrouve sa valeur d'avant.
+    for (const f of [...fixes].reverse()) await c.rollback({ ...f, oldValue: prev[fixes.indexOf(f)] });
+    assert.equal(wp.db.meta['post:11'].json_ld, undefined);
+    assert.equal(wp.db.meta['post:11'].meta_description, undefined);
+    assert.ok(page.content.includes(`href="${wp.origin}/ancienne/"`));
+  } finally {
+    wp.server.close();
+  }
 });

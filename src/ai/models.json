@@ -1,0 +1,20 @@
+{
+  "_comment": "Default models and indicative prices (USD per million tokens) used for the cost estimate. Editable; the model list is refreshed from the provider's API when you test the connection.",
+  "anthropic": {
+    "label": "Claude (Anthropic)",
+    "default": "claude-sonnet-5-5",
+    "models": [
+      { "id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "price": { "input": 3, "output": 15 } },
+      { "id": "claude-haiku-5-5", "label": "Claude Haiku 5.5 (fast, cheap)", "price": { "input": 1, "output": 5 } },
+      { "id": "claude-opus-5-5", "label": "Claude Opus 5.5 (best quality)", "price": { "input": 15, "output": 75 } }
+    ]
+  },
+  "openai": {
+    "label": "ChatGPT (OpenAI)",
+    "default": "gpt-4o-mini",
+    "models": [
+      { "id": "gpt-4o-mini", "label": "GPT-4o mini (fast, cheap)", "price": { "input": 0.15, "output": 0.6 } },
+      { "id": "gpt-4o", "label": "GPT-4o", "price": { "input": 2.5, "output": 10 } }
+    ]
+  }
+}

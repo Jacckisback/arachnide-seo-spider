@@ -1,0 +1,56 @@
+msgid ""
+msgstr "Project-Id-Version: Arachnide Connector\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nLanguage: fr_FR\nPlural-Forms: nplurals=2; plural=n > 1;\nX-Domain: arachnide-connector\n"
+
+msgid "All in One SEO Lite does not store SEO data for terms (AIOSEO Pro required)."
+msgstr "All in One SEO Lite n’enregistre pas de données SEO pour les termes (AIOSEO Pro requis)."
+
+msgid "All in One SEO could not save: "
+msgstr "All in One SEO n’a pas pu enregistrer : "
+
+msgid "All in One SEO models are not available (unsupported AIOSEO version)."
+msgstr "Les modèles de All in One SEO ne sont pas disponibles (version d’AIOSEO non prise en charge)."
+
+msgid "Canonical must be an absolute http(s) URL."
+msgstr "La canonical doit être une URL absolue http(s)."
+
+msgid "Invalid URL."
+msgstr "URL invalide."
+
+msgid "Invalid source (the home page cannot be redirected)."
+msgstr "Source invalide (la page d’accueil ne peut pas être redirigée)."
+
+msgid "Invalid source."
+msgstr "Source invalide."
+
+msgid "No post, page or term matches this URL."
+msgstr "Aucun article, page ou terme ne correspond à cette URL."
+
+msgid "Post not found."
+msgstr "Contenu introuvable."
+
+msgid "Redirection has no enabled group: finish the Redirection setup first."
+msgstr "Redirection n’a aucun groupe actif : terminez d’abord la configuration de Redirection."
+
+msgid "Redirection: "
+msgstr "Redirection : "
+
+msgid "Target must be an absolute http(s) URL."
+msgstr "La cible doit être une URL absolue http(s)."
+
+msgid "Term not found."
+msgstr "Terme introuvable."
+
+msgid "Value must be a string or null."
+msgstr "La valeur doit être une chaîne ou null."
+
+msgid "from and to must be absolute http(s) URLs."
+msgstr "from et to doivent être des URL absolues http(s)."
+
+msgid "json_ld must be a JSON object or array."
+msgstr "json_ld doit être un objet ou un tableau JSON."
+
+msgid "noindex must be true, false or null."
+msgstr "noindex doit valoir true, false ou null."
+
+msgid "Lets Arachnide SEO Spider read and apply SEO fixes (SEO title, meta description, canonical, noindex, 301 redirects, JSON-LD structured data, internal links) through the REST API, using Yoast SEO, Rank Math, All in One SEO, SEOPress or Redirection when they are active."
+msgstr "Permet à Arachnide SEO Spider de lire et d’appliquer des corrections SEO (title SEO, meta description, canonical, noindex, redirections 301, données structurées JSON-LD, liens internes) via l’API REST, en utilisant Yoast SEO, Rank Math, All in One SEO, SEOPress ou Redirection lorsqu’ils sont actifs."
