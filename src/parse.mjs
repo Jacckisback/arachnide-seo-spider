@@ -1,8 +1,9 @@
 // Extraction des données SEO d'une page HTML.
 import * as cheerio from 'cheerio';
 import crypto from 'node:crypto';
-import { tokenize, topKeywords, simhash } from './text.mjs';
+import { tokenize, topKeywords, simhash, countWords } from './text.mjs';
 
+const BLOCKS = 'p, div, li, td, th, h1, h2, h3, h4, h5, h6, br, section, article, header, footer, nav, aside, main, blockquote, dt, dd, figcaption, option, label, button, ul, ol, dl, table, tr, figure, form, fieldset, address, pre, hr';
 const SKIP_SCHEMES = /^(mailto:|tel:|javascript:|data:|sms:|ftp:|whatsapp:|skype:|#)/i;
 const HREFLANG_RE = /^(x-default|[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|\d{3}))?)$/i;
 
@@ -166,6 +167,9 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   const extracted = extractors?.length ? runExtractors($, html, extractors) : undefined;
   // Le contenu d'un <template> n'est jamais rendu ni indexé : retiré avant toute extraction.
   $('template').remove();
+  // Espace entre éléments de bloc et <br> AVANT toute lecture de texte : « <h1>Ligne 1<br>Ligne 2</h1> » ou une carte
+  // « <a><div>Titre</div><div>Résumé</div></a> » ne doivent pas donner « Ligne 1Ligne 2 » / « TitreRésumé ».
+  $(BLOCKS).append('\n');
   const baseHref = $('base[href]').attr('href');
   const base = (baseHref && resolveUrl(baseHref, pageUrl)) || pageUrl;
 
@@ -193,10 +197,26 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     if (($(el).attr('http-equiv') || '').toLowerCase() === 'refresh') metaRefresh = ($(el).attr('content') || '').trim();
   });
 
-  const h1 = $('h1').filter(isHtmlEl).map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
-  const h2 = $('h2').filter(isHtmlEl).map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
+  // Texte d'un titre tel que Google le lit : texte + alt des images (logo dans le H1) ; un titre vide n'est pas un titre.
+  const headingText = (el) => {
+    const $el = $(el);
+    if (!$el.find('img[alt], svg').length) return $el.text().replace(/\s+/g, ' ').trim();
+    const $c = $el.clone();
+    $c.find('svg').remove();
+    $c.find('img[alt]').each((_, i) => $(i).replaceWith(' ' + ($(i).attr('alt') || '') + ' '));
+    return $c.text().replace(/\s+/g, ' ').trim();
+  };
+  const h1 = $('h1').filter(isHtmlEl).map((_, el) => headingText(el)).get().filter(Boolean);
+  const h2 = $('h2').filter(isHtmlEl).map((_, el) => headingText(el)).get().filter(Boolean);
   // Hiérarchie des titres : on repère les niveaux sautés (ex. H2 → H4).
-  const levels = $('h1, h2, h3, h4, h5, h6').filter(isHtmlEl).map((_, el) => Number(el.tagName[1])).get();
+  // Seulement dans le contenu : les titres de widgets du pied de page ou de la barre latérale (<h4> après un <h2>)
+  // ne sont pas un défaut de structure de l'article.
+  const levels = $('h1, h2, h3, h4, h5, h6')
+    .filter(isHtmlEl)
+    .filter((_, el) => !$(el).closest('header, footer, nav, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"]').length)
+    .filter((_, el) => headingText(el))
+    .map((_, el) => Number(el.tagName[1]))
+    .get();
   const headingSkips = [];
   for (let i = 1; i < levels.length; i++) {
     if (levels[i] > levels[i - 1] + 1) headingSkips.push(`H${levels[i - 1]}→H${levels[i]}`);
@@ -307,17 +327,23 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
   // Texte : corps complet + contenu principal (sans navigation, en-tête, pied de page)
   $('script, style, noscript, template, svg').remove();
   // Espace entre éléments de bloc pour éviter « titreparagraphe » lors de l'extraction du texte.
-  $('p, div, li, td, th, h1, h2, h3, h4, h5, h6, br, section, article, header, footer, nav, aside, main, blockquote, dt, dd, figcaption, option, label, button').append(' ');
-  const text = $('body').text().replace(/\s+/g, ' ').trim();
-  const words = text ? text.split(' ').filter((w) => /[\p{L}\p{N}]/u.test(w)) : [];
-  let $main = $('main, article, [role="main"]').first();
-  if (!$main.length) {
-    $('nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"]').remove();
+  const rawText = $('body').text();
+  const text = rawText.replace(/\s+/g, ' ').trim();
+  const wordCount = countWords(text);
+  // Contenu principal : <main> (ou role=main) d'abord, un <article> seulement s'il est unique (sinon ce sont des
+  // résumés de liste), sinon le corps sans navigation, en-tête, pied de page, barres latérales ni bandeau cookies.
+  let $main = $('main, [role="main"]').first();
+  if (!$main.length && $('article').length === 1) $main = $('article');
+  const hasMain = !!$main.length;
+  if (!hasMain) {
+    $('nav, header, footer, aside, [role="navigation"], [role="banner"], [role="contentinfo"], [role="complementary"]').remove();
+    $('[id], [class]').filter((_, el) => /(^|[\s_-])(sidebar|widget-area|cookie|consent|gdpr)([\s_-]|$)/i.test(`${$(el).attr('id') || ''} ${$(el).attr('class') || ''}`)).remove();
     $main = $('body');
   }
-  const mainText = $main.text().replace(/\s+/g, ' ').trim();
+  const mainRaw = $main.text();
+  const mainText = mainRaw.replace(/\s+/g, ' ').trim();
   const mainTokens = tokenize(mainText);
-  const contentHash = words.length ? crypto.createHash('md5').update(text.toLowerCase()).digest('hex') : '';
+  const contentHash = wordCount ? crypto.createHash('md5').update(text.toLowerCase()).digest('hex') : '';
 
   return {
     title: titles[0] || '',
@@ -344,12 +370,13 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     links,
     images,
     mixedContent,
-    wordCount: words.length,
-    mainWordCount: mainTokens.length,
+    wordCount,
+    mainWordCount: countWords(mainText),
+    hasMain,
     textRatio: html.length ? Math.round((text.length / html.length) * 1000) / 10 : 0,
     contentHash,
     simhash: mainTokens.length >= 50 ? simhash(mainTokens) : null,
-    keywords: topKeywords(mainText, titles[0] || '', h1[0] || ''),
+    keywords: topKeywords(mainRaw, titles[0] || '', h1[0] || ''),
     extracted,
   };
 }
