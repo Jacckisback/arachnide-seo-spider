@@ -1090,4 +1090,7 @@ export default {
   'issue.rate-limited.label': 'URL non verificati (limite di frequenza del server)',
   'issue.rate-limited.desc': 'Il server rispondeva ancora 429/503 dopo diversi tentativi. Dipende dalla velocità del crawl, non dalle pagine: non sono contate come errori.',
   'issue.rate-limited.fix': 'Rilanciate il crawl con meno connessioni simultanee o un limite di URL al secondo.',
+  'issue.external-unverified.label': 'Link esterni non verificabili',
+  'issue.external-unverified.desc': 'Il sito esterno ha rifiutato la verifica (401, 403, 429, 999) o non ha risposto in tempo. Molti siti (LinkedIn, siti protetti da Cloudflare) bloccano i crawler: di solito il link funziona per i visitatori.',
+  'issue.external-unverified.fix': 'Aprite alcuni di questi link in un browser per verificare che funzionino.',
 };

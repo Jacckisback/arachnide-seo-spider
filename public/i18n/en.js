@@ -1090,4 +1090,7 @@ export default {
   'issue.rate-limited.label': 'URLs not checked (server rate limit)',
   'issue.rate-limited.desc': 'The server still answered 429/503 after several retries. This comes from the crawl speed, not from the pages: they are not counted as errors.',
   'issue.rate-limited.fix': 'Run the crawl again with fewer threads or a limit of URLs per second.',
+  'issue.external-unverified.label': 'External links that could not be checked',
+  'issue.external-unverified.desc': 'The external site refused the check (401, 403, 429, 999) or did not answer in time. Many sites (LinkedIn, Cloudflare-protected sites) block crawlers: the link usually works for visitors.',
+  'issue.external-unverified.fix': 'Open a few of these links in a browser to confirm they work.',
 };

@@ -730,7 +730,8 @@ export class Crawler extends EventEmitter {
     try {
       let { res, timer } = await this.request(url, 'HEAD');
       clearTimeout(timer);
-      if (res.status === 405 || res.status === 403 || res.status === 501) {
+      // Beaucoup de serveurs répondent mal à HEAD (404, 500, 403) alors que la page existe : seul un GET fait foi.
+      if (res.status >= 400) {
         ({ res, timer } = await this.request(url, 'GET'));
         clearTimeout(timer);
         await res.body?.cancel();

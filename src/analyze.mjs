@@ -27,6 +27,7 @@ export const THRESHOLDS = {
 
 export const SEVERITIES = ['error', 'warning', 'notice'];
 const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
+const UNVERIFIABLE = new Set([0, 401, 403, 429, 999]);
 const SEV_W = { error: 3, warning: 2, notice: 1 };
 const LVL_W = { high: 3, medium: 2, low: 1 };
 
@@ -262,6 +263,7 @@ export function analyze(crawler) {
   const nofollowInternal = [];
   const genericAnchors = new Map();
   const emptyAnchors = new Map();
+  const unverifiedExternal = [];
   for (const l of crawler.links) {
     if (l.internal) {
       const t = byUrl.get(l.to);
@@ -279,7 +281,10 @@ export function analyze(crawler) {
     } else {
       const ex = crawler.externals.get(l.to);
       if (ex && ex.status !== null && (ex.status === 0 || ex.status >= 400)) {
-        brokenLinks.push({ from: l.from, to: l.to, anchor: l.anchor, status: ex.status, statusText: ex.statusText, external: true });
+        // Anti-bot, limite de débit ou délai dépassé : le lien n'a pas pu être vérifié, il n'est pas forcément cassé.
+        const item = { from: l.from, to: l.to, anchor: l.anchor, status: ex.status, statusText: ex.statusText, external: true };
+        if (UNVERIFIABLE.has(ex.status)) unverifiedExternal.push(item);
+        else brokenLinks.push(item);
       }
     }
   }
@@ -363,6 +368,7 @@ export function analyze(crawler) {
   add('rate-limited', 'notice', 'codes', 'medium', 'low', u(pages.filter((p) => p.rateLimited), (p) => String(p.status)));
   add('broken-internal', 'error', 'links', 'high', 'low', brokenLinks.filter((l) => !l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
   add('broken-external', 'warning', 'links', 'medium', 'low', brokenLinks.filter((l) => l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
+  add('external-unverified', 'notice', 'links', 'low', 'low', unverifiedExternal.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
   add('redirect-loop', 'error', 'redirects', 'high', 'low', redirects.filter((r) => r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
   add('redirect-chain', 'warning', 'redirects', 'medium', 'low', redirects.filter((r) => r.hops > 1 && !r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
   add('redirect-to-home', 'warning', 'redirects', 'medium', 'medium', redirects.filter((r) => !r.loop && homes.has(r.finalUrl) && !homes.has(r.url) && new URL(r.url).pathname !== '/').map((r) => ({ url: r.url, detail: `${r.status} → ${r.finalUrl}` })));
@@ -409,7 +415,7 @@ export function analyze(crawler) {
   // Images
   add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(html200.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
   add('img-alt-empty', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesEmptyAlt > 0), (p) => `${p.imagesEmptyAlt}/${p.imagesCount}`));
-  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && (i.status === 0 || i.status >= 400)).map((i) => ({ url: [...i.pages][0], detail: `${i.src}${imgRole(i)} (${i.status})` })));
+  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && i.status >= 400 && !UNVERIFIABLE.has(i.status)).map((i) => ({ url: [...i.pages][0], detail: `${i.src}${imgRole(i)} (${i.status})` })));
   add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.${imgRole(i)}` })), { max: Math.round(T.largeImageBytes / 1024) });
   add('img-dimensions', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
   add('img-not-responsive', 'notice', 'images', 'medium', 'medium', imgs.filter((i) => i.role === 'src' && !i.responsive && i.size > T.largeImageBytes && !/svg/.test(i.contentType + imageFormat(i.src))).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.` })), { max: Math.round(T.largeImageBytes / 1024) });

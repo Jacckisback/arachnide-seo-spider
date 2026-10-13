@@ -1090,4 +1090,7 @@ export default {
   'issue.rate-limited.label': 'Nicht geprüfte URLs (Ratenbegrenzung des Servers)',
   'issue.rate-limited.desc': 'Der Server antwortete nach mehreren Versuchen weiterhin mit 429/503. Das liegt an der Crawl-Geschwindigkeit, nicht an den Seiten: Sie zählen nicht als Fehler.',
   'issue.rate-limited.fix': 'Starten Sie den Crawl erneut mit weniger Threads oder einer Grenze für URLs pro Sekunde.',
+  'issue.external-unverified.label': 'Externe Links, die nicht geprüft werden konnten',
+  'issue.external-unverified.desc': 'Die externe Website hat die Prüfung abgelehnt (401, 403, 429, 999) oder nicht rechtzeitig geantwortet. Viele Websites (LinkedIn, durch Cloudflare geschützte Seiten) blockieren Crawler: Für Besucher funktioniert der Link meist.',
+  'issue.external-unverified.fix': 'Öffnen Sie einige dieser Links im Browser, um zu bestätigen, dass sie funktionieren.',
 };

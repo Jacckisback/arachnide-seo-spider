@@ -1090,4 +1090,7 @@ export default {
   'issue.rate-limited.label': 'URL no comprobadas (límite de velocidad del servidor)',
   'issue.rate-limited.desc': 'El servidor seguía respondiendo 429/503 tras varios intentos. Se debe a la velocidad del rastreo, no a las páginas: no se cuentan como errores.',
   'issue.rate-limited.fix': 'Vuelva a lanzar el rastreo con menos conexiones simultáneas o un límite de URL por segundo.',
+  'issue.external-unverified.label': 'Enlaces externos que no se pudieron comprobar',
+  'issue.external-unverified.desc': 'El sitio externo rechazó la comprobación (401, 403, 429, 999) o no respondió a tiempo. Muchos sitios (LinkedIn, sitios protegidos por Cloudflare) bloquean a los rastreadores: el enlace suele funcionar para los visitantes.',
+  'issue.external-unverified.fix': 'Abra algunos de estos enlaces en un navegador para confirmar que funcionan.',
 };
