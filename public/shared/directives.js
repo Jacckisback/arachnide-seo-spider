@@ -10,15 +10,19 @@ const GOOGLE_BOTS = /^(googlebot|googlebot-news|googlebot-image|googlebot-video|
 export function robotsDirectives(...values) {
   const out = [];
   for (const v of values) {
-    for (let part of String(v || '').split(',')) {
+    // « otherbot: noindex, nofollow » : le préfixe vaut pour les directives qui suivent, jusqu'au préfixe suivant.
+    let forGoogle = true;
+    // La date RFC 850 de unavailable_after contient une virgule après le jour (« Wednesday, 25-Aug-2020 »).
+    for (let part of String(v || '').replace(/(unavailable_after\s*:\s*[a-z]+),/gi, '$1 ').split(',')) {
       part = part.trim().toLowerCase();
       if (!part) continue;
-      // Préfixe robot (« googlebot: noindex », « otherbot: nofollow ») : uniquement quand ce n'est pas la valeur d'une directive.
+      // Préfixe robot (« googlebot: noindex ») : uniquement quand ce n'est pas la valeur d'une directive.
       const m = /^([a-z0-9*_-]+)\s*:\s*(.+)$/.exec(part);
       if (m && !/^(max-snippet|max-image-preview|max-video-preview|unavailable_after)$/.test(m[1])) {
-        if (!GOOGLE_BOTS.test(m[1])) continue;
+        forGoogle = GOOGLE_BOTS.test(m[1]);
         part = m[2].trim();
       }
+      if (!forGoogle) continue;
       if (/^unavailable_after\s*:/.test(part)) {
         out.push('unavailable_after:' + part.replace(/^unavailable_after\s*:\s*/, '').trim());
         continue;
