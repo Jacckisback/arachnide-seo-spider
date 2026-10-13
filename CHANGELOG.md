@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.0 — 2026-10-13
+
+Completes the reliability work started in 3.3.
+
+- **JavaScript redirects**: when rendering is on, a page that sends visitors elsewhere with JavaScript is treated as a redirect (not indexable, target crawled), with a new `js-redirect` check.
+- **Links grouped by page and target**: the same broken or redirected link with several anchors ("Support", "Get support") is one row listing all its anchors, instead of one row per anchor.
+- **Crawl comparison URL by URL**: an issue is "fixed" only when its URLs were crawled again without it; URLs not crawled again are "not rechecked"; issues that moved to other URLs with the same count are shown; a warning appears when the two crawls differ by more than 20 % or one was stopped. The report gets "URLs fixed" and "New URLs" columns, and scheduled alerts fire on new error URLs.
+- **hreflang targets checked**: language versions declared in hreflang are crawled, with new checks for targets in error or redirected (`hreflang-target-error`) and non-indexable targets (`hreflang-target-non-indexable`).
+
 ## 3.3.0 — 2026-10-13
 
 Reliability release: a full audit (HTML extraction, crawl engine, SEO rules, and crawls of 8 real sites) removed false positives and false negatives that could mislead SEO and GEO professionals.

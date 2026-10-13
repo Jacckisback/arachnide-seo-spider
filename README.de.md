@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.3.0-3d5f17" alt="Version 3.3.0">
+  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Version 3.4.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,13 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO Health Score, Bewertung nach Kategorie, Statuscodes, Klicktiefe und Prioritäten" width="100%">
 </p>
+
+## 🔎 Neu in 3.4: Zuverlässigkeit bis ins Detail
+
+- **JavaScript-Weiterleitungen** beim Rendern erkannt: als Weiterleitung behandelt, Ziel gecrawlt.
+- **Links nach Seite und Ziel gruppiert**, mit allen Ankertexten, statt einer Zeile pro Anker.
+- **Crawl-Vergleich URL für URL**: „behoben“ nur, wenn die URL erneut ohne das Problem gecrawlt wurde, mit Warnung, wenn die Crawls nicht vergleichbar sind.
+- **hreflang-Sprachversionen gecrawlt und geprüft**: Fehler, Weiterleitungen und nicht indexierbare Ziele werden gemeldet.
 
 ## 🛡️ Neu in 3.3: Zuverlässigkeits-Audit
 

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.3.0-3d5f17" alt="Version 3.3.0">
+  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Version 3.4.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,13 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Tableau de bord : score de santé SEO, score par catégorie, codes de réponse, profondeur de clic et priorités" width="100%">
 </p>
+
+## 🔎 Nouveau en 3.4 : la fiabilité, jusqu’au bout
+
+- **Redirections JavaScript** détectées au rendu : traitées comme des redirections, cible explorée.
+- **Liens regroupés par page et cible**, avec toutes leurs ancres, au lieu d’une ligne par ancre.
+- **Comparaison de crawls URL par URL** : « corrigé » seulement si l’URL a été recrawlée sans le problème, avec un avertissement quand les deux crawls ne sont pas comparables.
+- **Versions hreflang explorées et vérifiées** : cibles en erreur, redirigées ou non indexables signalées.
 
 ## 🛡️ Nouveau en 3.3 : audit de fiabilité
 

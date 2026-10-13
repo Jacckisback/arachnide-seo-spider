@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.3.0-3d5f17" alt="Version 3.3.0">
+  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Version 3.4.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,13 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
 </p>
+
+## 🔎 New in 3.4: finishing the reliability work
+
+- **JavaScript redirects** detected when rendering: treated as redirects, target crawled.
+- **Links grouped by page and target**, with all their anchors, instead of one row per anchor.
+- **Crawl comparison URL by URL**: "fixed" only when the URL was crawled again without the issue, with a warning when the two crawls are not comparable.
+- **hreflang language versions crawled and checked**: errors, redirects and non-indexable targets reported.
 
 ## 🛡️ New in 3.3: reliability audit
 

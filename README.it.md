@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.3.0-3d5f17" alt="Versione 3.3.0">
+  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Versione 3.4.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,13 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: punteggio di salute SEO, punteggio per categoria, codici di risposta, profondità di clic e priorità" width="100%">
 </p>
+
+## 🔎 Novità della 3.4: affidabilità fino in fondo
+
+- **Reindirizzamenti JavaScript** rilevati durante il rendering: trattati come reindirizzamenti, destinazione scansionata.
+- **Link raggruppati per pagina e destinazione**, con tutti i loro anchor, invece di una riga per anchor.
+- **Confronto dei crawl URL per URL**: «risolto» solo se l’URL è stato riscansionato senza il problema, con un avviso quando i due crawl non sono confrontabili.
+- **Versioni hreflang scansionate e verificate**: destinazioni in errore, reindirizzate o non indicizzabili segnalate.
 
 ## 🛡️ Novità della 3.3: audit di affidabilità
 
