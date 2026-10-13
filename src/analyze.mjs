@@ -264,9 +264,10 @@ export function analyze(crawler) {
     if (l.internal) {
       const t = byUrl.get(l.to);
       if (l.nofollow) nofollowInternal.push(l);
+      // Vide = aucun texte du tout ; « ! », « >> » sont des ancres réelles (opérateurs, pagination).
       const a = (l.anchor || '').toLowerCase().replace(/[.…:!»›→>\s]+$/u, '').trim();
-      if (!a) emptyAnchors.set(l.from, (emptyAnchors.get(l.from) || 0) + 1);
-      else if (GENERIC_ANCHORS.has(a)) {
+      if (!(l.anchor || '').trim()) emptyAnchors.set(l.from, (emptyAnchors.get(l.from) || 0) + 1);
+      else if (a && !l.code && GENERIC_ANCHORS.has(a)) {
         if (!genericAnchors.has(l.from)) genericAnchors.set(l.from, new Set());
         genericAnchors.get(l.from).add(l.anchor);
       }

@@ -639,7 +639,7 @@ export class Crawler extends EventEmitter {
       for (const l of links) {
         const to = this.normalize(l.to) || l.to;
         const internal = this.isInternal(to);
-        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos });
+        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, ...(l.code && { code: true }) });
         if (internal) {
           rec.internalOutlinks++;
           if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');

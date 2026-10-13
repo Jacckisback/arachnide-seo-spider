@@ -253,23 +253,28 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     const $el = $(el);
     const to = resolveUrl($el.attr('href'), base);
     if (!to) return;
-    let anchor = $el.text().replace(/\s+/g, ' ').trim();
+    // Ancre comme Google la lit : texte + alt des images (dans l'ordre), sans le <title> d'un SVG d'icône ;
+    // à défaut aria-label puis title. <area> : son attribut alt.
+    let anchor;
     let imageLink = false;
-    if (!anchor) {
-      const $img = $el.find('img').first();
-      if ($img.length) {
-        imageLink = true;
-        anchor = ($img.attr('alt') || '').trim();
-      } else {
-        anchor = ($el.attr('aria-label') || $el.attr('title') || '').trim();
-      }
-    }
+    if (el.tagName === 'area') anchor = ($el.attr('alt') || '').trim();
+    else if ($el.find('img, svg').length) {
+      const $c = $el.clone();
+      $c.find('svg').remove();
+      const textOnly = $c.text().replace(/\s+/g, ' ').trim();
+      imageLink = !textOnly && $el.find('img').length > 0;
+      $c.find('img').each((_, i) => $(i).replaceWith(' ' + ($(i).attr('alt') || '') + ' '));
+      anchor = $c.text().replace(/\s+/g, ' ').trim();
+    } else anchor = $el.text().replace(/\s+/g, ' ').trim();
+    if (!anchor) anchor = ($el.attr('aria-label') || $el.attr('title') || '').trim();
+    // Lien dont tout le texte est du code (<a><code>this</code></a>) : nom technique, pas une ancre générique.
+    const code = !!anchor && $el.find('code').length > 0 && $el.find('code').text().replace(/\s+/g, ' ').trim() === anchor;
     const rel = ($el.attr('rel') || '').toLowerCase();
     const nofollow = /\b(nofollow|ugc|sponsored)\b/.test(rel);
     const key = to + '\u0000' + anchor + '\u0000' + nofollow;
     if (seenLink.has(key)) return;
     seenLink.add(key);
-    links.push({ to, anchor: anchor.slice(0, 200), nofollow, imageLink, pos: linkPosition($el) });
+    links.push({ to, anchor: anchor.slice(0, 200), nofollow, imageLink, pos: linkPosition($el), ...(code && { code }) });
   });
 
   // Images : src, srcset et sources <picture> (chaque fichier candidat est relevé)
