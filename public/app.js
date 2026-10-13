@@ -4,6 +4,7 @@ import { icon } from './shared/icons.js';
 import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
+import { initFix, refreshFixTexts } from './fix.js';
 import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -1252,6 +1253,7 @@ async function setLang(code) {
   renderTabs();
   render();
   renderDetail();
+  refreshFixTexts();
 }
 $('#langSel').innerHTML = LANGS.map((l) => `<option value="${l.code}">${l.flag} ${l.code.toUpperCase()}</option>`).join('');
 $('#langSel').addEventListener('change', (e) => setLang(e.target.value));
@@ -1280,6 +1282,7 @@ document.addEventListener('keydown', (e) => {
   state.env = await fetch('/api/env').then((r) => r.json()).catch(() => ({}));
   if (state.env.version) $('#version').textContent = 'v' + state.env.version;
   await setLang(detectLang(store.get('lang')));
+  initFix({ t: () => t, esc, icon, toast, getResult: () => state.R, rerender: () => { renderTabs(); render(); } }).catch(() => {});
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());

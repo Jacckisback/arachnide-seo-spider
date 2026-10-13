@@ -372,6 +372,8 @@ dialog.config { width: min(940px, 96vw); }
 [data-pane] h4 + .cfg-help { margin-bottom: 8px; }
 .gsc-csv { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
 .gsc-csv label.btn { cursor: pointer; }
+.ai-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; font-size: 13px; }
+.ai-actions #aiStatus { margin-left: 4px; }
 .cfg-grid label, label.block { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 label.block small, .cfg-grid small { font-size: 11.5px; }
 .radios { display: flex; flex-direction: column; gap: 8px; }

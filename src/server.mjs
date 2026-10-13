@@ -11,6 +11,7 @@ import { toCrawlerOptions } from './options.mjs';
 import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl } from './store.mjs';
 import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, startScheduler } from './schedules.mjs';
 import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
+import { handleFixRoutes } from './fix/routes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -122,6 +123,9 @@ const server = http.createServer(async (req, res) => {
       if (!s) return send(res, 404, { error: 'Unknown schedule' });
       runSchedule(s).then((r) => broadcast('schedule', { id: s.id, ...r })).catch(() => {});
       return send(res, 202, { started: true });
+    }
+    if (p.startsWith('/api/ai/') || p.startsWith('/api/fix/')) {
+      if (await handleFixRoutes(req, res, p, { send, readBody, broadcast, getResult: () => lastResult })) return;
     }
     if (p === '/api/smtp' && req.method === 'GET') return send(res, 200, await publicSmtp());
     if (p === '/api/smtp' && req.method === 'POST') return send(res, 200, await saveSmtp(await readBody(req)));

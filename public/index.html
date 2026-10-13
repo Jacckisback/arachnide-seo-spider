@@ -46,6 +46,7 @@
           <button type="button" data-cfg="extract" data-i18n="cfg.extract">Extraction</button>
           <button type="button" data-cfg="auth" data-i18n="cfg.auth">Authentication</button>
           <button type="button" data-cfg="google" data-i18n="cfg.google">Google</button>
+          <button type="button" data-cfg="ai" data-i18n="cfg.ai">AI</button>
         </nav>
         <div class="cfg-body">
           <section data-pane="spider">
@@ -144,6 +145,18 @@
             <div class="gsc-csv"><span data-i18n="cfg.gscCsv">…or import a Search Console CSV export (Performance → Pages)</span>
               <label class="btn small"><input type="file" id="gscCsvFile" accept=".csv,text/csv" hidden><span data-i18n="cfg.gscCsvChoose">Choose a CSV file</span></label>
               <span id="gscCsvName" class="muted"></span><button type="button" class="btn small" id="gscCsvClear" hidden data-i18n="cfg.gscCsvClear">Remove</button></div>
+          </section>
+          <section data-pane="ai" hidden>
+            <!-- Pas d'attribut name : ces champs ne font pas partie des options de crawl. La clé ne revient jamais du serveur. -->
+            <h4 data-i18n="ai.title">AI provider (your own API key)</h4>
+            <p class="cfg-help" data-i18n="ai.help"></p>
+            <div class="cfg-grid">
+              <label><span data-i18n="ai.provider">Provider</span><select id="aiProvider"><option value="anthropic">Claude (Anthropic)</option><option value="openai">ChatGPT (OpenAI)</option></select></label>
+              <label><span data-i18n="ai.model">Model</span><input id="aiModel" list="aiModelList" autocomplete="off" spellcheck="false" class="mono"><datalist id="aiModelList"></datalist></label>
+              <label class="span2"><span data-i18n="ai.key">API key</span><input id="aiKey" type="password" autocomplete="off" spellcheck="false" class="mono"><small id="aiKeyState"></small></label>
+            </div>
+            <div class="ai-actions"><button type="button" class="btn small" id="aiSave" data-i18n="ai.save">Save</button><button type="button" class="btn small" id="aiTest" data-i18n="ai.test">Test the connection</button><button type="button" class="btn small" id="aiForget" data-i18n="ai.forget">Forget the key</button><span id="aiStatus" class="muted"></span></div>
+            <p class="cfg-help" data-i18n="ai.privacy"></p>
           </section>
         </div>
       </div>
