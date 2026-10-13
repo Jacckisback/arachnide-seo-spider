@@ -97,6 +97,7 @@ export default {
   'progress.stopping': 'Wird gestoppt…',
   'warn.noChrome': 'JavaScript-Rendering nicht möglich: kein Chrome / Edge gefunden. Der Crawl wird ohne Rendering fortgesetzt.',
   'warn.renderFailed': 'JavaScript-Rendering nicht möglich ({error}). Der Crawl wird ohne Rendering fortgesetzt.',
+  'warn.uaBlocked': 'Die Website hat den Arachnide-User-Agent abgelehnt ({status}): Der Crawl verwendet stattdessen den Chrome-User-Agent. Die Antworten zeigen, was Besucher sehen, nicht den Bot-Schutz.',
   'warn.gscFailed': 'Search Console nicht verfügbar ({error}). Der Crawl wird ohne diese Daten fortgesetzt.',
   'warn.psiFailed': 'PageSpeed Insights nicht verfügbar ({error}). Fügen Sie einen Google-API-Schlüssel hinzu oder testen Sie weniger Seiten.',
 
@@ -695,6 +696,9 @@ export default {
   'issue.img-alt-missing.label': 'Bilder ohne alt-Attribut',
   'issue.img-alt-missing.desc': 'Bilder haben keinen Alternativtext: Das schadet der Barrierefreiheit und der Sichtbarkeit in der Google-Bildersuche.',
   'issue.img-alt-missing.fix': 'Fügen Sie jedem inhaltlich relevanten Bild ein beschreibendes alt hinzu. Verwenden Sie alt="" nur für dekorative Bilder.',
+  'issue.img-alt-empty.label': 'Bilder mit leerem Alt (dekorativ)',
+  'issue.img-alt-empty.desc': 'Diese Bilder tragen alt="": Sie gelten als dekorativ und werden von Google Bilder und Screenreadern ignoriert. Das ist korrekt, wenn sie keine Information liefern.',
+  'issue.img-alt-empty.fix': 'Prüfen Sie, dass keines dieser Bilder bedeutungstragend ist (Produktfoto, Logo in einem Link, Diagramm). Andernfalls beschreiben Sie es im Alt.',
   'issue.img-broken.label': 'Defekte Bilder',
   'issue.img-broken.desc': 'Diese Bilder geben einen Fehler zurück und werden nicht angezeigt.',
   'issue.img-broken.fix': 'Korrigieren Sie den Bildpfad oder ersetzen Sie das Bild.',

@@ -18,8 +18,8 @@ export const USER_AGENTS = {
   arachnide: DEFAULT_UA,
   googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
   googlebotMobile:
-    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-  chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+  chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
 };
 
 export const DEFAULT_OPTIONS = {
@@ -295,6 +295,7 @@ export class Crawler extends EventEmitter {
         clearTimeout(timer);
         await res.body?.cancel();
         const loc = res.headers.get('location');
+        this.startStatus = res.status;
         if (res.status >= 300 && res.status < 400 && loc) {
           url = new URL(loc, url).href;
           this.hosts.add(new URL(url).hostname.toLowerCase());
@@ -304,6 +305,24 @@ export class Crawler extends EventEmitter {
         /* l'erreur sera enregistrée lors du crawl */
       }
       break;
+    }
+    // Protection anti-bot (LiteSpeed, Cloudflare, Sucuri…) : certains hébergeurs refusent les user-agents inconnus
+    // avec un 403 alors qu'un navigateur passe. Dans ce cas on crawle avec le user-agent Chrome et on le signale,
+    // pour que l'audit reflète ce que voient les visiteurs et Google, et non la protection.
+    if ([401, 403, 406, 429, 503].includes(this.startStatus) && this.opts.userAgent === DEFAULT_UA) {
+      const blockedStatus = this.startStatus;
+      this.opts.userAgent = USER_AGENTS.chrome;
+      try {
+        const { res, timer } = await this.request(url);
+        clearTimeout(timer);
+        await res.body?.cancel();
+        if (res.status < 400) {
+          this.uaFallback = true;
+          this.warn('warn.uaBlocked', { status: blockedStatus });
+        } else this.opts.userAgent = DEFAULT_UA;
+      } catch {
+        this.opts.userAgent = DEFAULT_UA;
+      }
     }
     this.finalStart = url;
     this.origin = new URL(url).origin;
@@ -600,8 +619,10 @@ export class Crawler extends EventEmitter {
       rec.internalOutlinks = 0;
       rec.externalOutlinks = 0;
       rec.imagesCount = images.length;
-      rec.imagesMissingAlt = images.filter((i) => i.alt === null || i.alt === '').length;
-      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null || i.alt === '').slice(0, 30).map((i) => i.src);
+      // alt absent = problème ; alt="" = image déclarée décorative (valide pour Google et l'accessibilité).
+      rec.imagesMissingAlt = images.filter((i) => i.alt === null).length;
+      rec.imagesEmptyAlt = images.filter((i) => i.alt === '').length;
+      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null).slice(0, 30).map((i) => i.src);
       rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
       rec.imagesResponsive = images.filter((i) => i.responsive).length;
       rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
@@ -632,7 +653,8 @@ export class Crawler extends EventEmitter {
       for (const img of images) {
         const im = this.images.get(img.src) || newImage(img.src);
         Object.assign(im, { role: 'src', of: '' });
-        if (img.alt === null || img.alt === '') im.missingAlt = true;
+        if (img.alt === null) im.missingAlt = true;
+        else if (img.alt === '') im.emptyAlt = true;
         else im.alts.add(img.alt);
         im.pages.add(item.url);
         if (img.responsive) im.responsive = true;

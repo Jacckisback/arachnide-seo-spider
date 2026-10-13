@@ -97,6 +97,7 @@ export default {
   'progress.stopping': 'Interruzione in corso…',
   'warn.noChrome': 'Rendering JavaScript impossibile: nessun Chrome / Edge trovato. Il crawl prosegue senza rendering.',
   'warn.renderFailed': 'Rendering JavaScript impossibile ({error}). Il crawl prosegue senza rendering.',
+  'warn.uaBlocked': 'Il sito ha rifiutato lo user agent di Arachnide ({status}): il crawl usa lo user agent di Chrome. Le risposte riflettono ciò che vedono i visitatori, non la protezione anti-bot.',
   'warn.gscFailed': 'Search Console non disponibile ({error}). Il crawl prosegue senza questi dati.',
   'warn.psiFailed': 'PageSpeed Insights non disponibile ({error}). Aggiungi una chiave API di Google o testa meno pagine.',
 
@@ -695,6 +696,9 @@ export default {
   'issue.img-alt-missing.label': 'Immagini senza attributo alt',
   'issue.img-alt-missing.desc': 'Alcune immagini non hanno un testo alternativo: si perde in accessibilità e in visibilità su Google Immagini.',
   'issue.img-alt-missing.fix': 'Aggiungi un alt descrittivo a ogni immagine significativa. Usa alt="" solo per le immagini decorative.',
+  'issue.img-alt-empty.label': 'Immagini con alt vuoto (decorative)',
+  'issue.img-alt-empty.desc': 'Queste immagini hanno alt="": sono dichiarate decorative e ignorate da Google Immagini e dagli screen reader. È corretto se non aggiungono informazioni.',
+  'issue.img-alt-empty.fix': 'Verifica che nessuna di queste immagini sia significativa (foto prodotto, logo in un link, schema). In tal caso, descrivila nell’alt.',
   'issue.img-broken.label': 'Immagini non funzionanti',
   'issue.img-broken.desc': 'Queste immagini restituiscono un errore e non vengono visualizzate.',
   'issue.img-broken.fix': 'Correggi il percorso dell’immagine o sostituiscila.',

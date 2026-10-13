@@ -282,7 +282,7 @@ export function analyze(crawler) {
 
   // Hreflang
   const hreflangMissingReturn = [];
-  for (const p of html200) {
+  for (const p of html200.filter((x) => x.indexable)) {
     for (const h of p.hreflang || []) {
       const n = norm(h.href);
       if (n === p.url) continue;
@@ -403,6 +403,7 @@ export function analyze(crawler) {
 
   // Images
   add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(html200.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
+  add('img-alt-empty', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesEmptyAlt > 0), (p) => `${p.imagesEmptyAlt}/${p.imagesCount}`));
   add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && (i.status === 0 || i.status >= 400)).map((i) => ({ url: [...i.pages][0], detail: `${i.src}${imgRole(i)} (${i.status})` })));
   add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.${imgRole(i)}` })), { max: Math.round(T.largeImageBytes / 1024) });
   add('img-dimensions', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
@@ -493,8 +494,9 @@ export function analyze(crawler) {
   // Hreflang
   add('hreflang-invalid', 'error', 'hreflang', 'high', 'low', u(html200.filter((p) => p.hreflangInvalid?.length), (p) => p.hreflangInvalid.join(', ')));
   add('hreflang-return', 'warning', 'hreflang', 'high', 'medium', hreflangMissingReturn);
-  add('hreflang-self', 'warning', 'hreflang', 'medium', 'low', u(html200.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => norm(h.href) === p.url))));
-  add('hreflang-xdefault', 'notice', 'hreflang', 'low', 'low', u(html200.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => h.lang.toLowerCase() === 'x-default'))));
+  // Google n'évalue les hreflang que sur les URL canoniques indexables : une page canonicalisée ou noindex n'est pas jugée.
+  add('hreflang-self', 'warning', 'hreflang', 'medium', 'low', u(indexableHtml.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => norm(h.href) === p.url))));
+  add('hreflang-xdefault', 'notice', 'hreflang', 'low', 'low', u(indexableHtml.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => h.lang.toLowerCase() === 'x-default'))));
 
   // IA & moteurs génératifs (GEO)
   const blockedBots = (crawler.botAccess || []).filter((b) => !b.allowed);
@@ -581,6 +583,7 @@ export function analyze(crawler) {
       sitemapFiles: crawler.sitemapFiles,
       sitemapUrlCount: crawler.sitemapUrls.size,
       warnings: crawler.warnings,
+      uaFallback: !!crawler.uaFallback,
       skipped: crawler.skipped,
       thresholds: T,
     },
@@ -611,7 +614,7 @@ export function analyze(crawler) {
     brokenLinks,
     nearDuplicates: nearDup.sort((a, b) => b.similarity - a.similarity).slice(0, 5000),
     cannibalization: cannibal.map(([keyword, arr]) => ({ keyword, urls: arr.map((p) => p.url) })),
-    images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
+    images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, emptyAlt: i.emptyAlt || undefined, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
     gscOnly,
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
     links: { urls, edges },

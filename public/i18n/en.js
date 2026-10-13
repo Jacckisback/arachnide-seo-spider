@@ -97,6 +97,7 @@ export default {
   'progress.stopping': 'Stopping…',
   'warn.noChrome': 'JavaScript rendering unavailable: no Chrome / Edge found. The crawl continues without rendering.',
   'warn.renderFailed': 'JavaScript rendering failed ({error}). The crawl continues without rendering.',
+  'warn.uaBlocked': 'The site refused the Arachnide user agent ({status}): crawling with the Chrome user agent instead. Responses reflect what visitors see, not the bot protection.',
   'warn.gscFailed': 'Search Console unavailable ({error}). The crawl continues without this data.',
   'warn.psiFailed': 'PageSpeed Insights unavailable ({error}). Add a Google API key or test fewer pages.',
 
@@ -695,6 +696,9 @@ export default {
   'issue.img-alt-missing.label': 'Images without alt attribute',
   'issue.img-alt-missing.desc': 'Images have no alternative text: accessibility and Google Images visibility are lost.',
   'issue.img-alt-missing.fix': 'Add a descriptive alt to every meaningful image. Use alt="" only for decorative images.',
+  'issue.img-alt-empty.label': 'Images with empty alt (decorative)',
+  'issue.img-alt-empty.desc': 'These images carry alt="": they are declared decorative and ignored by Google Images and screen readers. That is correct when they add no information.',
+  'issue.img-alt-empty.fix': 'Check that none of these images is meaningful (product photo, logo inside a link, diagram). If one is, describe it in the alt.',
   'issue.img-broken.label': 'Broken images',
   'issue.img-broken.desc': 'These images return an error and are not displayed.',
   'issue.img-broken.fix': 'Fix the image path or replace the image.',

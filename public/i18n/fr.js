@@ -97,6 +97,7 @@ export default {
   'progress.stopping': 'Arrêt en cours…',
   'warn.noChrome': 'Rendu JavaScript impossible : aucun Chrome / Edge trouvé. Le crawl continue sans rendu.',
   'warn.renderFailed': 'Rendu JavaScript impossible ({error}). Le crawl continue sans rendu.',
+  'warn.uaBlocked': 'Le site a refusé le user-agent Arachnide ({status}) : le crawl utilise le user-agent Chrome. Les réponses reflètent ce que voient les visiteurs, pas la protection anti-bot.',
   'warn.gscFailed': 'Search Console indisponible ({error}). Le crawl continue sans ces données.',
   'warn.psiFailed': 'PageSpeed Insights indisponible ({error}). Ajoutez une clé API Google ou réduisez le nombre de pages testées.',
 
@@ -695,6 +696,9 @@ export default {
   'issue.img-alt-missing.label': 'Images sans attribut alt',
   'issue.img-alt-missing.desc': 'Des images n’ont pas de texte alternatif : perte d’accessibilité et de visibilité dans Google Images.',
   'issue.img-alt-missing.fix': 'Ajoutez un alt descriptif à chaque image porteuse de sens. Utilisez alt="" seulement pour les images décoratives.',
+  'issue.img-alt-empty.label': 'Images avec alt vide (décoratives)',
+  'issue.img-alt-empty.desc': 'Ces images portent alt="" : elles sont déclarées décoratives et ignorées par Google Images et les lecteurs d’écran. C’est correct si elles n’apportent aucune information.',
+  'issue.img-alt-empty.fix': 'Vérifiez qu’aucune de ces images n’est porteuse de sens (photo produit, logo dans un lien, schéma). Sinon, décrivez-la dans l’alt.',
   'issue.img-broken.label': 'Images cassées',
   'issue.img-broken.desc': 'Ces images renvoient une erreur et ne s’affichent pas.',
   'issue.img-broken.fix': 'Corrigez le chemin de l’image ou remplacez-la.',

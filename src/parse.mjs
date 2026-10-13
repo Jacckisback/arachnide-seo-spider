@@ -155,10 +155,15 @@ function runExtractors($, html, extractors) {
 export function parseHtml(html, pageUrl, { extractors } = {}) {
   const $ = cheerio.load(html);
   const extracted = extractors?.length ? runExtractors($, html, extractors) : undefined;
+  // Le contenu d'un <template> n'est jamais rendu ni indexé : retiré avant toute extraction.
+  $('template').remove();
   const baseHref = $('base[href]').attr('href');
   const base = (baseHref && resolveUrl(baseHref, pageUrl)) || pageUrl;
 
-  const titles = $('title').map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
+  // Seuls les éléments HTML comptent : un <title> ou un <h1> dans un SVG inline, un <noscript> ou un <template>
+  // n'est pas le titre de la page pour Google.
+  const isHtmlEl = (_, el) => !$(el).closest('svg, noscript, template').length;
+  const titles = $('title').filter(isHtmlEl).map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
   const descs = metaContent($, ['description']);
   const robots = metaContent($, ['robots', 'googlebot']);
   const canonicals = $('link[rel]')
@@ -179,10 +184,10 @@ export function parseHtml(html, pageUrl, { extractors } = {}) {
     if (($(el).attr('http-equiv') || '').toLowerCase() === 'refresh') metaRefresh = ($(el).attr('content') || '').trim();
   });
 
-  const h1 = $('h1').map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
-  const h2 = $('h2').map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
+  const h1 = $('h1').filter(isHtmlEl).map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
+  const h2 = $('h2').filter(isHtmlEl).map((_, el) => $(el).text().replace(/\s+/g, ' ').trim()).get();
   // Hiérarchie des titres : on repère les niveaux sautés (ex. H2 → H4).
-  const levels = $('h1, h2, h3, h4, h5, h6').map((_, el) => Number(el.tagName[1])).get();
+  const levels = $('h1, h2, h3, h4, h5, h6').filter(isHtmlEl).map((_, el) => Number(el.tagName[1])).get();
   const headingSkips = [];
   for (let i = 1; i < levels.length; i++) {
     if (levels[i] > levels[i - 1] + 1) headingSkips.push(`H${levels[i - 1]}→H${levels[i]}`);
