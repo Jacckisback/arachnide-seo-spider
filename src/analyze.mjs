@@ -20,7 +20,7 @@ export const THRESHOLDS = {
   urlMaxLength: 115,
   lowTextRatio: 10,
   nearDuplicate: 92,
-  maxLinks: 250,
+  maxLinks: 1000,
   lcpMs: 2500,
   cls: 0.1,
 };
@@ -231,6 +231,8 @@ export function analyze(crawler) {
     if (p.relNext) join(p.url, norm(p.relNext));
     if (p.relPrev) join(p.url, norm(p.relPrev));
   }
+  // Mots de contenu : hors menu et pied de page quand la page les balise (<main>, <nav>, <footer>), sinon le corps.
+  const contentWords = (p) => (p.hasMain && p.mainWordCount != null ? p.mainWordCount : p.wordCount);
   const dupMap = (key, { byLang = false } = {}) => {
     const m = new Map();
     for (const p of indexableHtml) {
@@ -429,41 +431,41 @@ export function analyze(crawler) {
   // Titres
   add('title-missing', 'error', 'titles', 'high', 'low', u(html200.filter((p) => !p.title)));
   add('title-duplicate', 'warning', 'titles', 'high', 'medium', u(html200.filter((p) => p.duplicateTitle), (p) => `${p.title} (×${dupTitle.count(p)})`));
-  add('title-long', 'warning', 'titles', 'medium', 'low', u(html200.filter((p) => p.titlePx > T.titleMaxPx), (p) => D('d.pxChars', { px: p.titlePx, n: p.titleLength, text: p.title })), { max: T.titleMaxPx });
-  add('title-short', 'warning', 'titles', 'medium', 'low', u(html200.filter((p) => p.title && p.titleLength < T.titleMin), (p) => D('d.chars', { n: p.titleLength, text: p.title })), { min: T.titleMin });
+  add('title-long', 'warning', 'titles', 'medium', 'low', u(indexableHtml.filter((p) => p.titlePx > T.titleMaxPx), (p) => D('d.pxChars', { px: p.titlePx, n: p.titleLength, text: p.title })), { max: T.titleMaxPx });
+  add('title-short', 'warning', 'titles', 'medium', 'low', u(indexableHtml.filter((p) => p.title && p.titleLength < T.titleMin), (p) => D('d.chars', { n: p.titleLength, text: p.title })), { min: T.titleMin });
   add('title-multiple', 'warning', 'titles', 'low', 'low', u(html200.filter((p) => p.titleCount > 1), (p) => `×${p.titleCount}`));
-  add('title-eq-h1', 'notice', 'titles', 'low', 'low', u(html200.filter((p) => p.title && p.h1?.[0] && p.title.trim().toLowerCase() === p.h1[0].trim().toLowerCase())));
+  add('title-eq-h1', 'notice', 'titles', 'low', 'low', u(indexableHtml.filter((p) => p.title && p.h1?.[0] && p.title.trim().toLowerCase() === p.h1[0].trim().toLowerCase())));
 
   // Meta descriptions
   add('desc-missing', 'warning', 'meta', 'medium', 'low', u(html200.filter((p) => p.indexable && !p.metaDescription)));
   add('desc-duplicate', 'warning', 'meta', 'medium', 'medium', u(html200.filter((p) => p.duplicateDescription), (p) => `×${dupDesc.count(p)} · ${p.metaDescription.slice(0, 80)}`));
-  add('desc-long', 'notice', 'meta', 'low', 'low', u(html200.filter((p) => p.metaDescriptionPx > T.descMaxPx), (p) => D('d.pxChars', { px: p.metaDescriptionPx, n: p.metaDescriptionLength, text: '' })), { max: T.descMaxPx });
-  add('desc-short', 'notice', 'meta', 'low', 'low', u(html200.filter((p) => p.metaDescription && p.metaDescriptionLength < T.descMin), (p) => D('d.chars', { n: p.metaDescriptionLength, text: '' })), { min: T.descMin });
+  add('desc-long', 'notice', 'meta', 'low', 'low', u(indexableHtml.filter((p) => p.metaDescriptionPx > T.descMaxPx), (p) => D('d.pxChars', { px: p.metaDescriptionPx, n: p.metaDescriptionLength, text: '' })), { max: T.descMaxPx });
+  add('desc-short', 'notice', 'meta', 'low', 'low', u(indexableHtml.filter((p) => p.metaDescription && p.metaDescriptionLength < T.descMin), (p) => D('d.chars', { n: p.metaDescriptionLength, text: '' })), { min: T.descMin });
   add('desc-multiple', 'warning', 'meta', 'low', 'low', u(html200.filter((p) => p.metaDescriptionCount > 1)));
 
   // Titres Hn
   add('h1-missing', 'warning', 'headings', 'medium', 'low', u(html200.filter((p) => p.indexable && !p.h1Count)));
-  add('h1-multiple', 'notice', 'headings', 'low', 'low', u(html200.filter((p) => p.h1Count > 1), (p) => p.h1.join(' | ')));
+  add('h1-multiple', 'notice', 'headings', 'low', 'low', u(indexableHtml.filter((p) => p.h1Count > 1), (p) => p.h1.join(' | ')));
   add('h1-duplicate', 'warning', 'headings', 'medium', 'medium', u(html200.filter((p) => p.duplicateH1), (p) => p.h1[0]));
   add('h2-missing', 'notice', 'headings', 'low', 'low', u(indexableHtml.filter((p) => !p.h2Count)));
   add('heading-skip', 'notice', 'headings', 'low', 'low', u(indexableHtml.filter((p) => p.headingSkips?.length), (p) => [...new Set(p.headingSkips)].join(', ')));
 
   // Contenu
-  add('thin-content', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => p.wordCount < T.thinWords), (p) => D('d.words', { n: p.wordCount })), { min: T.thinWords });
+  add('thin-content', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => contentWords(p) < T.thinWords), (p) => D('d.words', { n: contentWords(p) })), { min: T.thinWords });
   add('duplicate-content', 'error', 'content', 'high', 'medium', u(html200.filter((p) => p.duplicateContent), (p) => `×${dupContent.count(p)}`));
   add('near-duplicate', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => p.nearDuplicates), (p) => `≈${p.closestSimilarity} % · ${p.closestMatch}`), { min: T.nearDuplicate });
   add('cannibalization', 'warning', 'content', 'high', 'medium', cannibal.flatMap(([k, arr]) => arr.map((p) => ({ url: p.url, detail: `« ${k} » ×${arr.length}` }))));
   add('low-text-ratio', 'notice', 'content', 'low', 'medium', u(indexableHtml.filter((p) => p.textRatio < T.lowTextRatio), (p) => `${p.textRatio} %`), { min: T.lowTextRatio });
 
   // Images
-  add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(html200.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
-  add('img-alt-empty', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesEmptyAlt > 0), (p) => `${p.imagesEmptyAlt}/${p.imagesCount}`));
+  add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(indexableHtml.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
+  add('img-alt-empty', 'notice', 'images', 'low', 'low', u(indexableHtml.filter((p) => p.imagesEmptyAlt > 0), (p) => `${p.imagesEmptyAlt}/${p.imagesCount}`));
   add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && i.status >= 400 && !UNVERIFIABLE.has(i.status)).map((i) => ({ url: [...i.pages][0], detail: `${i.src}${imgRole(i)} (${i.status})` })));
   add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.${imgRole(i)}` })), { max: Math.round(T.largeImageBytes / 1024) });
-  add('img-dimensions', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
+  add('img-dimensions', 'notice', 'images', 'low', 'low', u(indexableHtml.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
   add('img-not-responsive', 'notice', 'images', 'medium', 'medium', imgs.filter((i) => i.role === 'src' && !i.responsive && i.size > T.largeImageBytes && !/svg/.test(i.contentType + imageFormat(i.src))).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.` })), { max: Math.round(T.largeImageBytes / 1024) });
-  add('img-legacy-format', 'notice', 'images', 'medium', 'medium', u(html200.filter((p) => p.imagesLegacyOnly > 0), (p) => `${p.imagesLegacyOnly}/${p.imagesCount}`));
-  add('img-srcset-no-sizes', 'notice', 'images', 'low', 'low', u(html200.filter((p) => p.imagesNoSizes > 0), (p) => `${p.imagesNoSizes}/${p.imagesCount}`));
+  add('img-legacy-format', 'notice', 'images', 'medium', 'medium', u(indexableHtml.filter((p) => p.imagesLegacyOnly > 0), (p) => `${p.imagesLegacyOnly}/${p.imagesCount}`));
+  add('img-srcset-no-sizes', 'notice', 'images', 'low', 'low', u(indexableHtml.filter((p) => p.imagesNoSizes > 0), (p) => `${p.imagesNoSizes}/${p.imagesCount}`));
 
   // Directives
   add('noindex', 'notice', 'directives', 'medium', 'low', u(html200.filter((p) => robotsHas(p, 'noindex')), (p) => p.metaRobots || p.xRobotsTag));
@@ -474,10 +476,10 @@ export function analyze(crawler) {
   add('nofollow-internal', 'notice', 'links', 'low', 'low', nofollowInternal.map((l) => ({ url: l.from, detail: `→ ${l.to}` })));
   add('generic-anchors', 'notice', 'links', 'low', 'low', [...genericAnchors].map(([url, set]) => ({ url, detail: [...set].map((a) => `« ${a} »`).join(', ') })));
   add('empty-anchors', 'warning', 'links', 'medium', 'low', [...emptyAnchors].map(([url, n]) => ({ url, detail: D('d.links', { n }) })));
-  add('too-many-links', 'notice', 'links', 'low', 'medium', u(html200.filter((p) => p.internalOutlinks + p.externalOutlinks > T.maxLinks), (p) => D('d.links', { n: p.internalOutlinks + p.externalOutlinks })), { max: T.maxLinks });
+  add('too-many-links', 'notice', 'links', 'low', 'medium', u(indexableHtml.filter((p) => p.internalOutlinks + p.externalOutlinks > T.maxLinks), (p) => D('d.links', { n: p.internalOutlinks + p.externalOutlinks })), { max: T.maxLinks });
 
   // Canonicals
-  add('canonical-missing', 'notice', 'canonicals', 'low', 'low', u(html200.filter((p) => !p.canonical)));
+  add('canonical-missing', 'notice', 'canonicals', 'low', 'low', u(indexableHtml.filter((p) => !p.canonical)));
   add('canonicalised', 'notice', 'canonicals', 'low', 'low', u(html200.filter((p) => p.canonical && p.canonical !== p.url), (p) => `→ ${p.canonical}`));
   add('canonical-non200', 'error', 'canonicals', 'high', 'low', u(html200.filter((p) => {
     if (!p.canonical || p.canonical === p.url) return false;
@@ -537,10 +539,14 @@ export function analyze(crawler) {
   add('js-errors', 'notice', 'javascript', 'low', 'medium', u(rendered.filter((p) => p.js.consoleErrors?.length), (p) => p.js.consoleErrors[0]));
 
   // URLs
-  const inside = pages.filter((p) => p.url.startsWith('http'));
-  add('url-uppercase', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => /[A-Z]/.test(new URL(p.url).pathname))));
+  // Règles d'URL sur les pages indexables seulement (pas les images, PDF, redirections ni pages canonicalisées).
+  const inside = indexableHtml;
+  // Segments de langue-région (/en-US/, /pt-BR/) : convention normale, pas une majuscule fautive.
+  const upperPath = (p) => new URL(p.url).pathname.split('/').some((seg) => /[A-Z]/.test(seg) && !/^[a-z]{2,3}[-_][A-Z]{2}$/.test(seg));
+  add('url-uppercase', 'notice', 'url', 'low', 'medium', u(inside.filter(upperPath)));
   add('url-underscore', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => new URL(p.url).pathname.includes('_'))));
-  add('url-params', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => new URL(p.url).search)));
+  // Paramètres de pagination d'une série rel=next/prev : légitimes.
+  add('url-params', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => new URL(p.url).search && !((p.relNext || p.relPrev) && /^\?(page|p|paged|pg)=\d+$/i.test(new URL(p.url).search)))));
   add('url-long', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => p.urlLength > T.urlMaxLength), (p) => D('d.chars', { n: p.urlLength, text: '' })), { max: T.urlMaxLength });
   add('url-non-ascii', 'notice', 'url', 'low', 'medium', u(inside.filter((p) => /%[0-9A-F]{2}/i.test(new URL(p.url).pathname))));
 
