@@ -213,22 +213,45 @@ export function analyze(crawler) {
   const indexableHtml = html200.filter((p) => p.indexable);
   const isHttps = crawler.origin?.startsWith('https');
 
-  const dupMap = (key) => {
+  // Familles de pages qui ont le droit de partager titre, description et H1 : versions linguistiques déclarées en
+  // hreflang et pages d'une même série paginée (rel next/prev). Google ne les traite pas comme des doublons.
+  const family = new Map();
+  const root = (u) => {
+    while (family.has(u) && family.get(u) !== u) u = family.get(u);
+    return u;
+  };
+  const join = (a, b) => {
+    if (!a || !b || !byUrl.has(a) || !byUrl.has(b)) return;
+    if (!family.has(a)) family.set(a, a);
+    if (!family.has(b)) family.set(b, b);
+    family.set(root(a), root(b));
+  };
+  for (const p of html200) {
+    for (const h of p.hreflang || []) join(p.url, norm(h.href));
+    if (p.relNext) join(p.url, norm(p.relNext));
+    if (p.relPrev) join(p.url, norm(p.relPrev));
+  }
+  const dupMap = (key, { byLang = false } = {}) => {
     const m = new Map();
     for (const p of indexableHtml) {
       const v = key(p);
       if (!v) continue;
-      const k = v.toLowerCase();
+      // Deux traductions qui gardent le même titre (« MDN Web Docs ») ne se concurrencent pas.
+      const k = (byLang ? (p.lang || '').toLowerCase().split('-')[0] + '\u0000' : '') + v.toLowerCase();
       if (!m.has(k)) m.set(k, []);
       m.get(k).push(p);
     }
-    const dups = new Set();
-    for (const arr of m.values()) if (arr.length > 1) arr.forEach((p) => dups.add(p.url));
-    return { m, dups, count: (p) => m.get((key(p) || '').toLowerCase())?.length || 0 };
+    const dups = new Map();
+    for (const arr of m.values()) {
+      if (arr.length < 2) continue;
+      const fams = new Set(arr.map((p) => root(p.url)));
+      if (fams.size > 1) arr.forEach((p) => dups.set(p.url, arr.length));
+    }
+    return { m, dups, count: (p) => dups.get(p.url) || 0 };
   };
-  const dupTitle = dupMap((p) => p.title);
-  const dupDesc = dupMap((p) => p.metaDescription);
-  const dupH1 = dupMap((p) => p.h1?.[0]);
+  const dupTitle = dupMap((p) => p.title, { byLang: true });
+  const dupDesc = dupMap((p) => p.metaDescription, { byLang: true });
+  const dupH1 = dupMap((p) => p.h1?.[0], { byLang: true });
   const dupContent = dupMap((p) => p.contentHash);
   for (const p of html200) {
     p.duplicateTitle = dupTitle.dups.has(p.url);
@@ -405,7 +428,7 @@ export function analyze(crawler) {
 
   // Titres
   add('title-missing', 'error', 'titles', 'high', 'low', u(html200.filter((p) => !p.title)));
-  add('title-duplicate', 'error', 'titles', 'high', 'medium', u(html200.filter((p) => p.duplicateTitle), (p) => `${p.title} (×${dupTitle.count(p)})`));
+  add('title-duplicate', 'warning', 'titles', 'high', 'medium', u(html200.filter((p) => p.duplicateTitle), (p) => `${p.title} (×${dupTitle.count(p)})`));
   add('title-long', 'warning', 'titles', 'medium', 'low', u(html200.filter((p) => p.titlePx > T.titleMaxPx), (p) => D('d.pxChars', { px: p.titlePx, n: p.titleLength, text: p.title })), { max: T.titleMaxPx });
   add('title-short', 'warning', 'titles', 'medium', 'low', u(html200.filter((p) => p.title && p.titleLength < T.titleMin), (p) => D('d.chars', { n: p.titleLength, text: p.title })), { min: T.titleMin });
   add('title-multiple', 'warning', 'titles', 'low', 'low', u(html200.filter((p) => p.titleCount > 1), (p) => `×${p.titleCount}`));
