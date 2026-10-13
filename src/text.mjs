@@ -10,16 +10,42 @@ const STOP = new Set(
   o a os as um uma uns umas e ou mas se de do da dos das em no na nos nas com por para sem sobre entre é são foi ser estar está estão como mais menos muito já que qual quem onde quando este esta estes estas esse essa seu sua seus suas meu minha nosso nossa não também há`.split(/\s+/)
 );
 
-export function tokenize(text) {
-  return (String(text || '').toLowerCase().match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).filter(Boolean);
+// Écritures sans espaces entre les mots (chinois, japonais, thaï, lao, khmer, birman) : découpage par Intl.Segmenter.
+const NO_SPACE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+let segmenter = null;
+function segmentWords(text) {
+  segmenter ||= new Intl.Segmenter(undefined, { granularity: 'word' });
+  const out = [];
+  for (const s of segmenter.segment(text)) if (s.isWordLike && /[\p{L}\p{N}]/u.test(s.segment)) out.push(s.segment);
+  return out;
 }
+
+export function tokenize(text) {
+  const s = String(text || '').toLowerCase();
+  if (NO_SPACE_SCRIPT.test(s)) return segmentWords(s).map((w) => w.replace(/^['’-]+|['’-]+$/g, '')).filter(Boolean);
+  return (s.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).filter(Boolean);
+}
+
+// Nombre de mots d'un texte, juste aussi pour les langues sans espaces (un article japonais n'est pas « 1 mot »).
+export function countWords(text) {
+  const s = String(text || '');
+  if (!s.trim()) return 0;
+  if (NO_SPACE_SCRIPT.test(s)) return segmentWords(s).length;
+  return s.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+// Les bigrammes ne doivent pas enjamber une fin de phrase, un séparateur de titre (« | », « - ») ou un bloc.
+const SEGMENT_SPLIT = /\n|[.!?;:|·•—–](?=\s|$)|\s[-–—|]\s/;
 
 export const isStop = (w) => STOP.has(w) || w.length < 3 || /^\d+$/.test(w);
 
 // Termes principaux d'une page : unigrammes + bigrammes pondérés, titre et H1 renforcés.
 export function topKeywords(bodyText, title = '', h1 = '', n = 5) {
   const score = new Map();
-  const addTokens = (tokens, weight) => {
+  const addTokens = (text, weight) => {
+    for (const seg of String(text || '').split(SEGMENT_SPLIT)) addSegment(tokenize(seg), weight);
+  };
+  const addSegment = (tokens, weight) => {
     for (let i = 0; i < tokens.length; i++) {
       const w = tokens[i];
       if (!isStop(w)) score.set(w, (score.get(w) || 0) + weight);
@@ -30,9 +56,9 @@ export function topKeywords(bodyText, title = '', h1 = '', n = 5) {
       }
     }
   };
-  addTokens(tokenize(bodyText), 1);
-  addTokens(tokenize(title), 15);
-  addTokens(tokenize(h1), 8);
+  addTokens(bodyText, 1);
+  addTokens(title, 15);
+  addTokens(h1, 8);
   return [...score.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)

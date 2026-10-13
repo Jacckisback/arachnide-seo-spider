@@ -3,6 +3,7 @@ import { LANGS, getT, detailText, detectLang } from './shared/i18n.js';
 import { icon } from './shared/icons.js';
 import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
+import { robotsFlags } from './shared/directives.js';
 import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -177,7 +178,7 @@ const TABS = [
   { id: 'canonicals', icon: 'link', rows: html200, cols: [C.url, { k: 'canonical', l: 'col.canonical', cls: 'trunc' }, { k: 'canonicalCount', l: 'col.count', num: true }, C.indexability],
     filters: { all: () => true, selfRef: (p) => p.canonical === p.url, canonicalised: (p) => p.canonical && p.canonical !== p.url, missing: (p) => !p.canonical, multiple: (p) => p.canonicalCount > 1 } },
   { id: 'directives', icon: 'shield', rows: (R) => R.pages, cols: [C.url, { k: 'metaRobots', l: 'col.metaRobots' }, { k: 'xRobotsTag', l: 'col.xRobotsTag' }, C.indexability],
-    filters: { all: () => true, noindex: (p) => /noindex|none/i.test(`${p.metaRobots} ${p.xRobotsTag}`), nofollow: (p) => /nofollow|none/i.test(`${p.metaRobots} ${p.xRobotsTag}`), blocked: (p) => p.blockedByRobots, nonIndexable: (p) => !p.indexable } },
+    filters: { all: () => true, noindex: (p) => robotsFlags(p.metaRobots, p.xRobotsTag).noindex, nofollow: (p) => robotsFlags(p.metaRobots, p.xRobotsTag).nofollow, blocked: (p) => p.blockedByRobots, nonIndexable: (p) => !p.indexable } },
   { id: 'hreflang', icon: 'globe', rows: (R) => html200(R).filter((p) => p.hreflang?.length),
     cols: [C.url, { k: 'lang', l: 'col.lang' }, { k: 'hrefCount', l: 'col.count', num: true, v: (r) => r.hreflang.length }, { k: 'hreflangs', l: 'col.alternates', cls: 'wrap', v: (r) => r.hreflang.map((h) => `${h.lang}: ${h.href}`).join(' | ') }],
     filters: { all: () => true, invalid: (p) => p.hreflangInvalid?.length, noXDefault: (p) => !p.hreflang.some((h) => h.lang.toLowerCase() === 'x-default') } },
@@ -616,7 +617,7 @@ function renderRobots(view) {
     <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.robots'))}</h2><p class="help">${esc(t('help.robots'))}</p></div></div>
     <div class="dash-two">
       <div class="card"><h3>${icon('robot')} ${esc(t('robots.bots'))}</h3>
-        <table class="mini"><tbody>${(m.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
+        <table class="mini"><tbody>${(m.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed == null ? `<span class="chip">${esc(t('robots.unknown'))}</span>` : b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
         <p class="mt">${m.llmsTxt ? `<span class="chip ok">llms.txt ✓</span> ${num(m.llmsTxt.size)} ${esc(t('robots.chars'))}` : `<span class="chip muted">llms.txt ✗</span> ${esc(t('robots.noLlms'))}`}</p>
       </div>
       <div class="card"><h3>${icon('sitemap')} ${esc(t('robots.sitemaps'))} · ${num(m.sitemapUrlCount)} URLs</h3>

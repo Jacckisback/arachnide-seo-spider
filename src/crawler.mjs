@@ -2,12 +2,13 @@
 import { EventEmitter } from 'node:events';
 import zlib from 'node:zlib';
 import { parseHtml, resolveUrl } from './parse.mjs';
+import { robotsFlags } from '../public/shared/directives.js';
 import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey } from './google.mjs';
 
-export const VERSION = '3.2.0';
+export const VERSION = '3.3.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -18,8 +19,8 @@ export const USER_AGENTS = {
   arachnide: DEFAULT_UA,
   googlebot: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
   googlebotMobile:
-    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-  chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+  chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
 };
 
 export const DEFAULT_OPTIONS = {
@@ -89,19 +90,47 @@ function searchRegex(q) {
   }
 }
 
+// Entités XML d'un <loc> : &amp; &lt; &gt; &quot; &apos; et numériques (&#38; &#x26;).
+function decodeXml(v) {
+  return v
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" })[e]);
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Retry-After : nombre de secondes ou date HTTP.
+function retryAfterMs(v) {
+  if (!v) return null;
+  if (/^\d+$/.test(v.trim())) return Number(v) * 1000;
+  const d = Date.parse(v);
+  return Number.isNaN(d) ? null : Math.max(0, d - Date.now());
+}
 const HTML_TYPES = /text\/html|application\/xhtml\+xml/i;
 
-function decodeBody(buf, contentType) {
+// Décodage comme un navigateur : BOM d'abord, puis l'en-tête HTTP, puis <meta charset> (hors commentaires, 8 Ko),
+// sinon UTF-8 s'il est valide, et windows-1252 en dernier recours (pages anciennes sans déclaration).
+export function decodeBody(buf, contentType) {
+  const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return new TextDecoder('utf-8').decode(b);
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(b);
   let charset = /charset=["']?([\w-]+)/i.exec(contentType || '')?.[1];
   if (!charset) {
-    const head = Buffer.from(buf.subarray(0, 2048)).toString('latin1');
-    charset = /<meta[^>]+charset=["']?([\w-]+)/i.exec(head)?.[1];
+    const head = Buffer.from(b.subarray(0, 8192)).toString('latin1').replace(/<!--[\s\S]*?-->/g, '');
+    charset = /<meta[^>]+charset\s*=\s*["']?\s*([\w-]+)/i.exec(head)?.[1];
+  }
+  if (charset) {
+    try {
+      return new TextDecoder(charset).decode(b);
+    } catch {
+      /* jeu de caractères inconnu : détection ci-dessous */
+    }
   }
   try {
-    return new TextDecoder(charset || 'utf-8').decode(buf);
+    return new TextDecoder('utf-8', { fatal: true }).decode(b);
   } catch {
-    return new TextDecoder('utf-8').decode(buf);
+    return new TextDecoder('windows-1252').decode(b);
   }
 }
 
@@ -169,11 +198,29 @@ export class Crawler extends EventEmitter {
     try {
       const u = new URL(url);
       u.hash = '';
+      // %c3%a9 et %C3%A9 désignent la même ressource (RFC 3986) : forme canonique en majuscules.
+      const upperHex = (x) => x.replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
+      u.pathname = upperHex(u.pathname);
       if (this.opts.ignoreQuery) u.search = '';
       else if (this.removeParamRes.length && u.search) {
-        for (const k of [...u.searchParams.keys()]) if (this.removeParamRes.some((re) => re.test(k))) u.searchParams.delete(k);
+        // Suppression sur la chaîne brute : URLSearchParams réécrirait « ?b » en « ?b= » et « %20 » en « + ».
+        const kept = u.search
+          .slice(1)
+          .split('&')
+          .filter((kv) => {
+            let k = kv.split('=')[0];
+            try {
+              k = decodeURIComponent(k.replace(/\+/g, ' '));
+            } catch {
+              /* clé mal encodée : comparée telle quelle */
+            }
+            return kv && !this.removeParamRes.some((re) => re.test(k));
+          });
+        u.search = kept.length ? '?' + kept.join('&') : '';
       }
-      return u.href;
+      if (u.search) u.search = upperHex(u.search);
+      // « /a? » (requête vide) est la même requête que « /a ».
+      return u.href.endsWith('?') ? u.href.slice(0, -1) : u.href;
     } catch {
       return null;
     }
@@ -181,11 +228,15 @@ export class Crawler extends EventEmitter {
 
   isInternal(url) {
     let h;
+    let port;
     try {
-      h = new URL(url).hostname.toLowerCase();
+      ({ hostname: h, port } = new URL(url));
+      h = h.toLowerCase();
     } catch {
       return false;
     }
+    // Un autre port (serveur de dev, interface d'administration :8443) n'est pas le site audité.
+    if (port && this.ports && !this.ports.has(port)) return false;
     if (this.hosts.has(h)) return true;
     if (this.opts.crawlSubdomains) return h === this.rootDomain || h.endsWith('.' + this.rootDomain);
     return false;
@@ -227,6 +278,8 @@ export class Crawler extends EventEmitter {
 
   // Vitesse : plafond global de requêtes par seconde, partagé par tous les workers.
   async throttle() {
+    // Le site a demandé de ralentir (429/503 + Retry-After) : toutes les requêtes attendent.
+    if (this.backoffUntil > Date.now()) await sleep(this.backoffUntil - Date.now());
     if (!this.opts.maxUrlPerSec) return;
     const gap = 1000 / this.opts.maxUrlPerSec;
     const now = Date.now();
@@ -261,25 +314,37 @@ export class Crawler extends EventEmitter {
     }
   }
 
-  async fetchText(url) {
+  // info (facultatif) reçoit le statut final et le type de contenu, pour distinguer « absent » de « illisible ».
+  async fetchText(url, info = {}, hops = 0) {
     try {
       const { res, timer } = await this.request(url);
       try {
-        if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+        info.status = res.status;
+        info.type = res.headers.get('content-type') || '';
+        if (res.status >= 300 && res.status < 400 && res.headers.get('location') && hops < 5) {
           await res.body?.cancel();
-          return this.fetchText(new URL(res.headers.get('location'), url).href);
+          return this.fetchText(new URL(res.headers.get('location'), url).href, info, hops + 1);
         }
         if (res.status !== 200) {
           await res.body?.cancel();
           return null;
         }
         let buf = Buffer.from(await res.arrayBuffer());
-        if (url.endsWith('.gz') || (buf[0] === 0x1f && buf[1] === 0x8b)) buf = zlib.gunzipSync(buf);
+        // Un .gz servi avec Content-Encoding: gzip est déjà décompressé par fetch : seuls les octets magiques comptent.
+        if (buf[0] === 0x1f && buf[1] === 0x8b) {
+          try {
+            buf = zlib.gunzipSync(buf);
+          } catch {
+            /* fichier tronqué : on garde les octets bruts */
+          }
+        }
         return buf.toString('utf8');
       } finally {
         clearTimeout(timer);
       }
-    } catch {
+    } catch (e) {
+      info.status = 0;
+      info.error = e?.cause?.code || e?.name || 'Error';
       return null;
     }
   }
@@ -287,7 +352,11 @@ export class Crawler extends EventEmitter {
   async resolveStart() {
     // Suit les redirections de l'URL de départ pour connaître l'hôte réel du site.
     this.hosts = new Set([new URL(this.startUrl).hostname.toLowerCase()]);
-    if (this.listUrls) for (const x of this.listUrls) this.hosts.add(new URL(x).hostname.toLowerCase());
+    this.ports = new Set([new URL(this.startUrl).port]);
+    if (this.listUrls) for (const x of this.listUrls) {
+      this.hosts.add(new URL(x).hostname.toLowerCase());
+      this.ports.add(new URL(x).port);
+    }
     let url = this.startUrl;
     for (let i = 0; i < 10; i++) {
       try {
@@ -295,15 +364,35 @@ export class Crawler extends EventEmitter {
         clearTimeout(timer);
         await res.body?.cancel();
         const loc = res.headers.get('location');
+        this.startStatus = res.status;
         if (res.status >= 300 && res.status < 400 && loc) {
           url = new URL(loc, url).href;
           this.hosts.add(new URL(url).hostname.toLowerCase());
+          this.ports.add(new URL(url).port);
           continue;
         }
       } catch {
         /* l'erreur sera enregistrée lors du crawl */
       }
       break;
+    }
+    // Protection anti-bot (LiteSpeed, Cloudflare, Sucuri…) : certains hébergeurs refusent les user-agents inconnus
+    // avec un 403 alors qu'un navigateur passe. Dans ce cas on crawle avec le user-agent Chrome et on le signale,
+    // pour que l'audit reflète ce que voient les visiteurs et Google, et non la protection.
+    if ([401, 403, 406, 429, 503].includes(this.startStatus) && this.opts.userAgent === DEFAULT_UA) {
+      const blockedStatus = this.startStatus;
+      this.opts.userAgent = USER_AGENTS.chrome;
+      try {
+        const { res, timer } = await this.request(url);
+        clearTimeout(timer);
+        await res.body?.cancel();
+        if (res.status < 400) {
+          this.uaFallback = true;
+          this.warn('warn.uaBlocked', { status: blockedStatus });
+        } else this.opts.userAgent = DEFAULT_UA;
+      } catch {
+        this.opts.userAgent = DEFAULT_UA;
+      }
     }
     this.finalStart = url;
     this.origin = new URL(url).origin;
@@ -312,42 +401,66 @@ export class Crawler extends EventEmitter {
 
   async loadRobotsAndSitemaps() {
     this.setPhase('robots');
-    const [txt, llms] = await Promise.all([this.fetchText(this.origin + '/robots.txt'), this.fetchText(this.origin + '/llms.txt')]);
-    this.robotsTxt = txt;
+    const rInfo = {};
+    const [txt, llms] = await Promise.all([this.fetchText(this.origin + '/robots.txt', rInfo), this.fetchText(this.origin + '/llms.txt')]);
+    // robots.txt illisible : 5xx, refus (401/403/429), erreur réseau ou page HTML. Google bloque tout le crawl tant
+    // qu'un 5xx persiste ; dans tous les cas l'accès des robots est « inconnu », pas « autorisé ».
+    const robotsHtml = txt != null && /<(html|head|body)[\s>]/i.test(txt.slice(0, 1000));
+    this.robotsStatus = rInfo.status ?? null;
+    this.robotsUnreadable = robotsHtml || (rInfo.status !== 200 && rInfo.status !== 404 && rInfo.status !== 410);
+    if (robotsHtml) this.warn('warn.robotsHtml');
+    else if (this.robotsUnreadable && !this.opts.customRobots) this.warn('warn.robotsUnavailable', { status: rInfo.status || rInfo.error || '—' });
+    this.robotsTxt = robotsHtml ? null : txt;
     this.llmsTxt = llms && !/<html/i.test(llms.slice(0, 500)) ? { size: llms.length } : null;
     if (this.opts.customRobots) this.robotsTxt = this.opts.customRobots;
     const robots = this.robotsTxt ? parseRobots(this.robotsTxt) : null;
     this.robotsRules = robots ? rulesFor(robots, this.opts.userAgent) : [];
-    this.botAccess = BOTS.map((bot) => ({ bot, allowed: robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
+    const unknown = this.robotsUnreadable && !this.opts.customRobots;
+    this.botAccess = BOTS.map((bot) => ({ bot, allowed: unknown ? null : robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
     if (!this.opts.useSitemaps || this.opts.mode === 'list') return;
 
     this.setPhase('sitemaps');
     const toFetch = [...new Set([...(robots?.sitemaps || []), this.origin + '/sitemap.xml', this.origin + '/sitemap_index.xml'])];
     const done = new Set();
-    while (toFetch.length && done.size < 100 && !this.stopped) {
+    const MAX_FILES = 500;
+    const siteHost = (h) => h.replace(/^www\./, '');
+    while (toFetch.length && !this.stopped) {
+      if (done.size >= MAX_FILES) {
+        this.sitemapsTruncated = true;
+        break;
+      }
       const sm = toFetch.shift();
       if (done.has(sm)) continue;
       done.add(sm);
       const xml = await this.fetchText(sm);
       if (!xml || !/<(urlset|sitemapindex)/i.test(xml)) continue;
-      const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) =>
-        m[1].replace(/&amp;/g, '&').trim()
-      );
+      const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) => decodeXml(m[1]).trim());
       if (/<sitemapindex/i.test(xml)) {
-        toFetch.push(...locs);
+        // Sitemaps d'images, de vidéos ou d'actualités : ils ne listent pas de pages, inutile d'épuiser le quota.
+        const pages = locs.filter((l) => !/(^|[/_-])(image|video|news)[-_]?sitemap|sitemap[-_](image|video|news)/i.test(l));
+        // Index : les sitemaps de pages passent avant les sitemaps imbriqués suivants (parcours en largeur).
+        toFetch.push(...pages);
         this.sitemapFiles.push({ url: sm, type: 'index', count: locs.length });
       } else {
         let n = 0;
         for (const l of locs) {
-          const norm = this.normalize(l);
-          if (norm) {
-            this.sitemapUrls.add(norm);
-            n++;
+          let norm = this.normalize(l);
+          if (!norm) continue;
+          // Sitemap en http:// ou sans www alors que le site est en https://www : Google ignore ces URL. On le signale
+          // et on les rapproche des pages réelles pour que la couverture du sitemap reste juste.
+          const u = new URL(norm);
+          if (u.origin !== this.origin && siteHost(u.hostname) === siteHost(new URL(this.origin).hostname)) {
+            this.sitemapHostMismatch = (this.sitemapHostMismatch || 0) + 1;
+            this.sitemapMismatchExample ||= l;
+            norm = this.normalize(this.origin + u.pathname + u.search) || norm;
           }
+          this.sitemapUrls.add(norm);
+          n++;
         }
         this.sitemapFiles.push({ url: sm, type: 'urlset', count: n });
       }
     }
+    if (this.sitemapsTruncated) this.warn('warn.sitemapsTruncated', { n: MAX_FILES });
   }
 
   blockedByRobots(url) {
@@ -509,7 +622,22 @@ export class Crawler extends EventEmitter {
     }
     let reqRes;
     try {
-      reqRes = await this.request(item.url);
+      // 429 / 503 : le serveur demande de ralentir. On attend (Retry-After, 30 s max) et on réessaie deux fois
+      // avant de conclure ; une page seulement freinée n'est pas une page cassée.
+      for (let attempt = 0; ; attempt++) {
+        reqRes = await this.request(item.url);
+        const st = reqRes.res.status;
+        if ((st !== 429 && st !== 503) || attempt >= 2) break;
+        const wait = retryAfterMs(reqRes.res.headers.get('retry-after')) ?? 2000 * (attempt + 1);
+        clearTimeout(reqRes.timer);
+        await reqRes.res.body?.cancel();
+        if (st === 429 && !this.rateLimitWarned) {
+          this.rateLimitWarned = true;
+          this.warn('warn.rateLimited', { status: st });
+        }
+        this.backoffUntil = Math.max(this.backoffUntil || 0, Date.now() + Math.min(wait, 30000));
+        rec.retries = attempt + 1;
+      }
     } catch (e) {
       const r = this.errorRecord(item, e);
       this.pages.set(item.url, r);
@@ -519,6 +647,8 @@ export class Crawler extends EventEmitter {
     const { res, ttfb, timer } = reqRes;
     try {
       rec.status = res.status;
+      // Toujours freinée après les nouvelles tentatives : artefact du crawl, pas une erreur du site.
+      if (res.status === 429 || (res.status === 503 && rec.retries)) rec.rateLimited = true;
       rec.statusText = res.statusText;
       rec.contentType = res.headers.get('content-type') || '';
       rec.xRobotsTag = res.headers.get('x-robots-tag') || '';
@@ -537,6 +667,15 @@ export class Crawler extends EventEmitter {
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
           if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
+          // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
+          if (!this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
+            const ex = this.externals.get(rec.redirectUrl) || { url: rec.redirectUrl, status: null, statusText: '', inlinks: 0, pages: new Set() };
+            ex.pages.add(item.url);
+            this.externals.set(rec.redirectUrl, ex);
+          }
+        } else {
+          // Un 3xx sans en-tête Location ne mène nulle part : navigateurs et Google affichent une page d'erreur.
+          rec.error = 'Redirect without Location';
         }
         this.pages.set(item.url, rec);
         this.emit('page', rec);
@@ -600,15 +739,17 @@ export class Crawler extends EventEmitter {
       rec.internalOutlinks = 0;
       rec.externalOutlinks = 0;
       rec.imagesCount = images.length;
-      rec.imagesMissingAlt = images.filter((i) => i.alt === null || i.alt === '').length;
-      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null || i.alt === '').slice(0, 30).map((i) => i.src);
+      // alt absent = problème ; alt="" = image déclarée décorative (valide pour Google et l'accessibilité).
+      rec.imagesMissingAlt = images.filter((i) => i.alt === null).length;
+      rec.imagesEmptyAlt = images.filter((i) => i.alt === '').length;
+      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null).slice(0, 30).map((i) => i.src);
       rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
       rec.imagesResponsive = images.filter((i) => i.responsive).length;
       rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
       rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
       rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
 
-      const followAll = !/nofollow/i.test(rec.metaRobots + ' ' + rec.xRobotsTag);
+      const followAll = !robotsFlags(rec.metaRobots, rec.xRobotsTag).nofollow;
       const follow = this.opts.mode !== 'list';
       if (links.length > this.opts.maxLinksPerPage) {
         rec.linksTruncated = links.length;
@@ -617,7 +758,7 @@ export class Crawler extends EventEmitter {
       for (const l of links) {
         const to = this.normalize(l.to) || l.to;
         const internal = this.isInternal(to);
-        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos });
+        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, ...(l.code && { code: true }) });
         if (internal) {
           rec.internalOutlinks++;
           if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
@@ -632,7 +773,8 @@ export class Crawler extends EventEmitter {
       for (const img of images) {
         const im = this.images.get(img.src) || newImage(img.src);
         Object.assign(im, { role: 'src', of: '' });
-        if (img.alt === null || img.alt === '') im.missingAlt = true;
+        if (img.alt === null) im.missingAlt = true;
+        else if (img.alt === '') im.emptyAlt = true;
         else im.alts.add(img.alt);
         im.pages.add(item.url);
         if (img.responsive) im.responsive = true;
@@ -648,6 +790,7 @@ export class Crawler extends EventEmitter {
       }
       if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
       if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
+      if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
       this.pages.set(item.url, rec);
       this.emit('page', rec);
     } finally {
@@ -667,7 +810,8 @@ export class Crawler extends EventEmitter {
     try {
       let { res, timer } = await this.request(url, 'HEAD');
       clearTimeout(timer);
-      if (res.status === 405 || res.status === 403 || res.status === 501) {
+      // Beaucoup de serveurs répondent mal à HEAD (404, 500, 403) alors que la page existe : seul un GET fait foi.
+      if (res.status >= 400) {
         ({ res, timer } = await this.request(url, 'GET'));
         clearTimeout(timer);
         await res.body?.cancel();
@@ -699,7 +843,7 @@ export class Crawler extends EventEmitter {
   // puis les pages qui reçoivent le plus de liens internes.
   async runPageSpeed() {
     this.setPhase('psi');
-    const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !/noindex/i.test(`${p.metaRobots} ${p.xRobotsTag}`));
+    const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !robotsFlags(p.metaRobots, p.xRobotsTag).noindex);
     const inl = new Map();
     for (const l of this.links) if (l.internal && l.from !== l.to) inl.set(l.to, (inl.get(l.to) || 0) + 1);
     const clicks = new Map((this.gsc?.rows || []).map((r) => [r.url, r.clicks || 0]));

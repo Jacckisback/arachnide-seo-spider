@@ -1,5 +1,39 @@
 # Changelog
 
+## 3.3.0 — 2026-10-13
+
+Reliability release: a full audit (HTML extraction, crawl engine, SEO rules, and crawls of 8 real sites) removed false positives and false negatives that could mislead SEO and GEO professionals.
+
+### Crawling
+- **Bot protection**: when a site refuses the Arachnide user agent (403/406/429/503), the crawl switches to Chrome and says so, instead of reporting every page as an error.
+- **Rate limiting**: 429/503 responses honour `Retry-After` and are retried; URLs still throttled are reported as "not checked", never as 4xx/5xx or broken links.
+- **External links and images**: a HEAD error is confirmed with GET; 401/403/429/999/timeouts are "could not be checked", not "broken".
+- **robots.txt** unreadable (5xx, 403, HTML page) is reported and bot access shows "unknown" instead of "allowed".
+- **Sitemaps**: gzip sitemaps already decoded by the server, image/video sitemaps skipped, 500-file limit with a warning, XML entities, and a new check for sitemap URLs on another protocol or host.
+- **URLs**: percent-encoding case, empty query string and parameter removal no longer create duplicate URLs; another port is not the audited site.
+- **Redirects**: meta refresh is treated and followed as a redirect, 3xx without `Location` is an error, external redirect targets are checked, redirects add no click depth.
+- **Charset**: BOM, `<meta charset>` inside comments, and windows-1252 fallback handled like browsers.
+
+### HTML extraction
+- `<title>` and headings inside inline SVG, `<noscript>` or `<template>` are ignored.
+- Robots directives are read token by token: `max-image-preview:none` is no longer "noindex", other bots' `X-Robots-Tag` is ignored, `unavailable_after` is honoured.
+- Lazy-loaded images (`data-src`, `data-lazy-src`, `data-original`) are analysed instead of their placeholders; CSS width/height accepted.
+- Text of headings and links keeps line breaks and blocks apart; image alt text counts in headings and anchors; empty H1 is not an H1.
+- Word count works for Chinese, Japanese and Thai; thin content is measured on the main content.
+- Meta description: `content=""` and `property="description"` ignored; identical duplicate canonicals are a notice, conflicting ones a warning; canonical in `<body>` reported.
+- hreflang validated against real ISO 639-1 and ISO 3166-1 codes.
+- Structured data: only properties Google requires, checked on main entities (no more "Organization: url" from a nested publisher).
+
+### SEO rules and score
+- `alt=""` is a decorative image (separate notice), not a missing alt.
+- hreflang, title, description, H1, image and URL checks run on indexable pages only.
+- Duplicate titles/descriptions/H1 exclude hreflang alternates, paginated series and other-language pages; duplicate title is a warning.
+- Self-links and links on error pages are not inlinks; anchors such as "!" or ">>" are not empty; `<code>this</code>` is not generic.
+- Cannibalisation requires overlapping topics and ignores repeated title prefixes.
+- 302 is a notice (Google passes signals); `/index.html → /` is not a soft 404.
+- New checks: soft 404, rate-limited URLs, external links that could not be checked, canonical outside `<head>`, repeated canonical tag, sitemap on another host.
+- **Health score**: each issue's penalty is capped and penalties combine multiplicatively, so one template defect no longer drops a site to 0, while site-level issues (Googlebot blocked, no HTTPS) finally count.
+
 ## 3.2.0 — 2026-10-12
 
 ### New
