@@ -278,23 +278,34 @@ export function analyze(crawler) {
     }
   }
 
-  // Cannibalisation potentielle : même mot-clé principal présent dans le title de plusieurs pages.
+  // Cannibalisation potentielle : même expression principale dans le title de plusieurs pages.
+  // Les segments de titre répétés sur 3 pages ou plus (marque, préfixe de rubrique « Getting Started: ») sont ignorés.
+  const segOf = (title) => (title || '').toLowerCase().split(/\s[|–—-]\s|:\s/).map((x) => x.trim()).filter(Boolean);
+  const segFreq = new Map();
+  for (const p of indexableHtml) for (const sg of new Set(segOf(p.title))) segFreq.set(sg, (segFreq.get(sg) || 0) + 1);
+  const coreTitle = (p) => segOf(p.title).filter((sg) => segFreq.get(sg) < 3).join(' ');
   const titleTermFreq = new Map();
   for (const p of indexableHtml) {
-    const t = (p.title || '').toLowerCase();
+    const t = coreTitle(p);
     for (const k of new Set(p.keywords || [])) if (t.includes(k)) titleTermFreq.set(k, (titleTermFreq.get(k) || 0) + 1);
   }
   const siteWide = Math.max(3, indexableHtml.length * 0.3); // termes de marque présents partout : ignorés
   const focusGroups = new Map();
   for (const p of indexableHtml) {
-    const t = (p.title || '').toLowerCase();
+    const t = coreTitle(p);
+    const slug = decodeURIComponent(new URL(p.url).pathname).toLowerCase().replace(/[-_/]+/g, ' ');
+    const h1 = (p.h1?.[0] || '').toLowerCase();
     const focus = (p.keywords || []).find((k) => k.includes(' ') && t.includes(k) && titleTermFreq.get(k) < siteWide);
     p.focusKeyword = focus || (p.keywords || []).find((k) => t.includes(k) && titleTermFreq.get(k) < siteWide) || '';
-    if (focus) {
+    // L'expression doit aussi être le sujet affiché (H1, description) ou l'adresse de la page, pas un mot commun de titre.
+    if (focus && (h1.includes(focus) || slug.includes(focus) || (p.metaDescription || '').toLowerCase().includes(focus))) {
       if (!focusGroups.has(focus)) focusGroups.set(focus, []);
       focusGroups.get(focus).push(p);
     }
   }
+  // Deux pages ne se concurrencent que si leurs sujets se recouvrent : au moins 2 mots-clés principaux communs.
+  const overlap = (a, b) => (a.keywords || []).filter((k) => (b.keywords || []).includes(k)).length;
+  for (const [k, arr] of focusGroups) focusGroups.set(k, arr.filter((p) => arr.some((o) => o !== p && root(o.url) !== root(p.url) && overlap(p, o) >= 2)));
   const cannibal = [...focusGroups.entries()].filter(([, arr]) => arr.length > 1);
 
   // Liens cassés / vers redirections / ancres
@@ -454,7 +465,7 @@ export function analyze(crawler) {
   add('thin-content', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => contentWords(p) < T.thinWords), (p) => D('d.words', { n: contentWords(p) })), { min: T.thinWords });
   add('duplicate-content', 'error', 'content', 'high', 'medium', u(html200.filter((p) => p.duplicateContent), (p) => `×${dupContent.count(p)}`));
   add('near-duplicate', 'warning', 'content', 'high', 'high', u(indexableHtml.filter((p) => p.nearDuplicates), (p) => `≈${p.closestSimilarity} % · ${p.closestMatch}`), { min: T.nearDuplicate });
-  add('cannibalization', 'warning', 'content', 'high', 'medium', cannibal.flatMap(([k, arr]) => arr.map((p) => ({ url: p.url, detail: `« ${k} » ×${arr.length}` }))));
+  add('cannibalization', 'notice', 'content', 'medium', 'medium', cannibal.flatMap(([k, arr]) => arr.map((p) => ({ url: p.url, detail: `« ${k} » ×${arr.length}` }))));
   add('low-text-ratio', 'notice', 'content', 'low', 'medium', u(indexableHtml.filter((p) => p.textRatio < T.lowTextRatio), (p) => `${p.textRatio} %`), { min: T.lowTextRatio });
 
   // Images
