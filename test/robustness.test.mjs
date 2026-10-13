@@ -185,3 +185,30 @@ test('liens cassés : une ligne par paire page → cible, avec toutes les ancres
     server.close();
   }
 });
+
+test('hreflang : les versions linguistiques sont explorées et vérifiées (404, noindex)', async () => {
+  let base;
+  const alt = () => `<link rel="alternate" hreflang="fr" href="${base}/"><link rel="alternate" hreflang="es" href="${base}/es/"><link rel="alternate" hreflang="de" href="${base}/de/"><link rel="alternate" hreflang="it" href="${base}/it/">`;
+  const server = http.createServer((req, res) => {
+    if (req.url === '/de/') {
+      res.writeHead(404, { 'content-type': 'text/html' });
+      return res.end('<title>404</title>');
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    const noindex = req.url === '/it/' ? '<meta name="robots" content="noindex">' : '';
+    res.end(`<html><head><title>Page ${req.url}</title>${alt()}${noindex}</head><body><h1>${req.url}</h1></body></html>`);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false }).start();
+    // Aucune page n'est liée par <a> : elles ont été découvertes par hreflang.
+    assert.ok(R.pages.some((p) => p.url === base + '/es/' && p.status === 200));
+    const ids = (id) => R.issues.find((i) => i.id === id)?.items.map((i) => i.detail) || [];
+    assert.ok(ids('hreflang-target-error').some((d) => d.includes('/de/') && d.includes('404')));
+    assert.ok(ids('hreflang-target-non-indexable').some((d) => d.includes('/it/') && d.includes('noindex')));
+    assert.ok(!ids('hreflang-return').length);
+  } finally {
+    server.close();
+  }
+});

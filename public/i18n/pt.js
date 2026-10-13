@@ -1112,4 +1112,10 @@ export default {
   'report.compareUnreliable': 'Os dois rastreios têm tamanhos muito diferentes (ou um foi interrompido mais cedo): os problemas de URLs não rastreados de novo aparecem como «não reverificados», não como corrigidos.',
   'report.fixedUrls': 'URLs corrigidos',
   'report.newUrls': 'Novos URLs',
+  'issue.hreflang-target-error.label': 'hreflang para um erro ou redirecionamento',
+  'issue.hreflang-target-error.desc': 'Uma versão de idioma declarada em hreflang devolve um erro (4xx/5xx) ou redireciona. O Google ignora a anotação para esse idioma.',
+  'issue.hreflang-target-error.fix': 'Faça o hreflang apontar para o URL final da página traduzida (200, sem redirecionamento).',
+  'issue.hreflang-target-non-indexable.label': 'hreflang para uma página não indexável',
+  'issue.hreflang-target-non-indexable.desc': 'Uma versão de idioma declarada em hreflang está em noindex ou canonicalizada para outro URL: o grupo hreflang fica quebrado para esse idioma.',
+  'issue.hreflang-target-non-indexable.fix': 'Faça o hreflang apontar para o URL canónico e indexável de cada versão de idioma.',
 };

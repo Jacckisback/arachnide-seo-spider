@@ -348,12 +348,23 @@ export function analyze(crawler) {
 
   // Hreflang
   const hreflangMissingReturn = [];
+  const hreflangBadTarget = [];
+  const hreflangNonIndexable = [];
   for (const p of html200.filter((x) => x.indexable)) {
     for (const h of p.hreflang || []) {
       const n = norm(h.href);
       if (n === p.url) continue;
       const t = byUrl.get(n);
-      if (!t || !t.isHtml || t.status !== 200) continue;
+      if (!t || t.blockedByRobots || t.rateLimited) continue;
+      // Cible en erreur, redirigée ou non indexable : Google ignore l'annotation pour cette langue.
+      if (t.status !== 200 || !t.isHtml) {
+        hreflangBadTarget.push({ url: p.url, detail: `${h.lang} → ${n} (${t.status || t.error || '—'}${t.redirectUrl ? ' → ' + t.redirectUrl : ''})` });
+        continue;
+      }
+      if (!t.indexable) {
+        hreflangNonIndexable.push({ url: p.url, detail: `${h.lang} → ${n} (${t.indexabilityReason}${t.canonical && t.indexabilityReason === 'canonicalised' ? ' → ' + t.canonical : ''})` });
+        continue;
+      }
       if (!(t.hreflang || []).some((x) => norm(x.href) === p.url)) hreflangMissingReturn.push({ url: p.url, detail: `${h.lang} → ${n}` });
     }
   }
@@ -592,6 +603,8 @@ export function analyze(crawler) {
 
   // Hreflang
   add('hreflang-invalid', 'error', 'hreflang', 'high', 'low', u(html200.filter((p) => p.hreflangInvalid?.length), (p) => p.hreflangInvalid.join(', ')));
+  add('hreflang-target-error', 'error', 'hreflang', 'high', 'low', hreflangBadTarget);
+  add('hreflang-target-non-indexable', 'warning', 'hreflang', 'high', 'low', hreflangNonIndexable);
   add('hreflang-return', 'warning', 'hreflang', 'high', 'medium', hreflangMissingReturn);
   // Google n'évalue les hreflang que sur les URL canoniques indexables : une page canonicalisée ou noindex n'est pas jugée.
   add('hreflang-self', 'warning', 'hreflang', 'medium', 'low', u(indexableHtml.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => norm(h.href) === p.url))));

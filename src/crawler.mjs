@@ -799,6 +799,8 @@ export class Crawler extends EventEmitter {
         }
       }
       if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
+      // Versions linguistiques déclarées en hreflang : explorées pour vérifier qu'elles répondent 200, sont indexables et renvoient le lien.
+      if (follow && this.opts.crawlCanonicals) for (const h of rec.hreflang || []) this.enqueue(h.href, item.depth + 1, 'hreflang');
       if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
       if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
       this.pages.set(item.url, rec);

@@ -1112,4 +1112,10 @@ export default {
   'report.compareUnreliable': 'I due crawl hanno dimensioni molto diverse (o uno è stato interrotto prima): i problemi degli URL non riscansionati sono «non riverificati», non risolti.',
   'report.fixedUrls': 'URL risolti',
   'report.newUrls': 'Nuovi URL',
+  'issue.hreflang-target-error.label': 'hreflang verso un errore o un reindirizzamento',
+  'issue.hreflang-target-error.desc': 'Una versione linguistica dichiarata in hreflang restituisce un errore (4xx/5xx) o reindirizza. Google ignora l’annotazione per quella lingua.',
+  'issue.hreflang-target-error.fix': 'Fate puntare l’hreflang all’URL finale della pagina tradotta (200, senza reindirizzamento).',
+  'issue.hreflang-target-non-indexable.label': 'hreflang verso una pagina non indicizzabile',
+  'issue.hreflang-target-non-indexable.desc': 'Una versione linguistica dichiarata in hreflang è noindex o canonicalizzata verso un altro URL: il gruppo hreflang è interrotto per quella lingua.',
+  'issue.hreflang-target-non-indexable.fix': 'Fate puntare l’hreflang all’URL canonico e indicizzabile di ogni versione linguistica.',
 };
