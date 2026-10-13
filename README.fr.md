@@ -30,6 +30,18 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
   <img src="docs/screenshots/dashboard.png" alt="Tableau de bord : score de santé SEO, score par catégorie, codes de réponse, profondeur de clic et priorités" width="100%">
 </p>
 
+## 🛡️ Nouveau en 3.3 : audit de fiabilité
+
+Un audit complet (extraction HTML, moteur de crawl, règles SEO et crawls de 8 vrais sites) a supprimé les faux positifs et les faux négatifs qui pouvaient tromper un professionnel du SEO ou du GEO.
+
+- **Sites protégés contre les robots** (403 sur le user-agent du crawler) : le crawl passe automatiquement sur Chrome et vous le signale, au lieu d’afficher toutes les pages en erreur.
+- **Limitation de débit (429/503)** : Arachnide attend et réessaie, les pages freinées ne sont plus comptées comme cassées. Les liens vers LinkedIn ou des sites protégés par Cloudflare sont « non vérifiables », pas « cassés ».
+- **Directives lues comme Google** : `max-image-preview:none` n’est pas un noindex, le `X-Robots-Tag` d’un autre robot est ignoré, le meta refresh est une redirection.
+- **Le contenu tel qu’il est** : `<title>` des SVG ignorés, `alt=""` = image décorative, images en lazy-load (`data-src`) analysées, comptage des mots en chinois, japonais et thaï.
+- **International et données structurées** : hreflang vérifiés avec les vrais codes ISO, traductions et pages paginées non considérées comme doublons, seules les propriétés schema.org exigées par Google sont contrôlées.
+- **Un score de santé plus juste** : un lien cassé dans le menu ne met plus le site à 0, et un site qui bloque Googlebot n’obtient plus un A.
+- **Nouveaux contrôles** : soft 404, canonical hors du `<head>`, sitemap sur un autre hôte, URL non vérifiables.
+
 ## 📈 Nouveau en 3.2 : données Google et crawls planifiés
 
 - **Core Web Vitals des vrais visiteurs** (PageSpeed Insights + CrUX : LCP, INP, CLS…) et score Lighthouse de vos pages clés.

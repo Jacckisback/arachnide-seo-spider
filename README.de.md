@@ -30,6 +30,18 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO Health Score, Bewertung nach Kategorie, Statuscodes, Klicktiefe und Prioritäten" width="100%">
 </p>
 
+## 🛡️ Neu in 3.3: Zuverlässigkeits-Audit
+
+Ein vollständiges Audit (HTML-Extraktion, Crawl-Engine, SEO-Regeln und Crawls von 8 echten Websites) hat die falsch positiven und falsch negativen Befunde beseitigt, die SEO- und GEO-Profis in die Irre führen konnten.
+
+- **Gegen Bots geschützte Websites** (403 auf den User-Agent des Crawlers): Der Crawl wechselt automatisch zu Chrome und weist darauf hin, statt alle Seiten als Fehler zu melden.
+- **Ratenbegrenzung (429/503)**: Arachnide wartet und versucht es erneut; gebremste Seiten zählen nicht mehr als defekt. Links zu LinkedIn oder Cloudflare-geschützten Websites gelten als „nicht prüfbar“, nicht als „defekt“.
+- **Direktiven wie Google gelesen**: `max-image-preview:none` ist kein noindex, das `X-Robots-Tag` eines anderen Bots wird ignoriert, Meta-Refresh ist eine Weiterleitung.
+- **Inhalte, wie sie sind**: SVG-`<title>` ignoriert, `alt=""` = dekoratives Bild, Lazy-Load-Bilder (`data-src`) analysiert, Wortzählung für Chinesisch, Japanisch und Thai.
+- **International und strukturierte Daten**: hreflang gegen echte ISO-Codes geprüft, Übersetzungen und paginierte Seiten sind keine Duplikate, nur die von Google geforderten schema.org-Eigenschaften werden geprüft.
+- **Ein faireres Health-Score**: Ein defekter Link im Menü drückt die Website nicht mehr auf 0, und eine Website, die Googlebot sperrt, bekommt kein A mehr.
+- **Neue Prüfungen**: Soft 404, Canonical außerhalb von `<head>`, Sitemap auf anderem Host, nicht prüfbare URLs.
+
 ## 📈 Neu in 3.2: Google-Daten und geplante Crawls
 
 - **Core Web Vitals echter Nutzer** (PageSpeed Insights + CrUX: LCP, INP, CLS…) und Lighthouse-Score Ihrer wichtigsten Seiten.

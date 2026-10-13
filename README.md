@@ -30,6 +30,18 @@ There is no account, no cloud and no page limit, and your data stays on your mac
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
 </p>
 
+## 🛡️ New in 3.3: reliability audit
+
+A full audit (HTML extraction, crawl engine, SEO rules and crawls of 8 real sites) removed the false positives and false negatives that could mislead an SEO or GEO professional.
+
+- **Bot-protected sites** (403 on the crawler's user agent): the crawl switches to Chrome automatically and tells you, instead of reporting every page as an error.
+- **Rate limiting (429/503)**: Arachnide waits and retries; throttled pages are no longer counted as broken. External links to LinkedIn or Cloudflare-protected sites are "could not be checked", not "broken".
+- **Directives read like Google**: `max-image-preview:none` is not a noindex, another bot's `X-Robots-Tag` is ignored, meta refresh is a redirect.
+- **Content seen as it is**: SVG `<title>` ignored, `alt=""` is a decorative image, lazy-loaded images (`data-src`) analysed, word count for Chinese, Japanese and Thai.
+- **International and structured data**: hreflang checked against real ISO codes, translations and paginated pages are not duplicates, only the schema.org properties Google requires.
+- **A fairer health score**: one broken link in the menu no longer drops a site to 0, and a site blocking Googlebot no longer gets an A.
+- **New checks**: soft 404, canonical outside `<head>`, sitemap on another host, URLs that could not be checked.
+
 ## 📈 New in 3.2: Google data & scheduled crawls
 
 - **Core Web Vitals from real users** (PageSpeed Insights + CrUX: LCP, INP, CLS…) and Lighthouse score for your key pages.
