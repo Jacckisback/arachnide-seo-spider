@@ -1085,4 +1085,9 @@ export default {
   'issue.canonical-outside-head.label': 'Canonical hors du <head>',
   'issue.canonical-outside-head.desc': 'Une balise canonical est placée dans le <body> : Google l’ignore.',
   'issue.canonical-outside-head.fix': 'Déplacez la balise canonical dans le <head>.',
+  'warn.rateLimited': 'Le site a demandé au crawler de ralentir ({status}) : les requêtes ont été mises en pause puis relancées. Réduisez la vitesse dans les options si cela persiste.',
+  'idx.rateLimited': 'Freinée par le serveur (non vérifiée)',
+  'issue.rate-limited.label': 'URL non vérifiées (limite de débit du serveur)',
+  'issue.rate-limited.desc': 'Le serveur répondait encore 429/503 après plusieurs tentatives. Cela vient de la vitesse du crawl, pas des pages : elles ne sont pas comptées comme erreurs.',
+  'issue.rate-limited.fix': 'Relancez le crawl avec moins de connexions simultanées ou une limite d’URL par seconde.',
 };

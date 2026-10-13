@@ -91,6 +91,13 @@ function searchRegex(q) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Retry-After : nombre de secondes ou date HTTP.
+function retryAfterMs(v) {
+  if (!v) return null;
+  if (/^\d+$/.test(v.trim())) return Number(v) * 1000;
+  const d = Date.parse(v);
+  return Number.isNaN(d) ? null : Math.max(0, d - Date.now());
+}
 const HTML_TYPES = /text\/html|application\/xhtml\+xml/i;
 
 // Décodage comme un navigateur : BOM d'abord, puis l'en-tête HTTP, puis <meta charset> (hors commentaires, 8 Ko),
@@ -241,6 +248,8 @@ export class Crawler extends EventEmitter {
 
   // Vitesse : plafond global de requêtes par seconde, partagé par tous les workers.
   async throttle() {
+    // Le site a demandé de ralentir (429/503 + Retry-After) : toutes les requêtes attendent.
+    if (this.backoffUntil > Date.now()) await sleep(this.backoffUntil - Date.now());
     if (!this.opts.maxUrlPerSec) return;
     const gap = 1000 / this.opts.maxUrlPerSec;
     const now = Date.now();
@@ -542,7 +551,22 @@ export class Crawler extends EventEmitter {
     }
     let reqRes;
     try {
-      reqRes = await this.request(item.url);
+      // 429 / 503 : le serveur demande de ralentir. On attend (Retry-After, 30 s max) et on réessaie deux fois
+      // avant de conclure ; une page seulement freinée n'est pas une page cassée.
+      for (let attempt = 0; ; attempt++) {
+        reqRes = await this.request(item.url);
+        const st = reqRes.res.status;
+        if ((st !== 429 && st !== 503) || attempt >= 2) break;
+        const wait = retryAfterMs(reqRes.res.headers.get('retry-after')) ?? 2000 * (attempt + 1);
+        clearTimeout(reqRes.timer);
+        await reqRes.res.body?.cancel();
+        if (st === 429 && !this.rateLimitWarned) {
+          this.rateLimitWarned = true;
+          this.warn('warn.rateLimited', { status: st });
+        }
+        this.backoffUntil = Math.max(this.backoffUntil || 0, Date.now() + Math.min(wait, 30000));
+        rec.retries = attempt + 1;
+      }
     } catch (e) {
       const r = this.errorRecord(item, e);
       this.pages.set(item.url, r);
@@ -552,6 +576,8 @@ export class Crawler extends EventEmitter {
     const { res, ttfb, timer } = reqRes;
     try {
       rec.status = res.status;
+      // Toujours freinée après les nouvelles tentatives : artefact du crawl, pas une erreur du site.
+      if (res.status === 429 || (res.status === 503 && rec.retries)) rec.rateLimited = true;
       rec.statusText = res.statusText;
       rec.contentType = res.headers.get('content-type') || '';
       rec.xRobotsTag = res.headers.get('x-robots-tag') || '';

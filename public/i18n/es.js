@@ -1085,4 +1085,9 @@ export default {
   'issue.canonical-outside-head.label': 'Canonical fuera del <head>',
   'issue.canonical-outside-head.desc': 'Una etiqueta canonical está en el <body>: Google la ignora.',
   'issue.canonical-outside-head.fix': 'Mueva la etiqueta canonical al <head>.',
+  'warn.rateLimited': 'El sitio pidió al rastreador que fuera más despacio ({status}): las solicitudes se pausaron y se reintentaron. Reduzca la velocidad en las opciones si persiste.',
+  'idx.rateLimited': 'Limitada por el servidor (no comprobada)',
+  'issue.rate-limited.label': 'URL no comprobadas (límite de velocidad del servidor)',
+  'issue.rate-limited.desc': 'El servidor seguía respondiendo 429/503 tras varios intentos. Se debe a la velocidad del rastreo, no a las páginas: no se cuentan como errores.',
+  'issue.rate-limited.fix': 'Vuelva a lanzar el rastreo con menos conexiones simultáneas o un límite de URL por segundo.',
 };

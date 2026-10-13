@@ -1085,4 +1085,9 @@ export default {
   'issue.canonical-outside-head.label': 'Canonical fora do <head>',
   'issue.canonical-outside-head.desc': 'Uma tag canonical está no <body>: o Google a ignora.',
   'issue.canonical-outside-head.fix': 'Mova a tag canonical para o <head>.',
+  'warn.rateLimited': 'O site pediu ao rastreador para abrandar ({status}): os pedidos foram pausados e repetidos. Reduza a velocidade nas opções se persistir.',
+  'idx.rateLimited': 'Limitada pelo servidor (não verificada)',
+  'issue.rate-limited.label': 'URLs não verificados (limite de taxa do servidor)',
+  'issue.rate-limited.desc': 'O servidor continuava a responder 429/503 após várias tentativas. Deve-se à velocidade do rastreio, não às páginas: não são contadas como erros.',
+  'issue.rate-limited.fix': 'Execute o rastreio novamente com menos ligações simultâneas ou um limite de URLs por segundo.',
 };

@@ -44,6 +44,7 @@ function indexability(p) {
   if (p.blockedByRobots || p.robotsBlocked) return 'blocked';
   if (!p.status) return 'noResponse';
   if (p.status >= 300 && p.status < 400) return 'redirect';
+  if (p.rateLimited) return 'rateLimited';
   if (p.status >= 400 && p.status < 500) return 'clientError';
   if (p.status >= 500) return 'serverError';
   if (robotsFlags(p.metaRobots, p.xRobotsTag).noindex) return 'noindex';
@@ -272,7 +273,7 @@ export function analyze(crawler) {
         if (!genericAnchors.has(l.from)) genericAnchors.set(l.from, new Set());
         genericAnchors.get(l.from).add(l.anchor);
       }
-      if (!t || t.blockedByRobots) continue;
+      if (!t || t.blockedByRobots || t.rateLimited) continue;
       if (!t.status || t.status >= 400) brokenLinks.push({ from: l.from, to: l.to, anchor: l.anchor, status: t.status, statusText: t.statusText || t.error });
       else if (t.status >= 300) linksToRedirects.push({ from: l.from, to: l.to, anchor: l.anchor, status: t.status, target: t.redirectUrl });
     } else {
@@ -356,9 +357,10 @@ export function analyze(crawler) {
   const imgRole = (i) => (i.role === 'src' ? '' : ` [${i.role === 'source' ? '<picture>' : 'srcset'}${i.descriptor ? ' ' + i.descriptor : ''}]`);
 
   // Codes réponse & liens
-  add('4xx', 'error', 'codes', 'high', 'low', u(pages.filter((p) => p.status >= 400 && p.status < 500), (p) => D('d.statusInlinks', { status: p.status, n: p.uniqueInlinks })));
-  add('5xx', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => p.status >= 500), (p) => String(p.status)));
+  add('4xx', 'error', 'codes', 'high', 'low', u(pages.filter((p) => p.status >= 400 && p.status < 500 && !p.rateLimited), (p) => D('d.statusInlinks', { status: p.status, n: p.uniqueInlinks })));
+  add('5xx', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => p.status >= 500 && !p.rateLimited), (p) => String(p.status)));
   add('no-response', 'error', 'codes', 'high', 'medium', u(pages.filter((p) => !p.status && !p.blockedByRobots), (p) => p.error));
+  add('rate-limited', 'notice', 'codes', 'medium', 'low', u(pages.filter((p) => p.rateLimited), (p) => String(p.status)));
   add('broken-internal', 'error', 'links', 'high', 'low', brokenLinks.filter((l) => !l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
   add('broken-external', 'warning', 'links', 'medium', 'low', brokenLinks.filter((l) => l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
   add('redirect-loop', 'error', 'redirects', 'high', 'low', redirects.filter((r) => r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
@@ -449,7 +451,7 @@ export function analyze(crawler) {
   add('gsc-no-impressions', 'notice', 'content', 'medium', 'high', crawler.gsc ? u(indexableHtml.filter((p) => p.gsc && !p.gsc.impressions)) : []);
   add('gsc-low-ctr', 'warning', 'titles', 'high', 'low', u(indexableHtml.filter((p) => p.gsc?.impressions >= 100 && p.gsc.position && p.gsc.position <= 10 && p.gsc.ctr < EXPECTED_CTR[Math.max(0, Math.round(p.gsc.position) - 1)] / 2), (p) => `CTR ${(p.gsc.ctr * 100).toFixed(1)} % · pos. ${p.gsc.position} · ${p.gsc.impressions} impr.`));
   add('gsc-non-indexable-traffic', 'warning', 'directives', 'high', 'low', u(html200.filter((p) => !p.indexable && p.gsc?.clicks > 0), (p) => D('d.gsc', { clicks: p.gsc.clicks, impressions: p.gsc.impressions })));
-  add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable), (p) => D('idx.' + p.indexabilityReason)));
+  add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable && !p.rateLimited), (p) => D('idx.' + p.indexabilityReason)));
   add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
 
   // Architecture

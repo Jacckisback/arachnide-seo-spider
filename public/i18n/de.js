@@ -1085,4 +1085,9 @@ export default {
   'issue.canonical-outside-head.label': 'Canonical außerhalb von <head>',
   'issue.canonical-outside-head.desc': 'Ein Canonical-Tag steht im <body>: Google ignoriert es.',
   'issue.canonical-outside-head.fix': 'Verschieben Sie das Canonical-Tag in den <head>.',
+  'warn.rateLimited': 'Die Website hat den Crawler gebeten, langsamer zu werden ({status}): Anfragen wurden pausiert und wiederholt. Senken Sie die Geschwindigkeit in den Optionen, falls es anhält.',
+  'idx.rateLimited': 'Vom Server gebremst (nicht geprüft)',
+  'issue.rate-limited.label': 'Nicht geprüfte URLs (Ratenbegrenzung des Servers)',
+  'issue.rate-limited.desc': 'Der Server antwortete nach mehreren Versuchen weiterhin mit 429/503. Das liegt an der Crawl-Geschwindigkeit, nicht an den Seiten: Sie zählen nicht als Fehler.',
+  'issue.rate-limited.fix': 'Starten Sie den Crawl erneut mit weniger Threads oder einer Grenze für URLs pro Sekunde.',
 };

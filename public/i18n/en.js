@@ -1085,4 +1085,9 @@ export default {
   'issue.canonical-outside-head.label': 'Canonical outside <head>',
   'issue.canonical-outside-head.desc': 'A canonical tag is placed in the <body>: Google ignores it.',
   'issue.canonical-outside-head.fix': 'Move the canonical tag into the <head>.',
+  'warn.rateLimited': 'The site asked the crawler to slow down ({status}): requests were paused and retried. Lower the speed in the options if this persists.',
+  'idx.rateLimited': 'Rate-limited (not checked)',
+  'issue.rate-limited.label': 'URLs not checked (server rate limit)',
+  'issue.rate-limited.desc': 'The server still answered 429/503 after several retries. This comes from the crawl speed, not from the pages: they are not counted as errors.',
+  'issue.rate-limited.fix': 'Run the crawl again with fewer threads or a limit of URLs per second.',
 };

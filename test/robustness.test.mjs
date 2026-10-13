@@ -47,3 +47,36 @@ test('site qui refuse le user-agent Arachnide (403) : bascule automatique sur Ch
     server.close();
   }
 });
+
+test('429 avec Retry-After : nouvelle tentative, pas d’erreur 4xx ni de lien cassé', async () => {
+  const hits = new Map();
+  const server = http.createServer((req, res) => {
+    const n = (hits.get(req.url) || 0) + 1;
+    hits.set(req.url, n);
+    if (req.url === '/lent' && n === 1) {
+      res.writeHead(429, { 'retry-after': '0' });
+      return res.end();
+    }
+    if (req.url === '/bloque') {
+      res.writeHead(429, { 'retry-after': '0' });
+      return res.end();
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(req.url === '/' ? '<title>Accueil</title><h1>A</h1><a href="/lent">l</a><a href="/bloque">b</a>' : '<title>Lent</title><h1>L</h1>');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false }).start();
+    const lent = R.pages.find((p) => p.url === base + '/lent');
+    assert.equal(lent.status, 200);
+    assert.equal(lent.retries, 1);
+    assert.equal(hits.get('/bloque'), 3);
+    const ids = new Set(R.issues.map((i) => i.id));
+    assert.ok(ids.has('rate-limited'));
+    assert.ok(!ids.has('4xx') && !ids.has('broken-internal'));
+    assert.ok(R.meta.warnings.some((w) => w.key === 'warn.rateLimited'));
+  } finally {
+    server.close();
+  }
+});

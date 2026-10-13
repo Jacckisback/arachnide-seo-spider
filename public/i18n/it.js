@@ -1085,4 +1085,9 @@ export default {
   'issue.canonical-outside-head.label': 'Canonical fuori dall’<head>',
   'issue.canonical-outside-head.desc': 'Un tag canonical si trova nel <body>: Google lo ignora.',
   'issue.canonical-outside-head.fix': 'Spostate il tag canonical nell’<head>.',
+  'warn.rateLimited': 'Il sito ha chiesto al crawler di rallentare ({status}): le richieste sono state sospese e ripetute. Riducete la velocità nelle opzioni se persiste.',
+  'idx.rateLimited': 'Limitata dal server (non verificata)',
+  'issue.rate-limited.label': 'URL non verificati (limite di frequenza del server)',
+  'issue.rate-limited.desc': 'Il server rispondeva ancora 429/503 dopo diversi tentativi. Dipende dalla velocità del crawl, non dalle pagine: non sono contate come errori.',
+  'issue.rate-limited.fix': 'Rilanciate il crawl con meno connessioni simultanee o un limite di URL al secondo.',
 };
