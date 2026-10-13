@@ -449,7 +449,11 @@ export function analyze(crawler) {
   // Sitemap
   const hasSitemap = crawler.sitemapUrls.size > 0;
   const spider = crawler.opts.mode !== 'list';
-  add('no-sitemap', 'warning', 'sitemap', 'medium', 'low', hasSitemap || !crawler.opts.useSitemaps || !spider ? [] : [{ url: crawler.origin + '/sitemap.xml', detail: '404' }]);
+  // Un index trouvé mais sans URL lisible n'est pas « absent » : le détail dit ce qui a été lu.
+  const smFiles = crawler.sitemapFiles || [];
+  const noSitemapDetail = smFiles.length ? D('d.sitemapEmpty', { n: smFiles.length }) : '404';
+  add('no-sitemap', 'warning', 'sitemap', 'medium', 'low', hasSitemap || !crawler.opts.useSitemaps || !spider ? [] : [{ url: smFiles[0]?.url || crawler.origin + '/sitemap.xml', detail: noSitemapDetail }]);
+  add('sitemap-host-mismatch', 'warning', 'sitemap', 'high', 'low', crawler.sitemapHostMismatch ? [{ url: crawler.sitemapMismatchExample, detail: D('d.sitemapHost', { n: crawler.sitemapHostMismatch, origin: crawler.origin }) }] : []);
   add('orphan', 'warning', 'sitemap', 'high', 'medium', u(pages.filter((p) => p.inSitemap && p.uniqueInlinks === 0 && !homes.has(p.url))));
   // Search Console : pages vues par Google mais absentes du crawl, pages sans visibilité, CTR faible.
   const EXPECTED_CTR = [0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025];
@@ -458,7 +462,7 @@ export function analyze(crawler) {
   add('gsc-low-ctr', 'warning', 'titles', 'high', 'low', u(indexableHtml.filter((p) => p.gsc?.impressions >= 100 && p.gsc.position && p.gsc.position <= 10 && p.gsc.ctr < EXPECTED_CTR[Math.max(0, Math.round(p.gsc.position) - 1)] / 2), (p) => `CTR ${(p.gsc.ctr * 100).toFixed(1)} % · pos. ${p.gsc.position} · ${p.gsc.impressions} impr.`));
   add('gsc-non-indexable-traffic', 'warning', 'directives', 'high', 'low', u(html200.filter((p) => !p.indexable && p.gsc?.clicks > 0), (p) => D('d.gsc', { clicks: p.gsc.clicks, impressions: p.gsc.impressions })));
   add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable && !p.rateLimited), (p) => D('idx.' + p.indexabilityReason)));
-  add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
+  add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap && !crawler.sitemapsTruncated ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
 
   // Architecture
   add('deep', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth !== null && p.depth >= T.deepLevel), (p) => D('d.depth', { n: p.depth })) : [], { min: T.deepLevel });
@@ -513,7 +517,7 @@ export function analyze(crawler) {
   add('hreflang-xdefault', 'notice', 'hreflang', 'low', 'low', u(indexableHtml.filter((p) => p.hreflang?.length && !p.hreflang.some((h) => h.lang.toLowerCase() === 'x-default'))));
 
   // IA & moteurs génératifs (GEO)
-  const blockedBots = (crawler.botAccess || []).filter((b) => !b.allowed);
+  const blockedBots = (crawler.botAccess || []).filter((b) => b.allowed === false);
   add('search-bots-blocked', 'error', 'ai', 'high', 'low', blockedBots.filter((b) => b.bot === 'Googlebot' || b.bot === 'Bingbot').map((b) => ({ url: crawler.origin + '/robots.txt', detail: b.bot })));
   add('ai-bots-blocked', 'notice', 'ai', 'medium', 'low', blockedBots.filter((b) => b.bot !== 'Googlebot' && b.bot !== 'Bingbot').map((b) => ({ url: crawler.origin + '/robots.txt', detail: b.bot })));
   add('llms-missing', 'notice', 'ai', 'low', 'low', spider && !crawler.llmsTxt && html200.length ? [{ url: crawler.origin + '/llms.txt', detail: '404' }] : []);

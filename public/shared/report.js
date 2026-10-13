@@ -135,7 +135,7 @@ export function buildReport(R, opts, t) {
       <div><h3>${esc(t('dash.depth'))}</h3>${depth.map(([k, v]) => `<div class="cat"><span>${esc(k === 'n/a' ? t('dash.notLinked') : t('dash.level', { n: k }))}</span>${bar((v / maxDepth) * 100, color)}<b>${t.num(v)}</b></div>`).join('')}</div>
     </div>
     <div class="two">
-      <div><h3>${esc(t('robots.bots'))}</h3><table class="mini"><tbody>${(R.meta.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
+      <div><h3>${esc(t('robots.bots'))}</h3><table class="mini"><tbody>${(R.meta.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed == null ? `<span class="chip">${esc(t('robots.unknown'))}</span>` : b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
         <p class="small">llms.txt : ${R.meta.llmsTxt ? '✓' : '✗'}</p></div>
       <div><h3>${esc(t('report.crawlSetup'))}</h3><table class="mini"><tbody>
         <tr><td>${esc(t('report.mode'))}</td><td>${esc(R.meta.mode === 'list' ? t('opt.modeList') : t('opt.modeSpider'))}</td></tr>

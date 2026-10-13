@@ -1093,4 +1093,13 @@ export default {
   'issue.external-unverified.label': 'Enlaces externos que no se pudieron comprobar',
   'issue.external-unverified.desc': 'El sitio externo rechazó la comprobación (401, 403, 429, 999) o no respondió a tiempo. Muchos sitios (LinkedIn, sitios protegidos por Cloudflare) bloquean a los rastreadores: el enlace suele funcionar para los visitantes.',
   'issue.external-unverified.fix': 'Abra algunos de estos enlaces en un navegador para confirmar que funcionan.',
+  'robots.unknown': 'Desconocido',
+  'warn.robotsUnavailable': 'No se pudo leer el robots.txt ({status}): el acceso de los robots de búsqueda y de IA es desconocido. Google detiene el rastreo mientras el robots.txt devuelva un error 5xx.',
+  'warn.robotsHtml': 'El robots.txt devuelve una página HTML en lugar de un archivo de texto: sus reglas no se pueden leer.',
+  'warn.sitemapsTruncated': 'Más de {n} archivos sitemap: la lectura se detuvo ahí, por lo que se omite el control «fuera del sitemap».',
+  'd.sitemapEmpty': '{n} archivo(s) sitemap leído(s), ninguna URL de página',
+  'd.sitemapHost': '{n} URL fuera de {origin}',
+  'issue.sitemap-host-mismatch.label': 'URL del sitemap en otro protocolo o host',
+  'issue.sitemap-host-mismatch.desc': 'El sitemap enumera URL en http:// o con/sin www mientras el sitio se sirve en otra dirección. Google ignora las URL del sitemap que no están en la dirección exacta del sitio.',
+  'issue.sitemap-host-mismatch.fix': 'Regenere el sitemap con las URL finales (https, con o sin www como en el sitio).',
 };

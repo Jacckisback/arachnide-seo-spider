@@ -80,3 +80,39 @@ test('429 avec Retry-After : nouvelle tentative, pas d’erreur 4xx ni de lien c
     server.close();
   }
 });
+
+test('sitemap .gz servi avec Content-Encoding, URL du sitemap en http, robots.txt en erreur 500', async () => {
+  const zlib = await import('node:zlib');
+  let base;
+  const server = http.createServer((req, res) => {
+    if (req.url === '/robots.txt') {
+      res.writeHead(500);
+      return res.end('oops');
+    }
+    if (req.url === '/sitemap.xml') {
+      res.writeHead(200, { 'content-type': 'application/xml' });
+      return res.end(`<sitemapindex><sitemap><loc>${base}/pages.xml.gz</loc></sitemap><sitemap><loc>${base}/image-sitemap-1.xml</loc></sitemap></sitemapindex>`);
+    }
+    if (req.url === '/pages.xml.gz') {
+      // Comme MDN : fichier .gz, mais servi compressé en transfert → fetch le décompresse déjà.
+      res.writeHead(200, { 'content-type': 'application/xml', 'content-encoding': 'gzip' });
+      return res.end(zlib.gzipSync(`<urlset><url><loc>${base.replace('127.0.0.1', 'localhost')}/a?x=1&#38;y=2</loc></url><url><loc>${base}/</loc></url></urlset>`));
+    }
+    if (req.url === '/image-sitemap-1.xml') throw new Error('ne doit pas être lu');
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end('<title>T</title><h1>H</h1>');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const c = new Crawler(base + '/', { maxPages: 5 });
+    const R = await c.start();
+    assert.ok(c.sitemapUrls.has(base + '/'));
+    assert.ok(R.meta.warnings.some((w) => w.key === 'warn.robotsUnavailable' && w.params.status === 500));
+    assert.ok(R.meta.botAccess.every((b) => b.allowed === null));
+    assert.ok(!R.issues.some((i) => i.id === 'no-sitemap' || i.id === 'search-bots-blocked'));
+    assert.deepEqual(R.meta.sitemapFiles.map((f) => f.type), ['index', 'urlset']);
+  } finally {
+    server.close();
+  }
+});

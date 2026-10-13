@@ -617,7 +617,7 @@ function renderRobots(view) {
     <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.robots'))}</h2><p class="help">${esc(t('help.robots'))}</p></div></div>
     <div class="dash-two">
       <div class="card"><h3>${icon('robot')} ${esc(t('robots.bots'))}</h3>
-        <table class="mini"><tbody>${(m.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
+        <table class="mini"><tbody>${(m.botAccess || []).map((b) => `<tr><td>${esc(b.bot)}</td><td>${b.allowed == null ? `<span class="chip">${esc(t('robots.unknown'))}</span>` : b.allowed ? `<span class="chip ok">${esc(t('robots.allowed'))}</span>` : `<span class="chip error">${esc(t('robots.blocked'))}</span>`}</td></tr>`).join('')}</tbody></table>
         <p class="mt">${m.llmsTxt ? `<span class="chip ok">llms.txt ✓</span> ${num(m.llmsTxt.size)} ${esc(t('robots.chars'))}` : `<span class="chip muted">llms.txt ✗</span> ${esc(t('robots.noLlms'))}`}</p>
       </div>
       <div class="card"><h3>${icon('sitemap')} ${esc(t('robots.sitemaps'))} · ${num(m.sitemapUrlCount)} URLs</h3>

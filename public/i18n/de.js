@@ -1093,4 +1093,13 @@ export default {
   'issue.external-unverified.label': 'Externe Links, die nicht geprüft werden konnten',
   'issue.external-unverified.desc': 'Die externe Website hat die Prüfung abgelehnt (401, 403, 429, 999) oder nicht rechtzeitig geantwortet. Viele Websites (LinkedIn, durch Cloudflare geschützte Seiten) blockieren Crawler: Für Besucher funktioniert der Link meist.',
   'issue.external-unverified.fix': 'Öffnen Sie einige dieser Links im Browser, um zu bestätigen, dass sie funktionieren.',
+  'robots.unknown': 'Unbekannt',
+  'warn.robotsUnavailable': 'robots.txt konnte nicht gelesen werden ({status}): Der Zugriff von Such- und KI-Bots ist unbekannt. Google pausiert das Crawling, solange robots.txt einen 5xx-Fehler liefert.',
+  'warn.robotsHtml': 'robots.txt liefert eine HTML-Seite statt einer Textdatei: Die Regeln können nicht gelesen werden.',
+  'warn.sitemapsTruncated': 'Mehr als {n} Sitemap-Dateien: Das Einlesen wurde dort beendet, die Prüfung „nicht in der Sitemap“ entfällt daher.',
+  'd.sitemapEmpty': '{n} Sitemap-Datei(en) gelesen, keine Seiten-URL',
+  'd.sitemapHost': '{n} URL(s) nicht auf {origin}',
+  'issue.sitemap-host-mismatch.label': 'Sitemap-URLs auf anderem Protokoll oder Host',
+  'issue.sitemap-host-mismatch.desc': 'Die Sitemap listet http://- oder www/Nicht-www-URLs, während die Website unter einer anderen Adresse ausgeliefert wird. Google ignoriert Sitemap-URLs, die nicht exakt auf der Adresse der Website liegen.',
+  'issue.sitemap-host-mismatch.fix': 'Erzeugen Sie die Sitemap mit den endgültigen URLs neu (https, mit oder ohne www wie auf der Website).',
 };

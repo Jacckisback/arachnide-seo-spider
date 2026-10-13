@@ -1093,4 +1093,13 @@ export default {
   'issue.external-unverified.label': 'Liens externes non vérifiables',
   'issue.external-unverified.desc': 'Le site externe a refusé la vérification (401, 403, 429, 999) ou n’a pas répondu à temps. Beaucoup de sites (LinkedIn, sites protégés par Cloudflare) bloquent les robots : le lien fonctionne en général pour les visiteurs.',
   'issue.external-unverified.fix': 'Ouvrez quelques-uns de ces liens dans un navigateur pour confirmer qu’ils fonctionnent.',
+  'robots.unknown': 'Inconnu',
+  'warn.robotsUnavailable': 'Le robots.txt n’a pas pu être lu ({status}) : l’accès des robots de recherche et d’IA est inconnu. Google suspend le crawl tant que le robots.txt renvoie une erreur 5xx.',
+  'warn.robotsHtml': 'Le robots.txt renvoie une page HTML au lieu d’un fichier texte : ses règles ne peuvent pas être lues.',
+  'warn.sitemapsTruncated': 'Plus de {n} fichiers sitemap : la lecture s’est arrêtée là, le contrôle « absente du sitemap » est donc désactivé.',
+  'd.sitemapEmpty': '{n} fichier(s) sitemap lu(s), aucune URL de page',
+  'd.sitemapHost': '{n} URL hors de {origin}',
+  'issue.sitemap-host-mismatch.label': 'URL du sitemap sur un autre protocole ou hôte',
+  'issue.sitemap-host-mismatch.desc': 'Le sitemap liste des URL en http:// ou avec/sans www alors que le site est servi à une autre adresse. Google ignore les URL du sitemap qui ne sont pas à l’adresse exacte du site.',
+  'issue.sitemap-host-mismatch.fix': 'Régénérez le sitemap avec les URL finales (https, avec ou sans www comme sur le site).',
 };

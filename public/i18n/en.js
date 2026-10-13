@@ -1093,4 +1093,13 @@ export default {
   'issue.external-unverified.label': 'External links that could not be checked',
   'issue.external-unverified.desc': 'The external site refused the check (401, 403, 429, 999) or did not answer in time. Many sites (LinkedIn, Cloudflare-protected sites) block crawlers: the link usually works for visitors.',
   'issue.external-unverified.fix': 'Open a few of these links in a browser to confirm they work.',
+  'robots.unknown': 'Unknown',
+  'warn.robotsUnavailable': 'robots.txt could not be read ({status}): access for search and AI bots is unknown. Google pauses crawling while robots.txt returns a 5xx error.',
+  'warn.robotsHtml': 'robots.txt returns an HTML page instead of a text file: its rules cannot be read.',
+  'warn.sitemapsTruncated': 'More than {n} sitemap files: discovery stopped there, so the “not in sitemap” check is skipped.',
+  'd.sitemapEmpty': '{n} sitemap file(s) read, no page URL',
+  'd.sitemapHost': '{n} URL(s) not on {origin}',
+  'issue.sitemap-host-mismatch.label': 'Sitemap URLs on another protocol or host',
+  'issue.sitemap-host-mismatch.desc': 'The sitemap lists http:// or www/non-www URLs while the site is served on another address. Google ignores sitemap URLs that are not on the site’s exact address.',
+  'issue.sitemap-host-mismatch.fix': 'Regenerate the sitemap with the final URLs (https, with or without www as on the site).',
 };

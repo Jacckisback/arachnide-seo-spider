@@ -90,6 +90,14 @@ function searchRegex(q) {
   }
 }
 
+// Entités XML d'un <loc> : &amp; &lt; &gt; &quot; &apos; et numériques (&#38; &#x26;).
+function decodeXml(v) {
+  return v
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&(amp|lt|gt|quot|apos);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" })[e]);
+}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Retry-After : nombre de secondes ou date HTTP.
 function retryAfterMs(v) {
@@ -284,25 +292,37 @@ export class Crawler extends EventEmitter {
     }
   }
 
-  async fetchText(url) {
+  // info (facultatif) reçoit le statut final et le type de contenu, pour distinguer « absent » de « illisible ».
+  async fetchText(url, info = {}, hops = 0) {
     try {
       const { res, timer } = await this.request(url);
       try {
-        if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+        info.status = res.status;
+        info.type = res.headers.get('content-type') || '';
+        if (res.status >= 300 && res.status < 400 && res.headers.get('location') && hops < 5) {
           await res.body?.cancel();
-          return this.fetchText(new URL(res.headers.get('location'), url).href);
+          return this.fetchText(new URL(res.headers.get('location'), url).href, info, hops + 1);
         }
         if (res.status !== 200) {
           await res.body?.cancel();
           return null;
         }
         let buf = Buffer.from(await res.arrayBuffer());
-        if (url.endsWith('.gz') || (buf[0] === 0x1f && buf[1] === 0x8b)) buf = zlib.gunzipSync(buf);
+        // Un .gz servi avec Content-Encoding: gzip est déjà décompressé par fetch : seuls les octets magiques comptent.
+        if (buf[0] === 0x1f && buf[1] === 0x8b) {
+          try {
+            buf = zlib.gunzipSync(buf);
+          } catch {
+            /* fichier tronqué : on garde les octets bruts */
+          }
+        }
         return buf.toString('utf8');
       } finally {
         clearTimeout(timer);
       }
-    } catch {
+    } catch (e) {
+      info.status = 0;
+      info.error = e?.cause?.code || e?.name || 'Error';
       return null;
     }
   }
@@ -354,42 +374,66 @@ export class Crawler extends EventEmitter {
 
   async loadRobotsAndSitemaps() {
     this.setPhase('robots');
-    const [txt, llms] = await Promise.all([this.fetchText(this.origin + '/robots.txt'), this.fetchText(this.origin + '/llms.txt')]);
-    this.robotsTxt = txt;
+    const rInfo = {};
+    const [txt, llms] = await Promise.all([this.fetchText(this.origin + '/robots.txt', rInfo), this.fetchText(this.origin + '/llms.txt')]);
+    // robots.txt illisible : 5xx, refus (401/403/429), erreur réseau ou page HTML. Google bloque tout le crawl tant
+    // qu'un 5xx persiste ; dans tous les cas l'accès des robots est « inconnu », pas « autorisé ».
+    const robotsHtml = txt != null && /<(html|head|body)[\s>]/i.test(txt.slice(0, 1000));
+    this.robotsStatus = rInfo.status ?? null;
+    this.robotsUnreadable = robotsHtml || (rInfo.status !== 200 && rInfo.status !== 404 && rInfo.status !== 410);
+    if (robotsHtml) this.warn('warn.robotsHtml');
+    else if (this.robotsUnreadable && !this.opts.customRobots) this.warn('warn.robotsUnavailable', { status: rInfo.status || rInfo.error || '—' });
+    this.robotsTxt = robotsHtml ? null : txt;
     this.llmsTxt = llms && !/<html/i.test(llms.slice(0, 500)) ? { size: llms.length } : null;
     if (this.opts.customRobots) this.robotsTxt = this.opts.customRobots;
     const robots = this.robotsTxt ? parseRobots(this.robotsTxt) : null;
     this.robotsRules = robots ? rulesFor(robots, this.opts.userAgent) : [];
-    this.botAccess = BOTS.map((bot) => ({ bot, allowed: robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
+    const unknown = this.robotsUnreadable && !this.opts.customRobots;
+    this.botAccess = BOTS.map((bot) => ({ bot, allowed: unknown ? null : robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
     if (!this.opts.useSitemaps || this.opts.mode === 'list') return;
 
     this.setPhase('sitemaps');
     const toFetch = [...new Set([...(robots?.sitemaps || []), this.origin + '/sitemap.xml', this.origin + '/sitemap_index.xml'])];
     const done = new Set();
-    while (toFetch.length && done.size < 100 && !this.stopped) {
+    const MAX_FILES = 500;
+    const siteHost = (h) => h.replace(/^www\./, '');
+    while (toFetch.length && !this.stopped) {
+      if (done.size >= MAX_FILES) {
+        this.sitemapsTruncated = true;
+        break;
+      }
       const sm = toFetch.shift();
       if (done.has(sm)) continue;
       done.add(sm);
       const xml = await this.fetchText(sm);
       if (!xml || !/<(urlset|sitemapindex)/i.test(xml)) continue;
-      const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) =>
-        m[1].replace(/&amp;/g, '&').trim()
-      );
+      const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) => decodeXml(m[1]).trim());
       if (/<sitemapindex/i.test(xml)) {
-        toFetch.push(...locs);
+        // Sitemaps d'images, de vidéos ou d'actualités : ils ne listent pas de pages, inutile d'épuiser le quota.
+        const pages = locs.filter((l) => !/(^|[/_-])(image|video|news)[-_]?sitemap|sitemap[-_](image|video|news)/i.test(l));
+        // Index : les sitemaps de pages passent avant les sitemaps imbriqués suivants (parcours en largeur).
+        toFetch.push(...pages);
         this.sitemapFiles.push({ url: sm, type: 'index', count: locs.length });
       } else {
         let n = 0;
         for (const l of locs) {
-          const norm = this.normalize(l);
-          if (norm) {
-            this.sitemapUrls.add(norm);
-            n++;
+          let norm = this.normalize(l);
+          if (!norm) continue;
+          // Sitemap en http:// ou sans www alors que le site est en https://www : Google ignore ces URL. On le signale
+          // et on les rapproche des pages réelles pour que la couverture du sitemap reste juste.
+          const u = new URL(norm);
+          if (u.origin !== this.origin && siteHost(u.hostname) === siteHost(new URL(this.origin).hostname)) {
+            this.sitemapHostMismatch = (this.sitemapHostMismatch || 0) + 1;
+            this.sitemapMismatchExample ||= l;
+            norm = this.normalize(this.origin + u.pathname + u.search) || norm;
           }
+          this.sitemapUrls.add(norm);
+          n++;
         }
         this.sitemapFiles.push({ url: sm, type: 'urlset', count: n });
       }
     }
+    if (this.sitemapsTruncated) this.warn('warn.sitemapsTruncated', { n: MAX_FILES });
   }
 
   blockedByRobots(url) {
