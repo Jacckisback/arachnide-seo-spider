@@ -667,6 +667,15 @@ export class Crawler extends EventEmitter {
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
           if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
+          // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
+          if (!this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
+            const ex = this.externals.get(rec.redirectUrl) || { url: rec.redirectUrl, status: null, statusText: '', inlinks: 0, pages: new Set() };
+            ex.pages.add(item.url);
+            this.externals.set(rec.redirectUrl, ex);
+          }
+        } else {
+          // Un 3xx sans en-tête Location ne mène nulle part : navigateurs et Google affichent une page d'erreur.
+          rec.error = 'Redirect without Location';
         }
         this.pages.set(item.url, rec);
         this.emit('page', rec);

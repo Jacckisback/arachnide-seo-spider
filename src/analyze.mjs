@@ -27,6 +27,8 @@ export const THRESHOLDS = {
 
 export const SEVERITIES = ['error', 'warning', 'notice'];
 const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
+// /index.html, /home, /accueil… → / : simple alias de l'accueil, pas une page supprimée.
+const HOME_ALIAS = /^\/((index|default|home|accueil|inicio|start|startseite)(\.(html?|php|aspx?))?\/?)?$/i;
 const UNVERIFIABLE = new Set([0, 401, 403, 429, 999]);
 const SEV_W = { error: 3, warning: 2, notice: 1 };
 const LVL_W = { high: 3, medium: 2, low: 1 };
@@ -191,7 +193,7 @@ export function analyze(crawler) {
     const final = byUrl.get(chain[chain.length - 1]);
     p.redirectHops = chain.length - 1;
     p.finalUrl = chain[chain.length - 1];
-    redirects.push({ url: p.url, status: p.status, target: p.redirectUrl, hops: chain.length - 1, chain, loop, finalUrl: p.finalUrl, finalStatus: loop ? null : final?.status ?? null, inlinks: p.inlinks });
+    redirects.push({ url: p.url, status: p.status, target: p.redirectUrl, hops: chain.length - 1, chain, loop, finalUrl: p.finalUrl, finalStatus: loop ? null : final?.status ?? crawler.externals?.get(p.finalUrl)?.status ?? null, inlinks: p.inlinks });
   }
 
   const html200 = pages.filter((p) => p.isHtml && p.status === 200);
@@ -370,10 +372,15 @@ export function analyze(crawler) {
   add('broken-external', 'warning', 'links', 'medium', 'low', brokenLinks.filter((l) => l.external).map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
   add('external-unverified', 'notice', 'links', 'low', 'low', unverifiedExternal.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status || l.statusText})` })));
   add('redirect-loop', 'error', 'redirects', 'high', 'low', redirects.filter((r) => r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
-  add('redirect-chain', 'warning', 'redirects', 'medium', 'low', redirects.filter((r) => r.hops > 1 && !r.loop).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
-  add('redirect-to-home', 'warning', 'redirects', 'medium', 'medium', redirects.filter((r) => !r.loop && homes.has(r.finalUrl) && !homes.has(r.url) && new URL(r.url).pathname !== '/').map((r) => ({ url: r.url, detail: `${r.status} → ${r.finalUrl}` })));
+  // Une chaîne n'est signalée qu'une fois, depuis son début : les étapes intermédiaires sans lien entrant ni sitemap
+  // n'existent que comme maillons de la chaîne.
+  const midHops = new Set(redirects.flatMap((r) => r.chain.slice(1, -1)));
+  const chainStart = (r) => !midHops.has(r.url) || byUrl.get(r.url)?.inSitemap || (byUrl.get(r.url)?.via && byUrl.get(r.url).via !== 'redirect');
+  add('redirect-chain', 'warning', 'redirects', 'medium', 'low', redirects.filter((r) => r.hops > 1 && !r.loop && chainStart(r)).map((r) => ({ url: r.url, detail: r.chain.join(' → ') })));
+  add('redirect-to-home', 'warning', 'redirects', 'medium', 'medium', redirects.filter((r) => !r.loop && homes.has(r.finalUrl) && !homes.has(r.url) && !HOME_ALIAS.test(new URL(r.url).pathname)).map((r) => ({ url: r.url, detail: `${r.status} → ${r.finalUrl}` })));
   add('links-to-redirect', 'warning', 'links', 'medium', 'medium', linksToRedirects.map((l) => ({ url: l.from, detail: `→ ${l.to} (${l.status} → ${l.target})` })));
-  add('redirect-302', 'warning', 'redirects', 'low', 'low', u(pages.filter((p) => p.status === 302 || p.status === 307), (p) => `${p.status} → ${p.redirectUrl}`));
+  // Google traite un 302 comme un 301 pour le PageRank ; il reste légitime pour une redirection de langue ou de pays.
+  add('redirect-302', 'notice', 'redirects', 'low', 'low', u(pages.filter((p) => p.status === 302 || p.status === 307), (p) => `${p.status} → ${p.redirectUrl}`));
   add('meta-refresh', 'warning', 'redirects', 'medium', 'low', u(html200.filter((p) => p.metaRefresh), (p) => p.metaRefresh));
   add('redirect-3xx', 'notice', 'redirects', 'low', 'low', u(pages.filter((p) => p.status >= 300 && p.status < 400), (p) => `${p.status} → ${p.redirectUrl}`));
 
