@@ -84,6 +84,7 @@ export function buildReport(R, opts, t) {
   const evolution = cmp ? `<section class="page">
     <h2><span class="n">02</span>${esc(t('report.evolution'))}</h2>
     <p>${esc(t('report.evolutionIntro', { date: t.date(cmp.prevDate, { dateStyle: 'long' }) }))}</p>
+    ${cmp.reliable === false ? `<p style="border-left:4px solid #d97706;background:#fdf6e9;padding:8px 12px">⚠ ${esc(t('report.compareUnreliable'))}</p>` : ''}
     <div class="evo">
       <div class="evo-score"><span>${cmp.prevScore}</span><i>→</i><b>${S.score}</b><em class="${cmp.scoreDelta >= 0 ? 'up' : 'down'}">${cmp.scoreDelta >= 0 ? '+' : ''}${cmp.scoreDelta}</em></div>
       <div class="evo-stats">
@@ -93,8 +94,8 @@ export function buildReport(R, opts, t) {
         <div><b class="down">${cmp.appeared.length}</b><span>${esc(t('report.new'))}</span></div>
       </div>
     </div>
-    <table><thead><tr><th>${esc(t('col.issue'))}</th><th>${esc(t('col.severity'))}</th><th class="r">${esc(t('report.before'))}</th><th class="r">${esc(t('report.after'))}</th><th class="r">Δ</th></tr></thead><tbody>
-      ${cmp.issues.filter((i) => i.delta !== 0).slice(0, 40).map((i) => `<tr><td>${esc(t('issue.' + i.id + '.label', R.issues.find((x) => x.id === i.id)?.params || {}))}</td><td>${chip(i.severity)}</td><td class="r">${t.num(i.prev)}</td><td class="r">${t.num(i.cur)}</td><td class="r ${i.delta < 0 ? 'up' : 'down'}">${i.delta > 0 ? '+' : ''}${t.num(i.delta)}</td></tr>`).join('')}
+    <table><thead><tr><th>${esc(t('col.issue'))}</th><th>${esc(t('col.severity'))}</th><th class="r">${esc(t('report.before'))}</th><th class="r">${esc(t('report.after'))}</th><th class="r">Δ</th><th class="r">${esc(t('report.fixedUrls'))}</th><th class="r">${esc(t('report.newUrls'))}</th></tr></thead><tbody>
+      ${cmp.issues.filter((i) => i.delta !== 0 || i.fixedCount || i.newCount).slice(0, 40).map((i) => `<tr><td>${esc(t('issue.' + i.id + '.label', R.issues.find((x) => x.id === i.id)?.params || {}))}</td><td>${chip(i.severity)}</td><td class="r">${t.num(i.prev)}</td><td class="r">${t.num(i.cur)}</td><td class="r ${i.delta < 0 ? 'up' : 'down'}">${i.delta > 0 ? '+' : ''}${t.num(i.delta)}</td><td class="r up">${i.fixedCount ? t.num(i.fixedCount) : '—'}</td><td class="r down">${i.newCount ? t.num(i.newCount) : '—'}</td></tr>`).join('')}
     </tbody></table>
   </section>` : '';
 

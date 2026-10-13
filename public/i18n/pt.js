@@ -1109,4 +1109,7 @@ export default {
   'issue.js-redirect.label': 'Redirecionamentos JavaScript',
   'issue.js-redirect.desc': 'A página envia os visitantes para outro URL com JavaScript. O Google só o segue depois da renderização, mais tarde e com menos fiabilidade do que um redirecionamento de servidor; a própria página não é indexada.',
   'issue.js-redirect.fix': 'Substitua-o por um redirecionamento de servidor 301 (ou 302 se for temporário).',
+  'report.compareUnreliable': 'Os dois rastreios têm tamanhos muito diferentes (ou um foi interrompido mais cedo): os problemas de URLs não rastreados de novo aparecem como «não reverificados», não como corrigidos.',
+  'report.fixedUrls': 'URLs corrigidos',
+  'report.newUrls': 'Novos URLs',
 };

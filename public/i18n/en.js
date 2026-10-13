@@ -1109,4 +1109,7 @@ export default {
   'issue.js-redirect.label': 'JavaScript redirects',
   'issue.js-redirect.desc': 'The page sends visitors to another URL with JavaScript. Google follows it only after rendering, later and less reliably than a server redirect; the page itself is not indexed.',
   'issue.js-redirect.fix': 'Replace it with a server-side 301 (or 302 if temporary).',
+  'report.compareUnreliable': 'The two crawls differ a lot in size (or one was stopped early): issues on URLs that were not crawled again are shown as “not rechecked”, not as fixed.',
+  'report.fixedUrls': 'URLs fixed',
+  'report.newUrls': 'New URLs',
 };

@@ -1109,4 +1109,7 @@ export default {
   'issue.js-redirect.label': 'JavaScript-Weiterleitungen',
   'issue.js-redirect.desc': 'Die Seite leitet Besucher per JavaScript auf eine andere URL weiter. Google folgt ihr erst nach dem Rendering, später und weniger zuverlässig als einer Server-Weiterleitung; die Seite selbst wird nicht indexiert.',
   'issue.js-redirect.fix': 'Ersetzen Sie sie durch eine serverseitige 301 (oder 302, wenn temporär).',
+  'report.compareUnreliable': 'Die beiden Crawls unterscheiden sich stark in der Größe (oder einer wurde früher beendet): Probleme auf nicht erneut gecrawlten URLs gelten als „nicht erneut geprüft“, nicht als behoben.',
+  'report.fixedUrls': 'Behobene URLs',
+  'report.newUrls': 'Neue URLs',
 };

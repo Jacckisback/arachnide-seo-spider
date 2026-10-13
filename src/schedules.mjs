@@ -120,7 +120,7 @@ export function evaluateAlerts(cur, prev, rules = DEFAULT_ALERTS) {
   const c = compareResults(cur, prev);
   if (rules.scoreDrop > 0 && prev.summary.score - cur.summary.score >= rules.scoreDrop) alerts.push({ key: 'alert.scoreDrop', params: { from: prev.summary.score, to: cur.summary.score } });
   if (rules.errors) {
-    for (const i of [...c.appeared, ...c.worsened].filter((x) => x.severity === 'error')) alerts.push({ key: 'alert.errors', params: { id: i.id, from: i.prev, to: i.cur } });
+    for (const i of [...c.appeared, ...c.worsened, ...c.changed.filter((x) => x.newCount)].filter((x) => x.severity === 'error')) alerts.push({ key: 'alert.errors', params: { id: i.id, from: i.prev, to: i.cur } });
   }
   if (rules.newIssues) {
     for (const i of c.appeared.filter((x) => x.severity !== 'error' || !rules.errors)) alerts.push({ key: 'alert.newIssue', params: { id: i.id, to: i.cur, severity: i.severity } });
