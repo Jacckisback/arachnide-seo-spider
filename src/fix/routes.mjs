@@ -6,6 +6,11 @@ import { readFixes, saveFixes, replaceProposals, readConnection, saveConnection 
 import { applyFixes, rollbackFixes, reverifyFixes } from './apply.mjs';
 import { fixConnectorFor } from './connectors.mjs';
 import { fixesToCsv } from './export.mjs';
+import { zipDirectory } from '../zip.mjs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const PLUGIN_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../integrations/wordpress/arachnide-connector');
 
 const jobs = new Map();
 const siteOf = (R) => R.meta.finalStart || R.meta.startUrl;
@@ -20,6 +25,11 @@ export async function handleFixRoutes(req, res, p, { send, readBody, broadcast, 
     return reply(200, await testAiConnection({ provider, apiKey }));
   }
   if (!p.startsWith('/api/fix/')) return false;
+  if (p === '/api/fix/wp-plugin.zip') {
+    const zip = await zipDirectory(PLUGIN_DIR, 'arachnide-connector');
+    res.writeHead(200, { 'content-type': 'application/zip', 'content-disposition': 'attachment; filename="arachnide-connector.zip"', 'content-length': zip.length });
+    return res.end(zip), true;
+  }
   const R = getResult();
   if (!R) return reply(409, { error: 'No crawl loaded', key: 'fix.noCrawl' });
   const site = siteOf(R);

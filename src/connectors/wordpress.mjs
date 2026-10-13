@@ -14,7 +14,8 @@
 import { Connector, ConnectorError, setImageAltInHtml, getImageAltInHtml } from './base.mjs';
 
 const PLUGIN_HINT = 'Install and activate the companion plugin integrations/wordpress/arachnide-connector (zip the folder, then Plugins > Add New > Upload Plugin).';
-const SEO_FIELDS = ['seo_title', 'meta_description', 'canonical', 'noindex'];
+// json_ld : données structurées ajoutées par le plugin compagnon (1.1+) ; link : lien interne réécrit dans le contenu.
+const SEO_FIELDS = ['seo_title', 'meta_description', 'canonical', 'noindex', 'json_ld'];
 // Types internes de WordPress qui n'ont pas d'URL publique.
 const SKIP_TYPES = new Set(['attachment', 'nav_menu_item', 'wp_block', 'wp_template', 'wp_template_part', 'wp_navigation', 'wp_global_styles', 'wp_font_family', 'wp_font_face']);
 
@@ -47,7 +48,7 @@ const imageKey = (src) => {
 export default class WordPressConnector extends Connector {
   static id = 'wordpress';
   static label = 'WordPress';
-  static fields = ['seo_title', 'meta_description', 'h1', 'canonical', 'noindex', 'image_alt', 'redirect'];
+  static fields = ['seo_title', 'meta_description', 'h1', 'canonical', 'noindex', 'image_alt', 'redirect', 'json_ld', 'link'];
   static setup = {
     user: 'WordPress username (an Editor is enough for content; Administrator for redirects)',
     appPassword: 'Application password, Users > Profile > Application Passwords (env: ARACHNIDE_WP_APP_PASSWORD)',
@@ -299,6 +300,12 @@ export default class WordPressConnector extends Connector {
       const loc = await this.locateImage(change);
       return loc.alt === '' || loc.alt === undefined ? null : loc.alt;
     }
+    if (field === 'link') {
+      // Valeur actuelle = l'adresse du lien encore présente dans le contenu (target), sinon null.
+      const r = await this.resource(change.url, field);
+      const o = await this.api(this.objectRoute(r, '?context=edit'));
+      return String(o?.content?.raw || '').includes(change.target) ? change.target : null;
+    }
     return super.get(change);
   }
 
@@ -328,6 +335,14 @@ export default class WordPressConnector extends Connector {
         // https://developer.wordpress.org/rest-api/reference/media/#update-a-media-item (alt_text)
         await this.api(`/wp/v2/media/${loc.mediaId}`, { method: 'POST', body: { alt_text: value ?? '' } });
       }
+      return;
+    }
+    if (field === 'link') {
+      await this.requirePlugin();
+      const r = await this.resource(change.url, field);
+      if (r.kind !== 'post') throw new ConnectorError('unsupported', 'WordPress: links can only be rewritten in posts and pages.');
+      const out = await this.api('/arachnide/v1/link', { method: 'POST', body: { kind: 'post', id: r.id, from: change.target, to: value } });
+      if (!out?.replaced) throw new ConnectorError('not_found', `WordPress: no link to ${change.target} found in the content (it may come from a menu or a widget).`);
       return;
     }
     return super.set(change);

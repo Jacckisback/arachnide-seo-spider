@@ -58,7 +58,9 @@ export class WordPressFixConnector extends CMSConnector {
     return { previous };
   }
   async rollback(fix) {
-    // Redirection créée par Arachnide : on la supprime ; sinon on remet la valeur d'avant.
+    // Lien : on réécrit la nouvelle adresse vers l'ancienne. Redirection créée par Arachnide : supprimée.
+    // Autres champs : la valeur d'avant est remise.
+    if (fix.target.kind === 'link') return this.wp.set({ url: fix.url, field: 'link', target: fix.newValue, value: fix.target.selector });
     await this.wp.set(this.change(fix, fix.target.kind === 'redirect' ? null : fix.oldValue ?? null));
   }
 }
