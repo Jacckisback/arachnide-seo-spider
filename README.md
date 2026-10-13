@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Version 3.4.0">
+  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Version 3.5.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,31 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Dashboard: SEO health score, score by category, response codes, click depth and priorities" width="100%">
 </p>
+
+## ✨ New in 3.5: Fix in 1 click with Claude or ChatGPT
+
+After a crawl, open the **Fix in 1 click** tab: issues are grouped by impact (pages × severity) and tagged **AI-fixable**, **Automatic** or **Manual**.
+
+<p align="center"><img src="docs/screenshots/fix-issues.png" alt="Fix in 1 click: issues grouped by impact with AI / automatic / manual badges and cost estimate" width="100%"></p>
+
+1. **Fix** one URL or **Fix all** for an issue type — Claude or ChatGPT writes titles, meta descriptions, H1, image alt texts and JSON-LD in the page’s language, from the page’s real content (the estimated cost is shown first). 301 redirects for internal 404s, canonicals, accidental noindex and links to redirects are computed without AI. Performance or hosting issues get a written action plan, never an “Apply” button.
+2. **Review**: before / after side by side, character counter against the target length, inline edit, Approve / Regenerate / Ignore, multi-select.
+3. **Apply** to WordPress (companion plugin) or to a code repository on GitHub (pull request — Lovable, Bolt.new, React, Next.js, Astro, HTML), or export CSV / JSON / PDF for any other CMS. **Simulation mode is on by default**: nothing is sent until you switch it off and accept the warning.
+4. Each fixed URL is **re-crawled** (verified ✓), and the **Fix history** tab lets you undo one fix or a whole batch, and export the “Applied fixes” PDF.
+
+<p align="center"><img src="docs/screenshots/fix-review.png" alt="Review panel: before / after, character counter, approve, regenerate, ignore" width="100%"></p>
+
+**The AI never changes your site by itself**: it proposes, you approve, a connector applies, Arachnide checks — and every change can be undone.
+
+### Set up
+
+- **AI key** — *Options → AI*: choose Claude (Anthropic) or ChatGPT (OpenAI), paste your API key ([console.anthropic.com](https://console.anthropic.com/settings/keys) or [platform.openai.com](https://platform.openai.com/api-keys)), pick a model, click *Test the connection*. The key is stored encrypted on your computer only and sent only to that provider; you pay the provider directly.
+- **WordPress** — in the *Fix* tab click the connection button → *WordPress* → *Download the WordPress plugin (.zip)*, then in WordPress *Plugins → Add New → Upload Plugin*. Create an **application password** in *Users → Profile → Application Passwords* (name it “Arachnide”, copy it), and enter the site address, username and that password in Arachnide. An Editor account is enough for content; Administrator for redirects. Works with Yoast SEO, Rank Math, SEOPress, All in One SEO and Redirection.
+- **GitHub / Lovable** — create a **fine-grained token** in *GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens*: *Only select repositories* (one repo), permissions *Contents: Read and write* and *Pull requests: Read and write*. Enter `owner/repo` and the token. Arachnide opens a pull request on `arachnide/fix-YYYYMMDD-HHMM` and shows the diff first; for Lovable, merging it into the default branch updates the project automatically.
+
+How connectors work and how to add a CMS: [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+<p align="center"><img src="docs/screenshots/fix-connection.png" alt="Connection dialog: WordPress, GitHub pull request or export" width="80%"></p>
 
 ## 🔎 New in 3.4: finishing the reliability work
 

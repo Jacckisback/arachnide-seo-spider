@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.5.0 — 2026-10-13
+
+### New: Fix in 1 click with Claude or ChatGPT
+- **Fix engine** (`src/fix/`): every correction is a validated **Fix** object (Zod schema). The AI never writes to a site: issue → proposal → before/after review → human approval → connector → re-crawl → history with undo.
+- **AI fixes** (Claude via the Anthropic Messages API, ChatGPT via OpenAI): SEO title, meta description, H1, image alt texts and JSON-LD (Article, Organization, FAQPage, Product depending on the page), written in the page’s language from a minimal context (URL, language, title, H1, ~2,000-token excerpt, target lengths, other pages’ values to avoid duplicates). Invalid answers get one retry, then a clear failure.
+- **Automatic fixes without AI**: 301 redirect from an internal 404 to the closest existing URL, missing or inconsistent canonical, accidental noindex, links pointing to redirects replaced by the final URL.
+- **Non-automatable issues** (performance, hosting, Core Web Vitals…): written action plan only.
+- **Batches**: “Fix all” per issue type with a queue (3 concurrent requests), 429 back-off, progress bar and cost estimate shown before running.
+- **Bring your own key**: Options → AI (provider, editable model list with defaults in `src/ai/models.json`, connection test). The key is encrypted locally (AES-256-GCM), never returned to the browser, logged or exported.
+- **Review UI**: new “Fix in 1 click” and “Fix history” tabs — issues grouped by impact with AI / Automatic / Manual badges, before/after side by side, character counter, inline edit, approve / regenerate / ignore, multi-select; **simulation mode on by default** and an explicit warning before the first live write.
+- **WordPress**: companion plugin **1.1.0** (downloadable as a zip from the app) — application passwords, Yoast SEO / Rank Math / SEOPress / All in One SEO / Redirection, JSON-LD output, internal link rewriting (with a WordPress revision), history of previous values, translations (fr, es, de, it, pt) via .pot/.po/.mo, WordPress 6.0+ / PHP 7.4+.
+- **GitHub** (Lovable, Bolt.new, React, Next.js, Astro, static HTML): fine-grained token on one repository, framework detection, exact location of titles / descriptions / H1 / alt / links in the code (AI-assisted when ambiguous), **diff shown before** a branch `arachnide/fix-YYYYMMDD-HHMM` and a pull request with a summary table are created; undo closes the PR or opens a revert PR.
+- **Export** for every other CMS: CSV, JSON and a PDF with step-by-step instructions; “Applied fixes” PDF report (before/after, date, AI provider, status).
+- Docs: README section, [docs/CONNECTORS.md](docs/CONNECTORS.md) (how to add a CMS; Shopify / Webflow / Wix planned), [docs/PLAN-FIX-ENGINE.md](docs/PLAN-FIX-ENGINE.md).
+
 ## 3.4.0 — 2026-10-13
 
 Completes the reliability work started in 3.3.

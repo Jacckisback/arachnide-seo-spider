@@ -113,3 +113,13 @@ test('« Tout corriger » : contexte minimal, langue de la page, 429 avec backof
   assert.doesNotMatch(first.user, /menu/);
   await assert.rejects(proposeFixes(R, { issueIds: ['desc-missing'], fetch: fetchPage }), /No AI provider/);
 });
+
+test('routes sensibles : refusées depuis une autre origine, sans JSON ou via un autre hôte (DNS rebinding)', async () => {
+  const { isTrustedRequest } = await import('../src/fix/routes.mjs');
+  const req = (method, headers) => ({ method, headers: { host: '127.0.0.1:4000', ...headers } });
+  assert.equal(isTrustedRequest(req('POST', { 'content-type': 'application/json', origin: 'http://127.0.0.1:4000' })), true);
+  assert.equal(isTrustedRequest(req('GET', {})), true);
+  assert.equal(isTrustedRequest(req('POST', { 'content-type': 'text/plain' })), false);
+  assert.equal(isTrustedRequest(req('POST', { 'content-type': 'application/json', origin: 'https://evil.example' })), false);
+  assert.equal(isTrustedRequest({ method: 'GET', headers: { host: 'evil.example:4000' } }), false);
+});

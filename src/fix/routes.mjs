@@ -16,8 +16,28 @@ const jobs = new Map();
 const siteOf = (R) => R.meta.finalStart || R.meta.startUrl;
 
 // Renvoie true si la route a été traitée.
+// Ces routes dépensent des crédits IA et peuvent écrire sur un site : seule l'interface locale peut les appeler.
+// Host local (contre le DNS rebinding), même Origin, et JSON obligatoire en POST (une page tierce ne peut pas
+// l'envoyer sans requête CORS préalable, que le serveur n'autorise pas).
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+export function isTrustedRequest(req) {
+  const host = req.headers.host || '';
+  if (!LOCAL_HOST.test(host) && !(process.env.HOST && host.startsWith(process.env.HOST))) return false;
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      if (new URL(origin).host !== host) return false;
+    } catch {
+      return false;
+    }
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return false;
+  return true;
+}
+
 export async function handleFixRoutes(req, res, p, { send, readBody, broadcast, getResult }) {
   const reply = (code, body) => (send(res, code, body), true);
+  if (!isTrustedRequest(req)) return reply(403, { error: 'Forbidden: this route only accepts requests from the local Arachnide interface.' });
   if (p === '/api/ai/settings' && req.method === 'GET') return reply(200, await publicAiSettings());
   if (p === '/api/ai/settings' && req.method === 'POST') return reply(200, await saveAiSettings(await readBody(req)));
   if (p === '/api/ai/test' && req.method === 'POST') {

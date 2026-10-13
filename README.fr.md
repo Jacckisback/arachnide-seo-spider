@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Version 3.4.0">
+  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Version 3.5.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,31 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Tableau de bord : score de santé SEO, score par catégorie, codes de réponse, profondeur de clic et priorités" width="100%">
 </p>
+
+## ✨ Nouveau en 3.5 : corriger en 1 clic avec Claude ou ChatGPT
+
+Après un crawl, ouvrez l’onglet **Corriger en 1 clic** : les problèmes sont groupés par impact (pages × gravité), avec un badge **Corrigeable par IA**, **Automatique** ou **Manuel**.
+
+<p align="center"><img src="docs/screenshots/fix-issues.png" alt="Corriger en 1 clic : problèmes groupés par impact, badges IA / automatique / manuel et coût estimé" width="100%"></p>
+
+1. **Corriger** une URL ou **Tout corriger** pour un type de problème : Claude ou ChatGPT rédige titles, meta descriptions, H1, textes alternatifs et JSON-LD dans la langue de la page, à partir de son vrai contenu (le coût estimé est affiché avant). Les redirections 301 des 404 internes, les canonicals, les noindex accidentels et les liens vers des redirections sont calculés sans IA. Les problèmes de performance ou d’hébergement reçoivent un plan d’action écrit, jamais un bouton « Appliquer ».
+2. **Revue** : avant / après côte à côte, compteur de caractères par rapport à la longueur cible, édition directe, Valider / Régénérer / Ignorer, sélection multiple.
+3. **Application** sur WordPress (plugin compagnon) ou sur un dépôt de code GitHub (Pull Request : Lovable, Bolt.new, React, Next.js, Astro, HTML), ou export CSV / JSON / PDF pour tout autre CMS. **Le mode simulation est activé par défaut** : rien n’est envoyé tant que vous ne l’avez pas désactivé en acceptant l’avertissement.
+4. Chaque URL corrigée est **recrawlée** (vérifiée ✓) et l’onglet **Historique des corrections** permet d’annuler une correction ou un lot entier, et d’exporter le PDF « Corrections appliquées ».
+
+<p align="center"><img src="docs/screenshots/fix-review.png" alt="Panneau de revue : avant / après, compteur de caractères, valider, régénérer, ignorer" width="100%"></p>
+
+**L’IA ne modifie jamais votre site d’elle-même** : elle propose, vous validez, un connecteur applique, Arachnide vérifie — et tout peut être annulé.
+
+### Mise en route
+
+- **Clé IA** — *Options → IA* : choisissez Claude (Anthropic) ou ChatGPT (OpenAI), collez votre clé API ([console.anthropic.com](https://console.anthropic.com/settings/keys) ou [platform.openai.com](https://platform.openai.com/api-keys)), choisissez un modèle, cliquez sur *Tester la connexion*. La clé est chiffrée et stockée uniquement sur votre ordinateur, envoyée seulement à ce fournisseur ; vous le payez directement.
+- **WordPress** — dans l’onglet *Corriger*, bouton de connexion → *WordPress* → *Télécharger le plugin WordPress (.zip)*, puis dans WordPress *Extensions → Ajouter → Téléverser une extension*. Créez un **mot de passe d’application** dans *Utilisateurs → Profil → Mots de passe d’application* (nommez-le « Arachnide », copiez-le) et saisissez l’adresse du site, l’identifiant et ce mot de passe dans Arachnide. Un compte Éditeur suffit pour les contenus ; Administrateur pour les redirections. Compatible Yoast SEO, Rank Math, SEOPress, All in One SEO et Redirection.
+- **GitHub / Lovable** — créez un **token fine-grained** dans *GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens* : *Only select repositories* (un seul dépôt), permissions *Contents : Read and write* et *Pull requests : Read and write*. Saisissez `propriétaire/dépôt` et le token. Arachnide ouvre une Pull Request sur `arachnide/fix-AAAAMMJJ-HHMM` après vous avoir montré le diff ; avec Lovable, la fusion dans la branche par défaut met le projet à jour automatiquement.
+
+Fonctionnement des connecteurs et ajout d’un CMS : [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+<p align="center"><img src="docs/screenshots/fix-connection.png" alt="Fenêtre de connexion : WordPress, Pull Request GitHub ou export" width="80%"></p>
 
 ## 🔎 Nouveau en 3.4 : la fiabilité, jusqu’au bout
 

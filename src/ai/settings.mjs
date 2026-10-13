@@ -80,7 +80,8 @@ export async function getProvider({ provider, fetch } = {}) {
   const apiKey = s.keys[id] ? await decrypt(s.keys[id]) : process.env[ENV_KEYS[id]];
   if (!apiKey) return null;
   const model = s.models[id] || MODELS[id].default;
-  const p = new Cls({ apiKey, model, fetch });
+  // ARACHNIDE_ANTHROPIC_BASE_URL / ARACHNIDE_OPENAI_BASE_URL : passerelle d'entreprise ou serveur de test.
+  const p = new Cls({ apiKey, model, fetch, baseUrl: process.env[`ARACHNIDE_${id.toUpperCase()}_BASE_URL`] });
   p.price = modelPrice(id, model);
   return p;
 }

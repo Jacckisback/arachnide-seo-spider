@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.4.0-3d5f17" alt="Versão 3.4.0">
+  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Versão 3.5.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,19 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Painel: pontuação de saúde SEO, pontuação por categoria, códigos de resposta, profundidade de clique e prioridades" width="100%">
 </p>
+
+## ✨ Novidades da 3.5: corrigir em 1 clique com o Claude ou o ChatGPT
+
+Depois de um rastreio, o separador **Corrigir em 1 clique** agrupa os problemas por impacto, com a etiqueta **Corrigível com IA**, **Automática** ou **Manual**.
+
+- **Corrigir** / **Corrigir tudo**: o Claude ou o ChatGPT escreve titles, meta descriptions, H1, textos alternativos e JSON-LD na língua da página (o custo estimado é mostrado antes). Os redirecionamentos 301 dos 404 internos, as canonicals, os noindex acidentais e os links para redirecionamentos são calculados sem IA.
+- **Revisão**: antes / depois lado a lado, contador de caracteres, edição direta, Validar / Gerar de novo / Ignorar.
+- **Aplicação** no WordPress (plugin complementar), através de um pull request do GitHub (Lovable, Bolt.new, React, Next.js, Astro, HTML) ou exportação CSV / JSON / PDF. **O modo de simulação está ativo por predefinição.**
+- Cada URL corrigido é **rastreado de novo** (verificado ✓) e o **Histórico de correções** permite anular uma correção ou um lote inteiro.
+
+Configuração (chave de IA, palavra-passe de aplicação do WordPress, token do GitHub): consulte o [README (EN)](README.md#-new-in-35-fix-in-1-click-with-claude-or-chatgpt) e [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+<p align="center"><img src="docs/screenshots/fix-review.png" alt="Revisão: antes / depois, contador de caracteres" width="100%"></p>
 
 ## 🔎 Novidades da 3.4: fiabilidade até ao fim
 
