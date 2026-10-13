@@ -198,11 +198,29 @@ export class Crawler extends EventEmitter {
     try {
       const u = new URL(url);
       u.hash = '';
+      // %c3%a9 et %C3%A9 désignent la même ressource (RFC 3986) : forme canonique en majuscules.
+      const upperHex = (x) => x.replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
+      u.pathname = upperHex(u.pathname);
       if (this.opts.ignoreQuery) u.search = '';
       else if (this.removeParamRes.length && u.search) {
-        for (const k of [...u.searchParams.keys()]) if (this.removeParamRes.some((re) => re.test(k))) u.searchParams.delete(k);
+        // Suppression sur la chaîne brute : URLSearchParams réécrirait « ?b » en « ?b= » et « %20 » en « + ».
+        const kept = u.search
+          .slice(1)
+          .split('&')
+          .filter((kv) => {
+            let k = kv.split('=')[0];
+            try {
+              k = decodeURIComponent(k.replace(/\+/g, ' '));
+            } catch {
+              /* clé mal encodée : comparée telle quelle */
+            }
+            return kv && !this.removeParamRes.some((re) => re.test(k));
+          });
+        u.search = kept.length ? '?' + kept.join('&') : '';
       }
-      return u.href;
+      if (u.search) u.search = upperHex(u.search);
+      // « /a? » (requête vide) est la même requête que « /a ».
+      return u.href.endsWith('?') ? u.href.slice(0, -1) : u.href;
     } catch {
       return null;
     }
@@ -210,11 +228,15 @@ export class Crawler extends EventEmitter {
 
   isInternal(url) {
     let h;
+    let port;
     try {
-      h = new URL(url).hostname.toLowerCase();
+      ({ hostname: h, port } = new URL(url));
+      h = h.toLowerCase();
     } catch {
       return false;
     }
+    // Un autre port (serveur de dev, interface d'administration :8443) n'est pas le site audité.
+    if (port && this.ports && !this.ports.has(port)) return false;
     if (this.hosts.has(h)) return true;
     if (this.opts.crawlSubdomains) return h === this.rootDomain || h.endsWith('.' + this.rootDomain);
     return false;
@@ -330,7 +352,11 @@ export class Crawler extends EventEmitter {
   async resolveStart() {
     // Suit les redirections de l'URL de départ pour connaître l'hôte réel du site.
     this.hosts = new Set([new URL(this.startUrl).hostname.toLowerCase()]);
-    if (this.listUrls) for (const x of this.listUrls) this.hosts.add(new URL(x).hostname.toLowerCase());
+    this.ports = new Set([new URL(this.startUrl).port]);
+    if (this.listUrls) for (const x of this.listUrls) {
+      this.hosts.add(new URL(x).hostname.toLowerCase());
+      this.ports.add(new URL(x).port);
+    }
     let url = this.startUrl;
     for (let i = 0; i < 10; i++) {
       try {
@@ -342,6 +368,7 @@ export class Crawler extends EventEmitter {
         if (res.status >= 300 && res.status < 400 && loc) {
           url = new URL(loc, url).href;
           this.hosts.add(new URL(url).hostname.toLowerCase());
+          this.ports.add(new URL(url).port);
           continue;
         }
       } catch {
