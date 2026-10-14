@@ -5,6 +5,7 @@ import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
 import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.js';
+import { summarize, filterSort, summaryHtml, listHtml, detailHtml } from './issues.js';
 import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
 import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
@@ -270,6 +271,8 @@ function renderTabs() {
 $('#tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-tab]');
   if (!b || b.disabled) return;
+  // Depuis le menu, la page Problèmes s'ouvre sur sa liste (sur mobile, le détail est une vue à part).
+  if (b.dataset.tab === 'issues') { state.ivDetailOpen = false; state.ivUrls = null; }
   goTab(b.dataset.tab);
 });
 function goTab(id) {
@@ -448,12 +451,6 @@ function bars(entries, colorFn = () => 'var(--accent)') {
 }
 
 const sevChip = (s) => `<span class="chip ${s}">${esc(t('sev.' + s))}</span>`;
-const lvlChip = (kind, v) => `<span class="lvl ${kind}-${v}" title="${esc(t(kind + '.label'))}">${esc(t(kind + '.label'))}: ${esc(t('lvl.' + v))}</span>`;
-
-function issueRows(issues) {
-  return `<ul class="issue-list">${issues.map((i) => `<li data-issue="${i.id}" class="${state.issue === i.id ? 'active' : ''}">
-    ${sevChip(i.severity)}<span class="il-main">${esc(t('issue.' + i.id + '.label', i.params))}<small>${esc(t('cat.' + i.category))}</small></span><b class="num">${num(i.count)}</b></li>`).join('')}</ul>`;
-}
 
 function renderDashboard(view) {
   const R = state.R;
@@ -503,54 +500,117 @@ function skippedBanner(R) {
 
 function openIssue(id) {
   state.pillarFilter = null;
-  state.issue = id || state.R.issues[0]?.id || null;
+  state.ivUrls = null;
+  if (id) { state.sevFilter = 'all'; state.ivQ = ''; state.ivDetailOpen = true; }
+  state.issue = id || null;
+  state.ivFollow = true;
   goTab('issues');
 }
 
 /* ---------- Problèmes ---------- */
+const ivX = () => ({ t, esc, icon, num, detailText });
+const ivState = () => ({ sev: state.sevFilter, q: state.ivQ || '', sort: state.ivSort || 'priority', page: state.ivPage || 0, issue: state.issue });
+
 function renderIssues(view) {
   const R = state.R;
   if (!R.issues.length) {
-    view.innerHTML = `<div class="empty">${icon('check')}<h2>${esc(t('issues.none'))}</h2></div>`;
+    view.innerHTML = `<div class="iv">${ivHead()}<div class="empty">${icon('check')}<h2>${esc(t('issues.none'))}</h2><p class="muted">${esc(t('iv.noneHint'))}</p></div></div>`;
     return;
   }
-  // Filtre par pilier (clic sur un anneau du tableau de bord) : seulement les contrôles de ses catégories.
   const pf = state.pillarFilter;
-  const list = R.issues.filter((i) => (state.sevFilter === 'all' || i.severity === state.sevFilter) && (!pf || pf.categories.includes(i.category)));
-  if (pf && !list.length) {
-    view.innerHTML = `<div class="empty">${icon('check')}<h2>${esc(t('dash.pillarClean', { pillar: t('pillar.' + pf.id) }))}</h2><button class="btn" id="clearPillar">${esc(t('dash.allIssues'))}</button></div>`;
-    $('#clearPillar').onclick = () => ((state.pillarFilter = null), render());
+  // Liste complète des URL d'un problème : tableau existant (recherche, tri, pagination, CSV, panneau de détail).
+  const urlsOf = state.ivUrls && R.issues.find((i) => i.id === state.ivUrls);
+  if (urlsOf) {
+    view.innerHTML = `<div class="iv"><button class="link iv-back-list" id="ivBackList">${icon('chevronLeft')} ${esc(t('iv.backToIssues'))}</button><div id="issueTable"></div></div>`;
+    $('#ivBackList').onclick = () => { state.ivUrls = null; state.search = ''; state.page = 0; render(); };
+    renderTable($('#issueTable'), { id: 'issue-' + urlsOf.id, cols: [C.url, { k: 'detail', l: 'col.detail', cls: 'wrap' }] }, ivItems(urlsOf), { title: t('issue.' + urlsOf.id + '.label', urlsOf.params), help: t('iv.urlsHelp') });
     return;
   }
-  if (!list.find((i) => i.id === state.issue)) state.issue = list[0]?.id || R.issues[0].id;
+  const st = ivState();
+  const rows = filterSort(R.issues, { sev: st.sev, q: st.q, sort: st.sort, categories: pf?.categories }, t);
+  // Le problème sélectionné reste celui choisi s'il est encore visible, sinon le premier du classement actif.
+  if (!rows.find((i) => i.id === state.issue)) state.issue = rows[0]?.id || null;
+  const idx = rows.findIndex((i) => i.id === state.issue);
+  if (state.ivFollow && idx >= 0) state.ivPage = Math.floor(idx / IV_PAGE);
+  state.ivFollow = false;
+  st.issue = state.issue;
+  st.page = state.ivPage || 0;
   const issue = R.issues.find((i) => i.id === state.issue);
-  const counts = { all: R.issues.length, error: 0, warning: 0, notice: 0 };
-  R.issues.forEach((i) => counts[i.severity]++);
-  view.innerHTML = `${pf ? `<div class="filter-chip-row"><span class="pill-filter c-${pf.color}">${esc(t('pillar.' + pf.id))} <button class="link" id="clearPillar" aria-label="${esc(t('ui.close'))}">${icon('x')}</button></span></div>` : ''}<div class="issues-layout">
-    <div class="card il-col">
-      <div class="seg full">${['all', 'error', 'warning', 'notice'].map((s) => `<button data-sev="${s}" class="${state.sevFilter === s ? 'on' : ''}">${esc(s === 'all' ? t('f.all') : cap(t('sev.' + s + 's')))} <span>${counts[s]}</span></button>`).join('')}</div>
-      ${issueRows(list)}
-    </div>
-    <div class="il-detail">
-      <div class="issue-info card">
-        <div class="ii-chips">${sevChip(issue.severity)}<span class="chip muted">${esc(t('cat.' + issue.category))}</span>${lvlChip('impact', issue.impact)}${lvlChip('effort', issue.effort)}</div>
-        <h2>${esc(t('issue.' + issue.id + '.label', issue.params))} <span class="muted">· ${num(issue.count)}</span></h2>
-        <p>${esc(t('issue.' + issue.id + '.desc', issue.params))}</p>
-        <p class="fix"><b>${esc(t('issues.howToFix'))}</b> ${esc(t('issue.' + issue.id + '.fix', issue.params))}</p>
-      </div>
-      <div id="issueTable"></div>
+  view.innerHTML = `<div class="iv">
+    ${ivHead()}
+    ${isPartial(R) ? `<div class="ov-banner warn">${icon('alert')}<span>${esc(t('iv.partial'))}</span></div>` : ''}
+    ${summaryHtml(summarize(R.issues), st.sev, ivX())}
+    ${pf ? `<div class="filter-chip-row"><span class="pill-filter c-${pf.color}">${esc(t('pillar.' + pf.id))} <button class="link" id="clearPillar" aria-label="${esc(t('ui.close'))}">${icon('x')}</button></span></div>` : ''}
+    <div class="iv-work${state.ivDetailOpen ? ' show-detail' : ''}">
+      ${listHtml(R, rows, st, ivX())}
+      <div id="ivDetail">${issue ? detailHtml(R, issue, ivX()) : `<section class="iv-panel iv-detail"><div class="empty small">${icon('search')}<p>${esc(t('iv.noSelection'))}</p></div></section>`}</div>
     </div></div>`;
-  view.querySelectorAll('[data-sev]').forEach((b) => b.addEventListener('click', () => { state.sevFilter = b.dataset.sev; render(); }));
-  if ($('#clearPillar')) $('#clearPillar').onclick = () => ((state.pillarFilter = null), render());
-  view.querySelectorAll('[data-issue]').forEach((li) => li.addEventListener('click', () => { state.issue = li.dataset.issue; state.search = ''; state.page = 0; render(); }));
-  const items = issue.items.map((it) => ({ url: it.url, detail: detailText(it.detail, t) }));
-  renderTable($('#issueTable'), { id: 'issue-' + issue.id, cols: [C.url, { k: 'detail', l: 'col.detail', cls: 'wrap' }] }, items, { title: t('issues.affected'), help: '' });
+  wireIssues(view, rows);
+}
+
+const IV_PAGE = 10;
+const ivHead = () => `<header class="iv-head"><h1>${esc(t('iv.title'))}</h1><p>${esc(t('iv.subtitle'))}</p></header>`;
+const ivItems = (is) => is.items.map((it) => ({ url: it.url, detail: detailText(it.detail, t) }));
+
+function wireIssues(view, rows) {
+  const R = state.R;
+  const rerender = (follow) => { state.ivFollow = follow; render(); };
+  view.querySelectorAll('[data-sevf]').forEach((b) => b.addEventListener('click', () => { state.sevFilter = b.dataset.sevf; state.ivPage = 0; rerender(true); }));
+  view.querySelectorAll('[data-sort]').forEach((b) => b.addEventListener('click', () => { state.ivSort = b.dataset.sort; state.ivPage = 0; rerender(true); }));
+  view.querySelectorAll('[data-pg]').forEach((b) => b.addEventListener('click', () => { state.ivPage = Number(b.dataset.pg); rerender(false); $('#ivAllTitle')?.scrollIntoView({ block: 'nearest' }); }));
+  $('#ivSort', view)?.addEventListener('change', (e) => { state.ivSort = e.target.value; state.ivPage = 0; rerender(true); });
+  $('#ivReset', view)?.addEventListener('click', () => { state.sevFilter = 'all'; state.ivQ = ''; state.pillarFilter = null; state.ivPage = 0; rerender(true); });
+  $('#clearPillar', view)?.addEventListener('click', () => { state.pillarFilter = null; rerender(true); });
+  const si = $('#ivSearch', view);
+  si?.addEventListener('input', debounce(() => {
+    state.ivQ = si.value;
+    state.ivPage = 0;
+    rerender(true);
+    const el = $('#ivSearch');
+    el?.focus();
+    el?.setSelectionRange(el.value.length, el.value.length);
+  }, 200));
+  // Choisir un problème ne met à jour que le panneau : la page, la recherche et le défilement de la liste restent.
+  const select = (tr, focusDetail) => {
+    if (!tr) return;
+    state.issue = tr.dataset.issue;
+    view.querySelectorAll('.iv-row').forEach((x) => { x.classList.toggle('sel', x === tr); x.setAttribute('aria-selected', x === tr); });
+    const is = R.issues.find((i) => i.id === state.issue);
+    $('#ivDetail', view).innerHTML = detailHtml(R, is, ivX());
+    wireDetail(view, is);
+    if (focusDetail) {
+      state.ivDetailOpen = true;
+      view.querySelector('.iv-work')?.classList.add('show-detail');
+      if (matchMedia('(max-width: 900px)').matches) { $('#ivDetail', view)?.scrollIntoView({ block: 'start' }); $('#ivBack', view)?.focus({ preventScroll: true }); }
+    }
+  };
+  const tbody = view.querySelector('.iv-table tbody');
+  tbody?.addEventListener('click', (e) => select(e.target.closest('.iv-row'), true));
+  tbody?.addEventListener('keydown', (e) => {
+    const tr = e.target.closest('.iv-row');
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(tr, true); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); tr?.nextElementSibling?.focus(); select(tr?.nextElementSibling); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); tr?.previousElementSibling?.focus(); select(tr?.previousElementSibling); }
+  });
+  const is = R.issues.find((i) => i.id === state.issue);
+  if (is) wireDetail(view, is);
+}
+
+function wireDetail(view, is) {
+  $('#ivSeeUrls', view)?.addEventListener('click', () => { state.ivUrls = is.id; state.search = ''; state.page = 0; render(); });
+  $('#ivExport', view)?.addEventListener('click', () => exportCsv({ cols: [C.url, { k: 'detail', l: 'col.detail' }] }, ivItems(is), '', t('issue.' + is.id + '.label', is.params)));
+  $('#ivFix', view)?.addEventListener('click', () => goTab('fix'));
+  $('#ivBack', view)?.addEventListener('click', () => {
+    state.ivDetailOpen = false;
+    view.querySelector('.iv-work')?.classList.remove('show-detail');
+    view.querySelector(`.iv-row[data-issue="${CSS.escape(is.id)}"]`)?.focus();
+  });
 }
 
 /* ---------- Plan d'action ---------- */
 function renderPlan(view) {
   const R = state.R;
-  const plan = [...R.issues].sort((a, b) => b.priority - a.priority);
+  const plan = [...R.issues].sort((a, b) => ['error', 'warning', 'notice'].indexOf(a.severity) - ['error', 'warning', 'notice'].indexOf(b.severity) || b.priority - a.priority);
   const quick = plan.filter((i) => i.effort === 'low' && i.impact !== 'low' && i.severity !== 'notice');
   view.innerHTML = `
     <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.plan'))}</h2><p class="help">${esc(t('help.plan'))}</p></div>
