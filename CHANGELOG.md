@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.7.0 — 2026-10-14
+
+### New: “SEO issues” page redesign
+- **Summary cards**: number of issue *types* overall, errors, warnings and notices (never a sum of URLs), with a segmented severity bar. Each card filters the list; the active filter is highlighted, “All” resets it.
+- **Prioritised list**: “All issues” with severity tabs and counters, search on name, category and action, and a sort selector — recommended priority by default, then URLs affected, severity, lowest effort or name. The rule behind the recommended priority is spelled out, and the sort indicator always matches the order actually applied.
+- **Table**: issue with its recommended action, severity badge (text + icon + colour), number of **unique URLs** (or “Whole site”), and effort on its own colour scale. Selected row tinted with a lime marker; the whole row opens the detail; keyboard navigation (↑ ↓ Enter); pagination so every issue stays reachable.
+- **Fix panel**: severity, impact, effort, URLs affected, “Why fix it?”, numbered “How to fix it” steps (the issue’s own recommendation, a check for its category, then a re-crawl), a before / after example taken from a real page — with an automatic shortening suggestion for titles and descriptions that are too long, clearly labelled — nuances (decorative images, intentional noindex, short pages), a preview of the affected URLs, “See the N URLs” (full table with search, pagination and CSV) and “Export the list” for the selected issue. “Prepare the fix” opens the Fixes tab when the issue can be fixed there.
+- **Layout**: 58 / 42 two-column work area on large screens with a sticky panel, stacked on tablets, and on mobile a list then a dedicated detail view with a clear way back. Partial-audit banner, no-issue and no-result states.
+- New night palette (`#090E15`, `#121B27`, `#182331`, lime `#AAEF29`), translations in the 6 languages.
+
+### Fixed
+- **Recommended priority**: a widespread warning could rank above an error, contrary to the documented rule. Errors now always come first, then warnings, then notices (also in the action plan and the overview priorities, including crawls saved before 3.7).
+
+### Internal
+- The pixel width measurement (`public/shared/pixel.js`) and the fix catalogue (`public/shared/fix-catalog.js`) are now shared between the engine and the interface.
+
 ## 3.6.0 — 2026-10-13
 
 ### New: dark dashboard redesign

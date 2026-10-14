@@ -32,7 +32,8 @@ const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
 const HOME_ALIAS = /^\/((index|default|home|accueil|inicio|start|startseite)(\.(html?|php|aspx?))?\/?)?$/i;
 const UNVERIFIABLE = new Set([0, 401, 403, 429, 999]);
 // Score : plafond de points retirés par problème, poids par page touchée, facteur d'impact.
-const PRIO_FLOOR = { error: 20, warning: 10, notice: 0 };
+// Paliers largement au-dessus du score brut (≤ ~200 même sur 100 000 pages) : la gravité départage toujours en premier.
+const PRIO_FLOOR = { error: 1000, warning: 500, notice: 0 };
 const SEV_W = { error: 3, warning: 2, notice: 1 };
 const LVL_W = { high: 3, medium: 2, low: 1 };
 

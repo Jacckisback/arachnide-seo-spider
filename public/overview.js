@@ -15,9 +15,10 @@ export function pillarsOf(R) {
 export const pillarCategories = (id) => PILLARS.find((p) => p.id === id).categories;
 
 // Trois actions les plus utiles : priorité existante (gravité × impact × portée ÷ effort, erreurs d'abord).
+const SEV_RANK = { error: 0, warning: 1, notice: 2 };
 export function topActions(R, n = 3) {
   return [...R.issues]
-    .sort((a, b) => b.priority - a.priority)
+    .sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.priority - a.priority)
     .slice(0, n)
     .map((is) => ({
       id: is.id,
