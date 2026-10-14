@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Version 3.5.0">
+  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Version 3.7.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,27 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🧭 Neu in 3.7: eine übersichtlichere Seite „SEO-Probleme“
+
+Von der Diagnose zur Korrektur auf einem Bildschirm: was gefunden wurde, was zuerst zu beheben ist, wie schwer es wiegt, wie viele URLs betroffen sind und wie viel Aufwand es kostet.
+
+<p align="center"><img src="docs/screenshots/issues.png" alt="Seite SEO-Probleme: Übersichtskarten, priorisierte Liste und Korrekturbereich mit Vorher-/Nachher-Beispiel" width="100%"></p>
+
+- **Übersichtskarten**: Problemtypen insgesamt, Fehler, Warnungen und Hinweise (nie eine Summe von URLs). Ein Klick auf eine Karte filtert die Liste.
+- **Priorisierte Liste**: Reiter nach Schweregrad, Suche und Sortierung (standardmäßig empfohlene Priorität, mit erklärter Regel). Eindeutige URLs pro Problem, Aufwand getrennt vom Schweregrad, Seitenumbruch und Tastaturnavigation.
+- **Korrekturbereich**: warum beheben, nummerierte Schritte, Vorher-/Nachher-Beispiel von einer echten Seite (mit klar gekennzeichnetem automatischem Vorschlag für zu lange Titles und Beschreibungen), Vorschau der URLs, **Alle N URLs ansehen** und **Liste exportieren**.
+- **Fehler stehen immer zuerst** – in der empfohlenen Priorität, im Maßnahmenplan und in der Übersicht.
+- Zwei Spalten auf großen Bildschirmen, eigene Detailansicht auf dem Smartphone.
+
+## 🌙 Neu in 3.6: Dashboard im Dunkelmodus
+
+Die Übersicht beantwortet eine Frage auf einen Blick: Wie steht meine Website da, und was ist als Nächstes zu tun? (Screenshot oben auf dieser Seite)
+
+- **SEO-Gesundheit in vier Ringen**: Technik, Inhalt, Verlinkung und Performance. Jeder Bogen entspricht genau dem Wert der Säule; ein Klick öffnet die passenden Probleme. Eine Säule ohne Daten wird als „Nicht gemessen“ angezeigt.
+- **Ihre Prioritäten**: die 3 wichtigsten Maßnahmen, gezählt in eindeutigen Seiten, mit Link zum Maßnahmenplan.
+- **Kennzahlen**, **Was gut funktioniert** und **Ihr nächstes Ziel**, dazu ein Hinweis bei einem Teilaudit.
+- Neue Seitenleiste (Steuerung / Erkunden), obere Leiste mit Crawl-Status und „Crawl erneut starten“, standardmäßig dunkles Design.
 
 ## ✨ Neu in 3.5: Mit 1 Klick korrigieren – mit Claude oder ChatGPT
 
