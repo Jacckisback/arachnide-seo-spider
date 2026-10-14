@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Versão 3.5.0">
+  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Versão 3.7.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,27 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🧭 Novidades da 3.7: uma página de problemas SEO mais clara
+
+Do diagnóstico à correção num só ecrã: o que foi detetado, o que corrigir primeiro, a gravidade, quantos URL são afetados e o esforço estimado.
+
+<p align="center"><img src="docs/screenshots/issues.png" alt="Página Problemas SEO: cartões de resumo, lista priorizada e painel de correção com exemplo antes / depois" width="100%"></p>
+
+- **Cartões de resumo**: tipos de problemas no total, erros, avisos e notas (nunca uma soma de URL). Um clique num cartão filtra a lista.
+- **Lista priorizada**: separadores por gravidade, pesquisa e ordenação (prioridade recomendada por predefinição, com a regra explicada). URL únicos por problema, esforço separado da gravidade, paginação e navegação por teclado.
+- **Painel de correção**: porquê corrigir, passos numerados, exemplo antes / depois retirado de uma página real (com uma sugestão automática claramente indicada para títulos e descrições demasiado longos), pré-visualização dos URL, **Ver os N URL** e **Exportar a lista**.
+- **Os erros vêm sempre primeiro** na prioridade recomendada, no plano de ação e na visão geral.
+- Duas colunas em ecrãs grandes, vista de detalhe dedicada no telemóvel.
+
+## 🌙 Novidades da 3.6: painel em modo escuro
+
+A visão geral responde num relance a uma pergunta: como está o meu site e o que fazer a seguir? (captura no topo desta página)
+
+- **Saúde SEO em quatro anéis**: Técnico, Conteúdo, Ligação interna e Desempenho. Cada arco corresponde exatamente à pontuação do pilar; um clique abre os problemas correspondentes. Um pilar sem dados é indicado como «Não medido».
+- **As suas prioridades**: as 3 primeiras ações, contadas em páginas únicas, com uma ligação para o plano de ação.
+- **Indicadores-chave**, **O que funciona bem** e **O seu próximo objetivo**, além de um aviso quando a auditoria é parcial.
+- Nova barra lateral (Gestão / Exploração), barra superior com o estado do rastreio e «Relançar o rastreio», tema escuro por predefinição.
 
 ## ✨ Novidades da 3.5: corrigir em 1 clique com o Claude ou o ChatGPT
 

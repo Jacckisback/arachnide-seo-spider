@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Versione 3.5.0">
+  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Versione 3.7.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,27 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🧭 Novità della 3.7: una pagina Problemi SEO più chiara
+
+Dalla diagnosi alla correzione in un'unica schermata: cosa è stato rilevato, cosa correggere per primo, la gravità, quanti URL sono interessati e lo sforzo stimato.
+
+<p align="center"><img src="docs/screenshots/issues.png" alt="Pagina Problemi SEO: schede di riepilogo, elenco con priorità e pannello di correzione con esempio prima / dopo" width="100%"></p>
+
+- **Schede di riepilogo**: tipi di problemi in totale, errori, avvisi e segnalazioni (mai una somma di URL). Un clic su una scheda filtra l'elenco.
+- **Elenco con priorità**: schede per gravità, ricerca e ordinamento (priorità consigliata per impostazione predefinita, con la regola spiegata). URL unici per problema, sforzo distinto dalla gravità, paginazione e navigazione da tastiera.
+- **Pannello di correzione**: perché correggere, passaggi numerati, esempio prima / dopo preso da una pagina reale (con un suggerimento automatico chiaramente indicato per titoli e descrizioni troppo lunghi), anteprima degli URL, **Vedi i N URL** ed **Esporta l'elenco**.
+- **Gli errori vengono sempre per primi** nella priorità consigliata, nel piano d'azione e nella panoramica.
+- Due colonne sugli schermi grandi, vista di dettaglio dedicata su mobile.
+
+## 🌙 Novità della 3.6: dashboard in modalità scura
+
+La panoramica risponde a colpo d'occhio a una domanda: come sta il mio sito e cosa fare adesso? (screenshot in cima a questa pagina)
+
+- **Salute SEO in quattro anelli**: Tecnica, Contenuto, Linking e Prestazioni. Ogni arco corrisponde esattamente al punteggio del pilastro; un clic apre i problemi corrispondenti. Un pilastro senza dati è indicato come «Non misurato».
+- **Le tue priorità**: le prime 3 azioni, contate in pagine uniche, con un link al piano d'azione.
+- **Indicatori chiave**, **Cosa funziona bene** e **Il tuo prossimo obiettivo**, più un avviso quando l'audit è parziale.
+- Nuova barra laterale (Gestione / Esplorazione), barra superiore con lo stato della scansione e «Rilancia la scansione», tema scuro predefinito.
 
 ## ✨ Novità della 3.5: correggi in 1 clic con Claude o ChatGPT
 

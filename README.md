@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.5.0-3d5f17" alt="Version 3.5.0">
+  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Version 3.7.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,27 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🧭 New in 3.7: a clearer SEO issues page
+
+From diagnosis to fixes on one screen: what was found, what to fix first, how serious it is, how many URLs it affects and how much effort it takes.
+
+<p align="center"><img src="docs/screenshots/issues.png" alt="SEO issues page: summary cards, prioritised list and fix panel with a before / after example" width="100%"></p>
+
+- **Summary cards**: issue types overall, errors, warnings and notices (never a sum of URLs). Click a card to filter the list.
+- **Prioritised list**: severity tabs, search, and a sort selector (recommended priority by default, with its rule explained). Unique URLs per issue, effort shown separately from severity, pagination and keyboard navigation.
+- **Fix panel**: why it matters, numbered steps, a before / after example taken from a real page (with a clearly labelled automatic suggestion for titles and descriptions that are too long), a preview of affected URLs, **See the N URLs** and **Export the list**.
+- **Errors always come first** in the recommended priority, the action plan and the overview.
+- Two columns on large screens, a dedicated detail view on mobile.
+
+## 🌙 New in 3.6: dark dashboard redesign
+
+The overview answers one question at a glance: how is my site doing, and what should I do next? (screenshot at the top of this page)
+
+- **SEO health in four rings**: Technical, Content, Internal linking and Performance. Each arc is exactly the pillar score; click a ring to see the matching issues. A pillar without data is shown as “Not measured”.
+- **Your priorities**: the top 3 actions, counted in unique pages, with a link to the action plan.
+- **Key indicators**, **What works well** and **Your next goal**, plus a banner when the audit is partial.
+- New sidebar (Steering / Explore), topbar with the crawl status and a “Run the crawl again” button, dark theme by default.
 
 ## ✨ New in 3.5: Fix in 1 click with Claude or ChatGPT
 
