@@ -6,6 +6,7 @@ import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
 import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.js';
 import { summarize, filterSort, summaryHtml, listHtml, detailHtml } from './issues.js';
+import { reconcile, storeKey, summary as planSummary, visible as planVisible, actionTitles as planTitles, defaultStatus as planDefault, cardsHtml as planCardsHtml, tableHtml as planTableHtml, detailHtml as planDetailHtml } from './plan.js';
 import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
 import { buildGraph, renderGraph, PALETTE } from './viz.js';
 
@@ -273,6 +274,7 @@ $('#tabs').addEventListener('click', (e) => {
   if (!b || b.disabled) return;
   // Depuis le menu, la page Problèmes s'ouvre sur sa liste (sur mobile, le détail est une vue à part).
   if (b.dataset.tab === 'issues') { state.ivDetailOpen = false; state.ivUrls = null; }
+  if (b.dataset.tab === 'plan') state.plDetailOpen = false;
   goTab(b.dataset.tab);
 });
 function goTab(id) {
@@ -608,18 +610,161 @@ function wireDetail(view, is) {
 }
 
 /* ---------- Plan d'action ---------- */
+// Suivi enregistré dans ce navigateur, par site ; une écriture refusée (stockage plein ou bloqué) est signalée.
+function planTrack() {
+  const R = state.R;
+  const saved = store.get(storeKey(R), null);
+  const track = reconcile(saved, R);
+  if (saved && JSON.stringify(saved.items || {}) !== JSON.stringify(track.items)) savePlan(track.items, true);
+  return track;
+}
+function savePlan(items, silent) {
+  try {
+    localStorage.setItem('arachnide.' + storeKey(state.R), JSON.stringify({ v: 1, items }));
+    return true;
+  } catch {
+    if (!silent) toast(t('pl.saveError'), 'error');
+    return false;
+  }
+}
+function setPlanItem(id, patch) {
+  const saved = store.get(storeKey(state.R), null) || { items: {} };
+  const items = { ...(saved.items || {}) };
+  items[id] = { ...(items[id] || {}), ...patch, at: state.R.meta.finishedAt || new Date().toISOString() };
+  return savePlan(items);
+}
+const planX = () => ({ t, esc, icon, num });
+
 function renderPlan(view) {
   const R = state.R;
-  const plan = [...R.issues].sort((a, b) => ['error', 'warning', 'notice'].indexOf(a.severity) - ['error', 'warning', 'notice'].indexOf(b.severity) || b.priority - a.priority);
-  const quick = plan.filter((i) => i.effort === 'low' && i.impact !== 'low' && i.severity !== 'notice');
-  view.innerHTML = `
-    <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.plan'))}</h2><p class="help">${esc(t('help.plan'))}</p></div>
-      <div class="tb-actions"><button class="btn primary" id="planReport">${icon('report')} ${esc(t('ui.report'))}</button></div></div>
-    ${quick.length ? `<div class="card quick"><h3>${icon('bolt')} ${esc(t('plan.quickWins'))}</h3><div class="qw">${quick.slice(0, 6).map((i) => `<button data-issue="${i.id}"><b>${esc(t('issue.' + i.id + '.label', i.params))}</b><span>${num(i.count)} · ${esc(t('cat.' + i.category))}</span></button>`).join('')}</div></div>` : ''}
-    <div class="table-wrap"><table class="plan"><thead><tr><th>#</th><th>${esc(t('col.issue'))}</th><th>${esc(t('col.severity'))}</th><th>${esc(t('impact.label'))}</th><th>${esc(t('effort.label'))}</th><th class="num">${esc(t('col.urls'))}</th><th>${esc(t('col.fix'))}</th></tr></thead>
-    <tbody>${plan.map((i, n) => `<tr data-issue="${i.id}"><td class="num">${n + 1}</td><td><b>${esc(t('issue.' + i.id + '.label', i.params))}</b><br><small class="muted">${esc(t('cat.' + i.category))}</small></td><td>${sevChip(i.severity)}</td><td><span class="lvl impact-${i.impact}">${esc(t('lvl.' + i.impact))}</span></td><td><span class="lvl effort-${i.effort}">${esc(t('lvl.' + i.effort))}</span></td><td class="num">${num(i.count)}</td><td class="wrap">${esc(t('issue.' + i.id + '.fix', i.params))}</td></tr>`).join('')}</tbody></table></div>`;
-  view.querySelectorAll('[data-issue]').forEach((el) => el.addEventListener('click', () => openIssue(el.dataset.issue)));
-  $('#planReport').addEventListener('click', openReportDialog);
+  if (!R.issues.length) {
+    view.innerHTML = `<div class="iv">${planHead()}<div class="empty">${icon('check')}<h2>${esc(t('pl.none'))}</h2><p class="muted">${esc(t('iv.noneHint'))}</p></div></div>`;
+    return;
+  }
+  const track = planTrack();
+  const S = planSummary(R, track, t);
+  state.plSel = state.plSel || new Set();
+  for (const id of [...state.plSel]) if (!track.status[id]) state.plSel.delete(id);
+  const st = { filter: state.plFilter || 'all', q: state.plQ || '', sort: state.plSort || 'priority', page: state.plPage || 0, selected: state.plSel };
+  const rows = planVisible(R, track, st, t);
+  if (!state.plIssue || !track.status[state.plIssue]) state.plIssue = S.start?.id || S.order[0].id;
+  // Rendre visible la ligne choisie depuis une carte (gain rapide, « Commencez ici »).
+  if (state.plFollow) {
+    let idx = rows.findIndex((is) => is.id === state.plIssue);
+    if (idx < 0) { state.plFilter = 'all'; state.plQ = ''; st.filter = 'all'; st.q = ''; rows.splice(0, rows.length, ...planVisible(R, track, st, t)); idx = rows.findIndex((is) => is.id === state.plIssue); }
+    if (idx >= 0) state.plPage = Math.floor(idx / PL_PAGE);
+    state.plFollow = false;
+  }
+  st.page = state.plPage || 0;
+  st.issue = state.plIssue;
+  const issue = R.issues.find((i) => i.id === state.plIssue);
+  view.innerHTML = `<div class="iv pl">
+    ${planHead()}
+    ${isPartial(R) ? `<div class="ov-banner warn">${icon('alert')}<span>${esc(t('iv.partial'))}</span></div>` : ''}
+    ${planCardsHtml(S, planX())}
+    <div class="pl-work${state.plDetailOpen ? ' show-detail' : ''}">
+      ${planTableHtml(R, S, track, rows, st, planX())}
+      <div id="plDetailWrap"><div class="pl-scrim" id="plScrim"></div><div id="plDetail">${planDetailHtml(R, S, track, issue, planX())}</div></div>
+    </div></div>`;
+  wirePlan(view, { S, track, rows });
+}
+
+const PL_PAGE = 12;
+const planHead = () => `<header class="iv-head"><h1>${esc(t('pl.title'))}</h1><p>${esc(t('pl.subtitle'))}</p></header>`;
+
+function wirePlan(view, { S, track, rows }) {
+  const R = state.R;
+  const rerender = () => render();
+  const on = (sel, ev, fn) => view.querySelectorAll(sel).forEach((el) => el.addEventListener(ev, (e) => fn(el, e)));
+  const openDetail = (focus) => {
+    state.plDetailOpen = true;
+    view.querySelector('.pl-work')?.classList.add('show-detail');
+    if (focus) $('.pl-detail', view)?.focus({ preventScroll: !matchMedia('(max-width: 1100px)').matches });
+  };
+  const select = (id, focus) => {
+    state.plIssue = id;
+    view.querySelectorAll('.pl-row').forEach((x) => { const on_ = x.dataset.row === id; x.classList.toggle('sel', on_); x.setAttribute('aria-selected', on_); });
+    $('#plDetail', view).innerHTML = planDetailHtml(R, S, track, R.issues.find((i) => i.id === id), planX());
+    wirePlanDetail(view, S, track);
+    openDetail(focus);
+  };
+  on('[data-plf]', 'click', (b) => { state.plFilter = b.dataset.plf; state.plPage = 0; rerender(); });
+  on('#plOther', 'change', (el) => { state.plFilter = el.value || 'all'; state.plPage = 0; rerender(); });
+  on('#plSort', 'change', (el) => { state.plSort = el.value; state.plPage = 0; rerender(); });
+  on('#plSortReset', 'click', () => { state.plSort = 'priority'; state.plPage = 0; rerender(); });
+  on('[data-plpg]', 'click', (b) => { state.plPage = Number(b.dataset.plpg); rerender(); $('#plListTitle')?.scrollIntoView({ block: 'nearest' }); });
+  on('#plReset', 'click', () => { state.plFilter = 'all'; state.plQ = ''; state.plPage = 0; rerender(); });
+  on('[data-select]', 'click', (b) => { state.plIssue = b.dataset.select; state.plFollow = true; state.plDetailOpen = true; rerender(); requestAnimationFrame(() => { $(`.pl-row[data-row="${CSS.escape(b.dataset.select)}"]`)?.scrollIntoView({ block: 'nearest' }); if (b.hasAttribute('data-focus-detail')) $('.pl-detail')?.focus({ preventScroll: true }); }); });
+  const si = $('#plSearch', view);
+  si?.addEventListener('input', debounce(() => {
+    state.plQ = si.value;
+    state.plPage = 0;
+    rerender();
+    const el = $('#plSearch');
+    el?.focus();
+    el?.setSelectionRange(el.value.length, el.value.length);
+  }, 200));
+  // Cases, menus de statut et ligne gardent chacun leur interaction.
+  const tbody = view.querySelector('.pl-table tbody');
+  tbody?.addEventListener('click', (e) => {
+    if (e.target.closest('input, select, label')) return;
+    const tr = e.target.closest('.pl-row');
+    if (tr) select(tr.dataset.row, matchMedia('(max-width: 1100px)').matches);
+  });
+  tbody?.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, select')) return;
+    const tr = e.target.closest('.pl-row');
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(tr.dataset.row, true); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); tr?.nextElementSibling?.focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); tr?.previousElementSibling?.focus(); }
+  });
+  on('[data-chk]', 'change', (el) => { el.checked ? state.plSel.add(el.dataset.chk) : state.plSel.delete(el.dataset.chk); rerender(); });
+  on('#plAll', 'change', (el) => {
+    const pageRows = rows.slice((state.plPage || 0) * PL_PAGE, ((state.plPage || 0) + 1) * PL_PAGE);
+    pageRows.forEach((is) => (el.checked ? state.plSel.add(is.id) : state.plSel.delete(is.id)));
+    rerender();
+  });
+  on('#plBulkClear', 'click', () => { state.plSel.clear(); rerender(); });
+  on('#plBulkExport', 'click', () => planExport(R.issues.filter((is) => state.plSel.has(is.id)), t('pl.title')));
+  on('#plBulkStatus', 'change', (el) => {
+    if (!el.value) return;
+    const items = { ...((store.get(storeKey(R), null) || {}).items || {}) };
+    for (const id of state.plSel) items[id] = { ...(items[id] || {}), status: el.value, at: R.meta.finishedAt };
+    if (savePlan(items)) toast(t('pl.bulkSaved', { n: state.plSel.size }), 'ok');
+    rerender();
+  });
+  on('.pl-row [data-status]', 'change', (el) => { if (setPlanItem(el.dataset.status, { status: el.value })) rerender(); });
+  wirePlanDetail(view, S, track);
+}
+
+function wirePlanDetail(view, S, track) {
+  const R = state.R;
+  const is = R.issues.find((i) => i.id === state.plIssue);
+  if (!is) return;
+  const set = (status, msg) => { if (setPlanItem(is.id, { status })) { if (msg) toast(t(msg), 'ok'); render(); } };
+  $('#plDetStatus', view)?.addEventListener('change', (e) => set(e.target.value));
+  $('#plStart', view)?.addEventListener('click', () => set('doing', 'pl.started'));
+  $('#plDone', view)?.addEventListener('click', () => set('validate', 'pl.markedDone'));
+  $('#plReopen', view)?.addEventListener('click', () => set(planDefault(is)));
+  $('#plRecrawl', view)?.addEventListener('click', () => $('#startBtn').click());
+  $('#plSeeUrls', view)?.addEventListener('click', () => { state.ivUrls = is.id; state.search = ''; state.page = 0; goTab('issues'); });
+  $('#plExport', view)?.addEventListener('click', () => planExport([is], actionTitlesOf(is)));
+  $('#plSaveNote', view)?.addEventListener('click', () => { if (setPlanItem(is.id, { note: $('#plNote', view).value.trim(), status: track.status[is.id].status })) toast(t('pl.noteSaved'), 'ok'); });
+  const close = () => {
+    state.plDetailOpen = false;
+    view.querySelector('.pl-work')?.classList.remove('show-detail');
+    view.querySelector(`.pl-row[data-row="${CSS.escape(is.id)}"]`)?.focus();
+  };
+  $('#plClose', view)?.addEventListener('click', close);
+  $('#plScrim', view)?.addEventListener('click', close);
+  $('.pl-detail', view)?.addEventListener('keydown', (e) => { if (e.key === 'Escape' && matchMedia('(max-width: 1100px)').matches) close(); });
+}
+
+const actionTitlesOf = (is) => planTitles(is, t).title;
+// Export des URL réellement liées aux actions choisies : une ligne par URL et par action.
+function planExport(list, title) {
+  const rows = list.flatMap((is) => is.items.map((it) => ({ action: planTitles(is, t).title, issue: t('issue.' + is.id + '.label', is.params), severity: t('sev.' + is.severity), url: it.url, detail: detailText(it.detail, t) })));
+  exportCsv({ cols: [{ k: 'action', l: 'pl.col.action' }, { k: 'issue', l: 'col.issue' }, { k: 'severity', l: 'col.severity' }, C.url, { k: 'detail', l: 'col.detail' }] }, rows, '', title);
 }
 
 /* ---------- Visualisations 2D / 3D ---------- */

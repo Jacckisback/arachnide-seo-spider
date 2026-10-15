@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Versione 3.7.0">
+  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Versione 3.8.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,17 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🗺️ Novità della 3.8: un piano d’azione su cui lavorare
+
+Cosa correggere, in che ordine e come, e a che punto sei.
+
+<p align="center"><img src="docs/screenshots/action-plan.png" alt="Piano d’azione: schede di riepilogo, roadmap con priorità e stati e scheda del metodo dell’azione" width="100%"></p>
+
+- **Quattro schede**: azioni da gestire (per gravità), vittorie rapide (poco sforzo, impatto medio o alto), sforzo di correzione e **Inizia da qui**, la prima azione dell’ordine consigliato.
+- **Roadmap**: ogni problema diventa un’azione con un verbo chiaro, il suo rango, gravità, impatto SEO, URL unici, sforzo e stato. Filtri (tutto, vittorie rapide, da fare, da verificare, altri stati), ricerca e un ordinamento manuale che sostituisce chiaramente quello consigliato finché non lo ripristini.
+- **Scheda dell’azione**: perché iniziare da qui (solo dati della scansione), metodo numerato, criterio «Fatto quando…», vedi / esporta gli URL, una nota e **Avvia questa azione → Segna come completata → Rilancia la scansione per convalidare**. Solo una nuova scansione che non rileva più il problema lo segna come risolto.
+- **Avanzamento** (stato e note) salvato nel tuo browser per ogni sito; la selezione multipla permette di esportare gli URL di più azioni o di cambiarne lo stato in una volta.
 
 ## 🧭 Novità della 3.7: una pagina Problemi SEO più chiara
 

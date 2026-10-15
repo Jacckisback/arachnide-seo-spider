@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Version 3.7.0">
+  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Version 3.8.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,17 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🗺️ New in 3.8: an action plan you can work from
+
+Know what to fix, in which order, and how — and keep track of where you are.
+
+<p align="center"><img src="docs/screenshots/action-plan.png" alt="Action plan: summary cards, prioritised roadmap with statuses and the action’s method panel" width="100%"></p>
+
+- **Four cards**: actions left to handle (by severity), quick wins (low effort, medium or high impact), fixing effort and **Start here** — the first action of the recommended order.
+- **Roadmap**: each issue becomes an action with a clear verb (“Shorten titles”, “Check nofollow links”), its rank, severity, SEO impact, unique URLs, effort and status. Filters (all, quick wins, to do, to check, other states), search, and a manual sort that clearly replaces the recommended order until you switch back.
+- **Action panel**: why start here (facts from the crawl only), numbered method, a concrete “Done when…” criterion, see / export the URLs, a note, and **Start this action → Mark as done → Run the crawl again to validate**. Only a new crawl that no longer detects the issue marks it as resolved.
+- **Tracking** (status and notes) is saved in your browser for each site, and multi-select lets you export the URLs of several actions or change their status at once.
 
 ## 🧭 New in 3.7: a clearer SEO issues page
 

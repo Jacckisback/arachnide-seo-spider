@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Version 3.7.0">
+  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Version 3.8.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,17 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🗺️ Nouveau en 3.8 : un plan d’action sur lequel travailler
+
+Sachez quoi corriger, dans quel ordre et comment, et suivez votre avancement.
+
+<p align="center"><img src="docs/screenshots/action-plan.png" alt="Plan d’action : cartes de synthèse, feuille de route priorisée avec statuts et fiche de méthode de l’action" width="100%"></p>
+
+- **Quatre cartes** : actions à traiter (par gravité), gains rapides (effort faible, impact moyen ou élevé), effort de correction et **Commencez ici**, la première action du classement recommandé.
+- **Feuille de route** : chaque problème devient une action avec un verbe clair (« Raccourcir les titres », « Vérifier les liens en nofollow »), son rang, sa gravité, son impact SEO, ses URL uniques, son effort et son statut. Filtres (tout, gains rapides, à faire, à vérifier, autres états), recherche, et un tri manuel qui remplace clairement le classement recommandé jusqu’à ce que vous y reveniez.
+- **Fiche d’action** : pourquoi commencer ici (uniquement des faits du crawl), méthode numérotée, critère « Terminé quand… », voir / exporter les URL, une note, et **Démarrer cette action → Marquer comme terminée → Relancer le crawl pour valider**. Seul un nouveau crawl qui ne détecte plus le problème le marque comme résolu.
+- **Suivi** (statut et notes) enregistré dans votre navigateur pour chaque site ; la sélection multiple permet d’exporter les URL de plusieurs actions ou de changer leur statut d’un coup.
 
 ## 🧭 Nouveau en 3.7 : une page Problèmes SEO plus claire
 
