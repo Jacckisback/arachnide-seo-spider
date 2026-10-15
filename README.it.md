@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Versione 3.8.0">
+  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Versione 3.9.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,17 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🕸️ Novità della 3.9: una mappa del sito più veloce e più chiara
+
+Esplora la struttura e individua le pagine da migliorare, in 2D o in 3D, su migliaia di pagine.
+
+<p align="center"><img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Mappa del sito in 3D: albero di scansione con rami etichettati, pagina selezionata, percorso di scoperta e ispettore di pagina" width="100%"></p>
+
+- **Tre viste davvero diverse**: *Albero di scansione* (ogni pagina sotto la pagina da cui è stata raggiunta sul percorso più breve dalla home — il percorso mostrato corrisponde sempre alla profondità in clic), *Directory* (percorsi URL, con cartelle virtuali non contate come pagine) e *Linking interno* (i link realmente osservati, orientati, cicli compresi).
+- **Ispettore di pagina**: stato, indicizzabilità (solo se nota), profondità, Link Score, pagine sorgente, link in uscita, percorso di scoperta, problemi e raccomandazione esistente, con *Isola il ramo / il vicinato*, *Vedi i link interni* e *Vedi il piano d’azione*.
+- **Ricerca, filtri e analisi** su tutte le pagine scansionate (non solo quelle disegnate): problemi SEO, profondità, directory, stato HTTP, indicizzabilità, linking in entrata debole con soglia esplicita, intervallo di Link Score — evidenziati nel contesto o isolati. Le esportazioni (PNG, PDF, CSV) mantengono etichette, legenda e contesto; una vista *Elenco* permette l’uso da tastiera.
+- **Molto più veloce**: disposizione deterministica invece di una simulazione fisica per gli alberi, nodi e link disegnati in pochi lotti, rendering solo quando qualcosa cambia. Misurato sulla stessa macchina (rendering software): stabilizzazione 3D da 5,5–13,9 s a 0,7–3,2 s, fluidità 3D in rotazione da 1–11 a 46–60 immagini/s.
 
 ## 🗺️ Novità della 3.8: un piano d’azione su cui lavorare
 

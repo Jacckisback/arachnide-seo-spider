@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Versión 3.8.0">
+  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Versión 3.9.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,17 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 🕸️ Novedades de la 3.9: una cartografía más rápida y más clara
+
+Explora la estructura y detecta las páginas que mejorar, en 2D o en 3D, con miles de páginas.
+
+<p align="center"><img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Cartografía en 3D: árbol de rastreo con ramas etiquetadas, página seleccionada, ruta de descubrimiento e inspector de página" width="100%"></p>
+
+- **Tres vistas realmente distintas**: *Árbol de rastreo* (cada página bajo la página desde la que se alcanzó por el camino más corto desde la página de inicio — la ruta mostrada siempre coincide con la profundidad en clics), *Directorios* (rutas de URL, con carpetas virtuales que no cuentan como páginas) y *Enlazado interno* (los enlaces realmente observados, con su sentido y sus ciclos).
+- **Inspector de página**: estado, indexabilidad (solo si se conoce), profundidad, Link Score, páginas de origen, enlaces salientes, ruta de descubrimiento, problemas y recomendación existente, con *Aislar la rama / el vecindario*, *Ver los enlaces internos* y *Ver el plan de acción*.
+- **Búsqueda, filtros y análisis** sobre todas las páginas rastreadas (no solo las dibujadas): problemas SEO, profundidad, directorio, estado HTTP, indexabilidad, enlazado entrante débil con umbral explícito, rango de Link Score — resaltados en contexto o aislados. Las exportaciones (PNG, PDF, CSV) conservan etiquetas, leyenda y contexto; una vista *Lista* permite usarlo todo con el teclado.
+- **Mucho más rápida**: colocación determinista en lugar de una simulación física para los árboles, nodos y enlaces dibujados en pocos lotes, renderizado solo cuando algo cambia. Medido en la misma máquina (renderizado por software): estabilización 3D de 5,5–13,9 s a 0,7–3,2 s, fluidez 3D al girar de 1–11 a 46–60 imágenes/s.
 
 ## 🗺️ Novedades de la 3.8: un plan de acción con el que trabajar
 
