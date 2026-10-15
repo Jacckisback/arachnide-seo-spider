@@ -210,7 +210,7 @@ export function detailHtml(R, is, X) {
       <span class="meta-chip eff ${LVL_CLS[is.effort]}">${icon('wand')}${esc(lvlText('iv.effort', is.effort, t))}</span>
       <span class="meta-chip">${esc(t('cat.' + is.category))}</span>
     </div>
-    <div class="iv-stat">${icon('file')}<div><b>${n == null ? esc(t('dash.siteWide')) : num(n)}</b><span>${esc(n == null ? t('iv.scopeSite') : t('iv.urlsUnit', { n }))}</span></div></div>
+    <div class="iv-stat">${icon('file')}<div><b${n == null ? ' class="site"' : ''}>${n == null ? esc(t('dash.siteWide')) : num(n)}</b><span>${esc(n == null ? t('iv.scopeSite') : t('iv.urlsUnit', { n }))}</span></div></div>
     <div class="iv-why">${icon('info')}<div><h3>${esc(t('iv.why'))}</h3><p>${esc(t('issue.' + is.id + '.desc', is.params))}</p>${t(note) !== note ? `<p class="iv-note">${esc(t(note))}</p>` : ''}</div></div>
     <div class="iv-how"><h3>${icon('wand')} ${esc(t('iv.how'))}</h3><ol>${fixSteps(is, t).map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>
     ${

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Versão 3.7.0">
+  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Versão 3.8.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,17 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🗺️ Novidades da 3.8: um plano de ação com que trabalhar
+
+O que corrigir, por que ordem e como, e em que ponto está.
+
+<p align="center"><img src="docs/screenshots/action-plan.png" alt="Plano de ação: cartões de resumo, roteiro priorizado com estados e ficha de método da ação" width="100%"></p>
+
+- **Quatro cartões**: ações por tratar (por gravidade), ganhos rápidos (pouco esforço, impacto médio ou alto), esforço de correção e **Comece aqui**, a primeira ação da ordem recomendada.
+- **Roteiro**: cada problema torna-se uma ação com um verbo claro, a sua posição, gravidade, impacto SEO, URL únicos, esforço e estado. Filtros (tudo, ganhos rápidos, a fazer, a verificar, outros estados), pesquisa e uma ordenação manual que substitui claramente a recomendada até voltar a ela.
+- **Ficha da ação**: porquê começar aqui (apenas factos do rastreio), método numerado, critério «Concluído quando…», ver / exportar os URL, uma nota e **Iniciar esta ação → Marcar como concluída → Relançar o rastreio para validar**. Só um novo rastreio que já não deteta o problema o marca como resolvido.
+- **Acompanhamento** (estado e notas) guardado no seu navegador para cada site; a seleção múltipla permite exportar os URL de várias ações ou mudar o estado de uma só vez.
 
 ## 🧭 Novidades da 3.7: uma página de problemas SEO mais clara
 

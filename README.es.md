@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Versión 3.7.0">
+  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Versión 3.8.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,17 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 🗺️ Novedades de la 3.8: un plan de acción con el que trabajar
+
+Qué corregir, en qué orden y cómo, y en qué punto estás.
+
+<p align="center"><img src="docs/screenshots/action-plan.png" alt="Plan de acción: tarjetas de resumen, hoja de ruta priorizada con estados y ficha de método de la acción" width="100%"></p>
+
+- **Cuatro tarjetas**: acciones pendientes (por gravedad), mejoras rápidas (poco esfuerzo, impacto medio o alto), esfuerzo de corrección y **Empieza aquí**, la primera acción del orden recomendado.
+- **Hoja de ruta**: cada problema se convierte en una acción con un verbo claro, su rango, gravedad, impacto SEO, URL únicas, esfuerzo y estado. Filtros (todo, mejoras rápidas, por hacer, por revisar, otros estados), búsqueda y un orden manual que sustituye claramente al recomendado hasta que vuelvas a él.
+- **Ficha de acción**: por qué empezar aquí (solo datos del rastreo), método numerado, criterio «Terminado cuando…», ver / exportar las URL, una nota y **Iniciar esta acción → Marcar como terminada → Relanzar el rastreo para validar**. Solo un nuevo rastreo que ya no detecta el problema lo marca como resuelto.
+- **Seguimiento** (estado y notas) guardado en tu navegador para cada sitio; la selección múltiple permite exportar las URL de varias acciones o cambiar su estado de una vez.
 
 ## 🧭 Novedades de la 3.7: una página de problemas SEO más clara
 

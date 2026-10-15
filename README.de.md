@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.7.0-3d5f17" alt="Version 3.7.0">
+  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Version 3.8.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,17 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🗺️ Neu in 3.8: ein Maßnahmenplan, mit dem Sie arbeiten können
+
+Was zu beheben ist, in welcher Reihenfolge und wie – und wo Sie gerade stehen.
+
+<p align="center"><img src="docs/screenshots/action-plan.png" alt="Maßnahmenplan: Übersichtskarten, priorisierte Roadmap mit Status und Methodenbereich der Maßnahme" width="100%"></p>
+
+- **Vier Karten**: offene Maßnahmen (nach Schweregrad), Quick Wins (geringer Aufwand, mittlere oder hohe Wirkung), Korrekturaufwand und **Hier beginnen** – die erste Maßnahme der empfohlenen Reihenfolge.
+- **Roadmap**: Jedes Problem wird zu einer Maßnahme mit klarem Verb, Rang, Schweregrad, SEO-Wirkung, eindeutigen URLs, Aufwand und Status. Filter (alle, Quick Wins, zu erledigen, zu prüfen, weitere Status), Suche und eine manuelle Sortierung, die die empfohlene Reihenfolge sichtbar ersetzt, bis Sie zurückwechseln.
+- **Maßnahmenbereich**: warum hier beginnen (nur Fakten aus dem Crawl), nummerierte Methode, konkretes Kriterium „Erledigt, wenn…“, URLs ansehen / exportieren, Notiz und **Maßnahme starten → Als erledigt markieren → Crawl erneut starten zur Bestätigung**. Erst ein neuer Crawl, der das Problem nicht mehr findet, markiert es als gelöst.
+- **Fortschritt** (Status und Notizen) wird pro Website im Browser gespeichert; per Mehrfachauswahl exportieren Sie die URLs mehrerer Maßnahmen oder ändern deren Status auf einmal.
 
 ## 🧭 Neu in 3.7: eine übersichtlichere Seite „SEO-Probleme“
 

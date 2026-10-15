@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.8.0 — 2026-10-15
+
+### New: “Action plan” page redesign
+- **Summary cards**: actions left to handle (by severity, with a segmented bar), quick wins (low effort, medium or high impact — one shared rule), fixing effort (low / medium / high) and **Start here**, the first action to do in the recommended order, which moves on as actions are handled.
+- **Roadmap**: rank in the recommended order, action title with a verb (action titles added for every check), severity, SEO impact, unique URLs (or “Whole site”), effort and status. Filters (all, quick wins, to do, to check, plus in progress / to validate), search, recommended sort by default with its rule shown; a manual sort says it replaces the recommended order and offers a way back. Pagination and keyboard navigation.
+- **Action panel**: why start here (rank, severity, scope, impact, effort — facts only), numbered method, “Done when…” criterion (a re-crawl for fixes, a documented decision for notices), see / export the URLs, a real note, and the status flow **To do → In progress → To validate**. Only a newer crawl that no longer detects the issue marks it resolved; one still detected is flagged.
+- **Tracking** saved in the browser per site with stable issue IDs; save errors are reported. Multi-select exports the URLs of several actions or changes their status at once.
+- Two-thirds / one-third layout with a sticky panel; on tablets the panel opens as a drawer (focus moved in and back, Escape closes it); compact cards and rows on mobile. Translations in the 6 languages.
+
 ## 3.7.0 — 2026-10-14
 
 ### New: “SEO issues” page redesign
