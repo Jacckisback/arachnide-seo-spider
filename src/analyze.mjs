@@ -161,6 +161,8 @@ export function analyze(crawler) {
   // Parcours 0-1 : l'accueil après redirection (http → https, www) reste au niveau 0.
   const roots = crawler.listUrls ? crawler.listUrls : [start];
   const dist = new Map(roots.map((r) => [r, 0]));
+  // Prédécesseur sur ce plus court chemin : le chemin affiché (cartographie) compte exactement « depth » clics.
+  const pred = new Map();
   const dq = [...roots];
   while (dq.length) {
     const cur = dq.shift();
@@ -168,11 +170,13 @@ export function analyze(crawler) {
     const h = hop.get(cur);
     if (h && (!dist.has(h) || dist.get(h) > d)) {
       dist.set(h, d);
+      pred.set(h, [cur, 'redirect']);
       dq.unshift(h);
     }
     for (const v of adj.get(cur) || []) {
       if (!dist.has(v) || dist.get(v) > d + 1) {
         dist.set(v, d + 1);
+        pred.set(v, [cur, 'link']);
         dq.push(v);
       }
     }
@@ -180,6 +184,11 @@ export function analyze(crawler) {
   for (const [u, d] of dist) {
     const p = byUrl.get(u);
     if (p) p.depth = d;
+    const pr = pred.get(u);
+    if (p && pr) {
+      p.pathParent = pr[0];
+      if (pr[1] === 'redirect') p.pathViaRedirect = true;
+    }
   }
 
   // PageRank interne sur les pages crawlées

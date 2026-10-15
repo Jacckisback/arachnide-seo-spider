@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Version 3.8.0">
+  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Version 3.9.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,17 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🕸️ New in 3.9: a faster, clearer site map
+
+Explore the structure and spot the pages to improve — in 2D or 3D, on thousands of pages.
+
+<p align="center"><img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Site map in 3D: crawl tree with labelled branches, selected page, discovery path and page inspector" width="100%"></p>
+
+- **Three truly different views**: *Crawl tree* (each page under the page it was reached from on the shortest path from the home page — the path shown always matches the depth in clicks), *Directories* (URL paths, with virtual folders that are not counted as pages) and *Internal linking* (the real directed links, cycles included).
+- **Page inspector**: status, indexability (only when known), depth, Link Score, source pages, outgoing links, discovery path, issues and the existing recommendation, with *Isolate the branch / neighbourhood*, *See internal links* and *See the action plan*.
+- **Search, filters and analyses** on every crawled page (not only what is drawn): SEO issues, depth, directory, HTTP status, indexability, weak inbound linking with an explicit threshold, Link Score range — highlighted in context or isolated. Exports (PNG, PDF, CSV) keep the labels, legend and context; a *List* view gives keyboard access.
+- **Much faster**: deterministic layout instead of a physics simulation for trees, all nodes and links drawn in a few batches, rendering only when something changes. Measured on the same machine (software rendering): 3D stabilisation from 5.5–13.9 s down to 0.7–3.2 s, 3D frame rate while rotating from 1–11 to 46–60 fps.
 
 ## 🗺️ New in 3.8: an action plan you can work from
 

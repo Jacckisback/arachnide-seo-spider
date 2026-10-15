@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Version 3.8.0">
+  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Version 3.9.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,17 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🕸️ Nouveau en 3.9 : une cartographie plus rapide et plus lisible
+
+Explorez la structure et repérez les pages à améliorer, en 2D ou en 3D, sur des milliers de pages.
+
+<p align="center"><img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Cartographie 3D : arbre de crawl avec branches nommées, page sélectionnée, chemin de découverte et inspecteur de page" width="100%"></p>
+
+- **Trois vues réellement différentes** : *Arbre de crawl* (chaque page sous la page qui l’a fait découvrir sur le plus court chemin depuis l’accueil — le chemin affiché correspond toujours à la profondeur en clics), *Répertoires* (chemins d’URL, avec des dossiers virtuels non comptés comme des pages) et *Maillage* (les liens réellement observés, orientés, cycles compris).
+- **Inspecteur de page** : statut, indexabilité (seulement si elle est connue), profondeur, Link Score, pages sources, liens sortants, chemin de découverte, problèmes et recommandation existante, avec *Isoler la branche / le voisinage*, *Voir les liens internes* et *Voir le plan d’action*.
+- **Recherche, filtres et analyses** sur toutes les pages du crawl (pas seulement celles dessinées) : problèmes SEO, profondeur, répertoire, statut HTTP, indexabilité, faible maillage entrant avec seuil explicite, plage de Link Score — en surbrillance dans le contexte ou isolées. Les exports (PNG, PDF, CSV) gardent libellés, légende et contexte ; une vue *Liste* permet tout au clavier.
+- **Beaucoup plus rapide** : placement déterministe au lieu d’une simulation physique pour les arbres, nœuds et liens dessinés en quelques lots, rendu seulement quand quelque chose change. Mesuré sur la même machine (rendu logiciel) : stabilisation 3D de 5,5–13,9 s à 0,7–3,2 s, fluidité 3D en rotation de 1–11 à 46–60 images/s.
 
 ## 🗺️ Nouveau en 3.8 : un plan d’action sur lequel travailler
 

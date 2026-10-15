@@ -8,7 +8,11 @@ import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.
 import { summarize, filterSort, summaryHtml, listHtml, detailHtml } from './issues.js';
 import { reconcile, storeKey, summary as planSummary, visible as planVisible, actionTitles as planTitles, defaultStatus as planDefault, cardsHtml as planCardsHtml, tableHtml as planTableHtml, detailHtml as planDetailHtml } from './plan.js';
 import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
-import { buildGraph, renderGraph, PALETTE } from './viz.js';
+import { createMap, SEV_COLORS, DIR_COLORS, UNKNOWN } from './viz.js';
+import { buildModel, topDir } from './map-model.js';
+import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
+import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, pathTo, pathClicks, descendants } from './map-view.js';
+import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -225,12 +229,12 @@ const visibleTabs = () => {
 /* ---------- Barre latérale ---------- */
 // Pilotage et exploration en tête ; toutes les autres analyses restent accessibles dans « Plus d'analyses ».
 const NAV = [
-  { group: 'grp.pilot', items: ['dashboard', 'issues', 'plan', 'fix', 'fixHistory'] },
+  { group: 'grp.pilot', items: ['dashboard', 'issues', 'plan', 'viz', 'fix', 'fixHistory'] },
   { group: 'grp.explore', items: ['internal', 'linking', 'content', 'images', 'directives'] },
 ];
 const NAV_IDS = new Set(NAV.flatMap((g) => g.items));
 const SUB_ITEMS = new Set(['fixHistory']); // affiché en retrait sous « Corrections »
-const NO_COUNT = new Set(['dashboard', 'plan', 'fix', 'fixHistory']); // pas de compteur qui ne veuille rien dire
+const NO_COUNT = new Set(['viz', 'dashboard', 'plan', 'fix', 'fixHistory']); // pas de compteur qui ne veuille rien dire
 const navLabel = (id) => {
   const k = 'nav.' + id;
   const v = t(k);
@@ -786,68 +790,380 @@ h1{font-size:18px;margin:0 0 2px}.meta{color:#5b6578;margin-bottom:8px}img{width
   w.document.close();
 }
 
+// ---------- Cartographie ----------
+// Données (map-model) → scène visible (map-view) → rendu (viz). Les changements de couleur, de sélection ou de
+// filtre en surbrillance ne font que restyler la scène ; seuls le mode, la dimension, le dépliage et l'isolement
+// la reconstruisent (positions en cache : rien ne bouge sans raison).
+const mapX = () => ({ t, esc, icon, num });
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function mapCtx() {
+  const R = state.R;
+  const key = (R.meta.finishedAt || '') + '|' + (R.meta.startUrl || '');
+  if (state.map?.key !== key) {
+    clearLayoutCache();
+    state.map = null;
+    const t0 = performance.now();
+    const M = buildModel(R, linkGraph());
+    performance.measure?.('map:model', { start: t0 });
+    state.map = { key, M, expanded: { crawl: new Set(), dir: new Set() }, extra: new Set(), isolate: null, sel: null, tab: 'page', filters: { ...DEFAULT_FILTERS, _mode: 'highlight' }, listPage: 0 };
+  }
+  return state.map;
+}
+
 async function renderViz(view) {
-  const o = { view: 'crawl', dim: '2d', colorBy: 'status', sizeBy: 'linkScore', maxNodes: 1500, ...store.get('viz', {}) };
-  const seg = (name, values) => `<div class="seg">${values.map((v) => `<button data-${name}="${v}" class="${o[name] === v ? 'on' : ''}">${esc(t(`viz.${name}.${v}`))}</button>`).join('')}</div>`;
-  const legend = o.colorBy === 'issues'
-    ? [['sevError', 'sev.error'], ['sevWarning', 'sev.warning'], ['sevNotice', 'sev.notice'], ['sevNone', 'viz.noIssue']]
-    : o.colorBy === 'depth'
-      ? [['__depth0', 'viz.shallow'], ['__depth1', 'viz.deep']]
-      : [['indexable', 'idx.indexable'], ['nonIndexable', 'idx.nonIndexable'], ['redirect', 'idx.redirect'], ['error', 'viz.error'], ['blocked', 'idx.blocked'], ...(o.view === 'dir' ? [['folder', 'viz.folder']] : [])];
-  const swatch = (k) => (k === '__depth0' ? 'hsl(130 65% 45%)' : k === '__depth1' ? 'hsl(0 65% 45%)' : PALETTE[k]);
-  view.innerHTML = `
-    <div class="toolbar"><div class="tb-title"><h2>${esc(t('tab.viz'))}</h2><p class="help">${esc(t('help.viz.' + o.view))}</p></div>
-      <div class="tb-actions">
-        ${seg('view', ['crawl', 'dir', 'links'])}
-        ${seg('dim', ['2d', '3d'])}
-        <select id="vizColor" aria-label="${esc(t('viz.colorBy'))}">${['status', 'issues', 'depth'].map((c) => `<option value="${c}" ${o.colorBy === c ? 'selected' : ''}>${esc(t('viz.color.' + c))}</option>`).join('')}</select>
- <select id="vizSize" aria-label="${esc(t('viz.sizeBy'))}">${['linkScore', 'weight', 'inlinks', 'responseTime'].map((c) => `<option value="${c}" ${o.sizeBy === c ? 'selected' : ''}>${esc(t('viz.size.' + c))}</option>`).join('')}</select>
-        <select id="vizMax" aria-label="${esc(t('viz.maxNodes'))}">${[500, 1500, 3000, 6000].map((n) => `<option value="${n}" ${o.maxNodes === n ? 'selected' : ''}>${esc(t('viz.nodes', { n }))}</option>`).join('')}</select>
-        <button class="btn" id="vizFit" title="${esc(t('viz.fit'))}">${icon('target')}</button>
-        <button class="btn" id="vizPng">${icon('download')} PNG</button>
-        <button class="btn" id="vizPdf">${icon('file')} PDF</button>
-      </div></div>
-    <div class="viz-wrap"><div id="vizCanvas" class="viz-canvas"><div class="empty">${icon('spider')} ${esc(t('ui.loading'))}</div></div>
-      <div class="viz-legend">${legend.map(([k, l]) => `<span><i style="background:${swatch(k)}"></i>${esc(t(l))}</span>`).join('')}<span class="muted">${esc(t('viz.sizeHint.' + o.sizeBy))}</span>${o.colorBy === 'issues' ? `<span class="muted">${esc(t('viz.issuesHint'))}</span>` : ''}</div>
-      <div id="vizNote" class="viz-note muted"></div></div>`;
-  const update = (patch) => { store.set('viz', { ...o, ...patch }); render(); };
-  view.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => update({ view: b.dataset.view })));
-  view.querySelectorAll('[data-dim]').forEach((b) => b.addEventListener('click', () => update({ dim: b.dataset.dim })));
-  $('#vizColor').addEventListener('change', (e) => update({ colorBy: e.target.value }));
-  $('#vizMax').addEventListener('change', (e) => update({ maxNodes: Number(e.target.value) }));
-  $('#vizSize').addEventListener('change', (e) => update({ sizeBy: e.target.value }));
+  const ctx = mapCtx();
+  const { M } = ctx;
+  const o = { mode: 'crawl', dim: '3d', colorBy: 'depth', sizeBy: 'linkScore', list: false, panel: true, ...store.get('map', {}) };
+  const save = (patch) => { Object.assign(o, patch); store.set('map', { mode: o.mode, dim: o.dim, colorBy: o.colorBy, sizeBy: o.sizeBy, list: o.list, panel: o.panel }); };
+  const dirs = dirsOf(M);
+  const matched = activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length ? matchPages(M, ctx.filters) : null;
+  const relKey = o.mode === 'crawl' ? 'map.rel.crawl' : o.mode === 'dir' ? 'map.rel.dir' : 'map.rel.links';
+  const relN = o.mode === 'links' ? M.linkCount : M.pages.length - 1;
+  const stats = [t('map.pagesExplored', { n: M.pages.length }), t(relKey, { n: relN })];
+  if (M.resources) stats.push(t('map.resourcesOut', { n: M.resources }));
+  if (isPartial(state.R)) stats.push(t('map.partial'));
+  view.innerHTML = `<div class="map${o.panel ? '' : ' no-panel'}" id="mapRoot">
+    ${headHtml(stats, mapX())}
+    ${toolbarHtml(o, matched ? activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length : 0, mapX())}
+    <div id="mapFiltersWrap" hidden>${filtersHtml(ctx.filters, o.mode, dirs, mapX())}</div>
+    <div id="mapChips">${matched ? chipsHtml(ctx.filters, matched.size, mapX()) : ''}</div>
+    <div class="map-work">
+      <div class="map-stage">
+        <div id="mapCanvas" class="map-canvas"${o.list ? ' hidden' : ''}><div class="map-loading">${icon('spider')} ${esc(t('ui.loading'))}</div></div>
+        <div id="mapListWrap"${o.list ? '' : ' hidden'}></div>
+        <div class="map-controls"${o.list ? ' hidden' : ''}>
+          <button class="btn icon" id="mapZoomIn" aria-label="${esc(t('map.zoomIn'))}" title="${esc(t('map.zoomIn'))}">+</button>
+          <button class="btn icon" id="mapZoomOut" aria-label="${esc(t('map.zoomOut'))}" title="${esc(t('map.zoomOut'))}">−</button>
+          <button class="btn icon" id="mapFit" aria-label="${esc(t('map.fit'))}" title="${esc(t('map.fit'))}">${icon('fit')}</button>
+          <button class="btn icon" id="mapReset" aria-label="${esc(t('map.reset'))}" title="${esc(t('map.reset'))}">${icon('home')}</button>
+          <button class="btn icon" id="mapHelp" aria-label="${esc(t('map.help'))}" title="${esc(t('map.help'))}" aria-expanded="false">?</button>
+        </div>
+        <div class="map-help" id="mapHelpBox" hidden><b>${esc(t('map.help'))}</b><ul>${['drag', 'wheel', 'click', 'search', 'esc'].map((k) => `<li>${esc(t('map.helpItem.' + k + (o.dim === '2d' && k === 'drag' ? '2d' : '')))}</li>`).join('')}</ul></div>
+        <div class="map-tip" id="mapTip" hidden></div>
+        <div class="map-legend" id="mapLegend"></div>
+        <div class="map-path" id="mapPath" hidden></div>
+        <div class="map-notice" id="mapNotice" hidden></div>
+      </div>
+      <aside class="map-inspector" id="mapInspector" aria-label="${esc(t('map.inspector'))}"></aside>
+      <button class="map-panel-toggle" id="mapPanelToggle" aria-expanded="${o.panel}" aria-controls="mapInspector" title="${esc(t('map.togglePanel'))}">${icon(o.panel ? 'chevronRight' : 'chevronLeft')}</button>
+    </div>
+    <div class="map-bottom">
+      <span class="muted">${esc(t('map.analyse'))}</span>
+      <button class="btn small" data-preset="issues">${icon('alert')} ${esc(t('map.preset.issues'))}</button>
+      <button class="btn small" data-preset="deep">${icon('graph')} ${esc(t('map.preset.deep'))}</button>
+      <button class="btn small" data-preset="weak">${icon('link')} ${esc(t('map.preset.weak'))}</button>
+      <button class="btn small ghost" data-preset="reset">${icon('history')} ${esc(t('map.preset.reset'))}</button>
+      <span class="map-hints muted">${esc(t(o.dim === '3d' ? 'map.hints3d' : 'map.hints2d'))}</span>
+    </div>
+  </div>`;
+  const $m = (sel) => view.querySelector(sel);
+
+  // --- Scène ---
   if (state.vizHandle) { state.vizHandle.destroy(); state.vizHandle = null; }
-  const el = $('#vizCanvas');
-  const data = buildGraph(state.R, linkGraph(), o);
-  const note = t('viz.stats', { nodes: data.nodes.length, links: data.links.length }) + (data.truncated ? ' · ' + t('viz.truncated', { n: o.maxNodes }) : '') + (data.resources ? ' · ' + t('viz.resourcesHidden', { n: data.resources }) : '');
-  $('#vizNote').textContent = note;
+  const R = state.R;
+  const scene = makeScene(M, { mode: o.mode, dim: o.dim, expanded: ctx.expanded[o.mode], isolate: ctx.isolate?.mode === o.mode ? ctx.isolate.ids : null, extra: ctx.extra }, ctx.key, t);
+  const byId = new Map(scene.nodes.map((n) => [n.id, n]));
+  const crawl = treeOf(M, 'crawl', ctx.key);
+  const dirColor = (() => { const m = new Map(dirs.slice(0, 8).map((d, i) => [d, i])); return (n) => (n.url ? (m.has(topDir(n.url)) ? DIR_COLORS[m.get(topDir(n.url))] : UNKNOWN) : null); })();
+  const style = { colorBy: o.colorBy, sizeBy: o.sizeBy, dirColor };
+
+  const notices = [];
+  if (scene.groups) notices.push(t('map.groupsNote', { n: scene.groups }));
+  if (scene.hiddenPages) notices.push(t('map.hiddenNote', { n: scene.hiddenPages }));
+  if (ctx.isolate?.mode === o.mode) notices.push(t('map.isolatedNote', { label: ctx.isolate.label }));
+  if (o.mode === 'crawl' && crawl.tree.inferred) notices.push(t('map.inferredNote'));
+  const noticeEl = $m('#mapNotice');
+  noticeEl.hidden = !notices.length;
+  noticeEl.innerHTML = notices.map((x) => `<span>${esc(x)}</span>`).join('') + (ctx.isolate?.mode === o.mode ? `<button class="link accent" id="mapUnIso">${esc(t('map.backGlobal'))}</button>` : '');
+
+  const legend = () => {
+    const items = legendItems(o, M, t, dirs);
+    $m('#mapLegend').innerHTML = `<div class="ml-row"><span class="ml-k">${esc(t('map.color.' + o.colorBy))} :</span>${items.map(([c, l]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join('')}</div>
+      <div class="ml-row"><span class="ml-k">${esc(t('map.sizeLabel'))} ${esc(t('map.size.' + o.sizeBy))}</span>${o.colorBy !== 'issues' ? `<span><i class="ring" style="border-color:${SEV_COLORS.error}"></i>${esc(t('map.sev.error'))}</span><span><i class="ring" style="border-color:${SEV_COLORS.warning}"></i>${esc(t('map.sev.warning'))}</span>` : ''}${o.mode === 'dir' ? `<span><i class="sq"></i>${esc(t('map.virtualFolder'))}</span>` : ''}${scene.groups ? `<span><i class="ring dash"></i>${esc(t('map.group'))}</span>` : ''}</div>
+      <p class="ml-hint">${esc(t('map.sizeHint.' + o.sizeBy))}</p>`;
+  };
+  legend();
+
+  // --- Sélection, chemin, voisinage ---
+  const crawlPathOf = (url) => {
+    const path = pathTo(crawl.tree, url);
+    if (!path.length || path[path.length - 1].id !== url) return [];
+    return path.map((s) => ({ ...s, label: s.id === crawl.tree.root ? t('map.home') : s.kind === 'unreached' ? t('map.unreached') : (s.url && new URL(s.url).pathname) || s.id }));
+  };
+  const styleForSelection = () => {
+    const sel = ctx.sel ? byId.get(ctx.sel) : null;
+    const next = { selected: sel?.id || null, pathIds: [], hiLinks: [], focus: null };
+    if (sel) {
+      if (o.mode === 'links') {
+        const ins = [...(M.inl.get(sel.id) || [])].filter((u) => byId.has(u));
+        const outs = [...(M.out.get(sel.id) || [])].filter((u) => byId.has(u));
+        next.hiLinks = [...ins.map((u) => ({ s: u, t: sel.id, kind: 'in' })), ...outs.map((u) => ({ s: sel.id, t: u, kind: 'out' }))];
+        next.focus = new Set([sel.id, ...ins, ...outs]);
+      } else {
+        const ids = [];
+        for (let cur = sel.id; cur != null && byId.has(cur); cur = scene.tree.parent.get(cur)) ids.unshift(cur);
+        next.pathIds = ids;
+        next.hiLinks = ids.slice(1).map((id, i) => ({ s: ids[i], t: id, kind: 'path' }));
+        next.focus = new Set([...ids, ...(scene.tree.children.get(sel.id) || []).filter((c) => byId.has(c))]);
+      }
+    }
+    // Filtre en surbrillance : les correspondances restent nettes, le reste s'estompe.
+    next.match = matched && ctx.filters._mode !== 'isolate' ? matchIds(scene, matched) : null;
+    if (next.focus && next.match) next.focus = new Set([...next.focus].filter((id) => next.match.has(id) || next.pathIds.includes(id) || id === next.selected));
+    return next;
+  };
+  const pathBar = () => {
+    const el = $m('#mapPath');
+    const n = ctx.sel ? byId.get(ctx.sel) : null;
+    const path = n?.url ? crawlPathOf(n.url) : [];
+    el.hidden = !path.length;
+    el.innerHTML = path.length ? `<span class="muted">${esc(t('map.discoveryPath'))} :</span> ${path.map((s, i) => `<button class="link${i === path.length - 1 ? ' cur' : ''}" data-goto="${esc(s.url || '')}">${esc(s.label)}</button>`).join(' <span class="muted">›</span> ')} <span class="muted">· ${esc(t('map.clicks', { n: pathClicks(path) }))}</span>` : '';
+  };
+  const inspector = () => {
+    const node = ctx.sel ? byId.get(ctx.sel) || (M.byUrl.has(ctx.sel) ? { id: ctx.sel, kind: 'page', url: ctx.sel, page: M.byUrl.get(ctx.sel) } : null) : null;
+    const insp = $m('#mapInspector');
+    insp.innerHTML = inspectorHtml({ M, node, tab: ctx.tab, mode: o.mode, crawlPath: node?.url ? crawlPathOf(node.url) : [], inferred: crawl.tree.inferred, isolate: ctx.isolate }, mapX());
+    wireInspector(node);
+  };
+  const select = (id, { focus = false } = {}) => {
+    ctx.sel = id;
+    state.vizHandle?.setStyle(styleForSelection());
+    inspector();
+    pathBar();
+    if (focus && id) state.vizHandle?.focus(id);
+  };
+
+  // Rendre visible une page (groupe replié, page hors budget) puis la sélectionner et la cadrer.
+  const reveal = (url) => {
+    const id = nodeIdForUrl(M, o.mode, ctx.key, url);
+    if (id && byId.has(id)) return select(id, { focus: true });
+    if (o.mode === 'links') ctx.extra.add(url);
+    else if (id) for (const a of ancestorsOf(M, o.mode, ctx.key, id)) ctx.expanded[o.mode].add(a);
+    if (ctx.isolate?.mode === o.mode && !ctx.isolate.ids.has(id)) ctx.isolate = null;
+    ctx.sel = id || url;
+    ctx.pendingFocus = ctx.sel;
+    renderViz(view);
+  };
+
+  function wireInspector(node) {
+    const insp = $m('#mapInspector');
+    insp.querySelectorAll('[data-mtab]').forEach((b) => b.addEventListener('click', () => { ctx.tab = b.dataset.mtab; inspector(); insp.querySelector(`[data-mtab="${ctx.tab}"]`)?.focus(); }));
+    insp.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => b.dataset.goto && reveal(b.dataset.goto)));
+    insp.querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => { state.plIssue = b.dataset.plan; state.plFollow = true; state.plDetailOpen = true; state.plFilter = 'all'; state.plQ = ''; goTab('plan'); }));
+    insp.querySelector('#mapCopy')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(node.url); toast(t('toast.copied', { n: 1 }), 'ok'); } catch { toast(t('toast.copyFailed'), 'error'); } });
+    insp.querySelector('#mapGlobal')?.addEventListener('click', () => { ctx.sel = null; ctx.isolate = null; renderViz(view); });
+    insp.querySelector('#mapExpand')?.addEventListener('click', () => { ctx.expanded[o.mode].add(node.id); ctx.pendingFocus = node.id; renderViz(view); });
+    insp.querySelector('#mapIsoBranch')?.addEventListener('click', () => {
+      const { tree } = treeOf(M, o.mode, ctx.key);
+      const ids = descendants(tree, node.id);
+      for (let cur = tree.parent.get(node.id); cur != null; cur = tree.parent.get(cur)) ids.add(cur);
+      ctx.isolate = { mode: o.mode, ids, label: node.label };
+      renderViz(view);
+    });
+    insp.querySelector('#mapIsoNeigh')?.addEventListener('click', () => {
+      ctx.isolate = { mode: 'links', ids: new Set([node.id, ...(M.inl.get(node.id) || []), ...(M.out.get(node.id) || [])]), label: node.label };
+      renderViz(view);
+    });
+    insp.querySelector('#mapToLinks')?.addEventListener('click', () => { save({ mode: 'links' }); ctx.sel = node.url; ctx.pendingFocus = node.url; ctx.extra.add(node.url); renderViz(view); });
+    insp.querySelector('#mapToTree')?.addEventListener('click', () => { save({ mode: 'crawl' }); const id = nodeIdForUrl(M, 'crawl', ctx.key, node.url); for (const a of ancestorsOf(M, 'crawl', ctx.key, id)) ctx.expanded.crawl.add(a); ctx.sel = id; ctx.pendingFocus = id; renderViz(view); });
+  }
+
+  // --- Barre d'outils ---
+  view.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    const url = ctx.sel ? byId.get(ctx.sel)?.url || (M.byUrl.has(ctx.sel) ? ctx.sel : null) : null;
+    save({ mode: b.dataset.mode });
+    // La sélection suit la page d'une vue à l'autre.
+    ctx.sel = url ? nodeIdForUrl(M, b.dataset.mode, ctx.key, url) : null;
+    if (ctx.sel && b.dataset.mode !== 'links') for (const a of ancestorsOf(M, b.dataset.mode, ctx.key, ctx.sel)) ctx.expanded[b.dataset.mode].add(a);
+    if (url && b.dataset.mode === 'links') ctx.extra.add(url);
+    ctx.pendingFocus = ctx.sel;
+    renderViz(view);
+  }));
+  view.querySelectorAll('[data-dim]').forEach((b) => b.addEventListener('click', () => { save({ dim: b.dataset.dim }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
+  $m('#mapColor').addEventListener('change', (e) => { save({ colorBy: e.target.value }); style.colorBy = o.colorBy; legend(); state.vizHandle?.setStyle({ colorBy: o.colorBy }); });
+  $m('#mapSize').addEventListener('change', (e) => { save({ sizeBy: e.target.value }); legend(); state.vizHandle?.setStyle({ sizeBy: o.sizeBy }); });
+  const fWrap = $m('#mapFiltersWrap');
+  $m('#mapFiltersBtn').addEventListener('click', (e) => { fWrap.hidden = !fWrap.hidden; e.currentTarget.setAttribute('aria-expanded', !fWrap.hidden); if (!fWrap.hidden) fWrap.querySelector('select')?.focus(); });
+  const applyFilters = () => { if (ctx.filters._mode === 'isolate') applyIsolateFilter(); else ctx.isolate = ctx.isolate?.filter ? null : ctx.isolate; ctx.pendingFocus = null; renderViz(view); const w = $('#mapFiltersWrap'); if (w) w.hidden = false; };
+  const applyIsolateFilter = () => {
+    const m = matchPages(M, ctx.filters);
+    ctx.isolate = activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length ? { mode: o.mode, ids: isolateSet(scene, M, o.mode, m, ctx.key), label: t('map.filtered'), filter: true } : null;
+  };
+  fWrap.querySelectorAll('[data-f]').forEach((el) => el.addEventListener('change', () => {
+    const k = el.dataset.f;
+    const v = el.type === 'checkbox' ? el.checked : el.value === '' ? (k === 'depthMin' || k.startsWith('ls') ? null : '') : ['depthMin', 'inlinksMax', 'lsMin', 'lsMax'].includes(k) ? Number(el.value) : el.value;
+    ctx.filters[k] = v;
+    applyFilters();
+  }));
+  fWrap.querySelectorAll('[data-fmode]').forEach((b) => b.addEventListener('click', () => { ctx.filters._mode = b.dataset.fmode; applyFilters(); }));
+  $m('#mapFiltersReset').addEventListener('click', () => { ctx.filters = { ...DEFAULT_FILTERS, _mode: ctx.filters._mode }; if (ctx.isolate?.filter) ctx.isolate = null; renderViz(view); });
+  view.querySelectorAll('[data-unf]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.unf; ctx.filters[k] = DEFAULT_FILTERS[k]; if (ctx.filters._mode === 'isolate') applyIsolateFilter(); renderViz(view); }));
+  view.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
+    const p = b.dataset.preset;
+    const mode = ctx.filters._mode;
+    ctx.filters = { ...DEFAULT_FILTERS, _mode: mode, ...(p === 'issues' ? { issues: 'any' } : p === 'deep' ? { depthMin: 4 } : p === 'weak' ? { lowInlinks: true, inlinksMax: 1 } : {}) };
+    if (p === 'reset') { ctx.isolate = null; ctx.sel = null; ctx.expanded[o.mode] = new Set(); }
+    else if (mode === 'isolate') applyIsolateFilter();
+    renderViz(view);
+  }));
+  $m('#mapListBtn').addEventListener('click', () => { save({ list: !o.list }); renderViz(view); });
+  $m('#mapPanelToggle').addEventListener('click', () => { save({ panel: !o.panel }); $m('#mapRoot').classList.toggle('no-panel', !o.panel); const b = $m('#mapPanelToggle'); b.setAttribute('aria-expanded', o.panel); b.innerHTML = icon(o.panel ? 'chevronRight' : 'chevronLeft'); });
+  $m('#mapFull').addEventListener('click', () => { const r = $m('#mapRoot'); document.fullscreenElement ? document.exitFullscreen() : r.requestFullscreen?.().catch(() => toast(t('map.noFullscreen'), 'error')); });
+  view.querySelectorAll('#mapPath [data-goto], #mapPath').forEach(() => {});
+  $m('#mapPath').addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b?.dataset.goto) reveal(b.dataset.goto); });
+  $m('#mapUnIso')?.addEventListener('click', () => { ctx.isolate = null; if (ctx.filters._mode === 'isolate') ctx.filters = { ...DEFAULT_FILTERS, _mode: 'isolate' }; renderViz(view); });
+
+  // Recherche : tout le corpus, résultats au clavier, y compris dans un groupe replié ou hors budget.
+  const sIn = $m('#mapSearch');
+  const sOut = $m('#mapResults');
+  let sIdx = -1;
+  const showResults = () => {
+    const res = searchPages(M, sIn.value);
+    sIdx = -1;
+    sOut.hidden = !sIn.value.trim();
+    sIn.setAttribute('aria-expanded', !sOut.hidden);
+    sOut.innerHTML = res.length ? res.map((p, i) => `<li role="option" id="mapRes${i}" data-goto="${esc(p.url)}"><b>${esc(new URL(p.url).pathname)}</b><small>${esc(p.title || '')}</small></li>`).join('') : `<li class="muted" role="option" aria-disabled="true">${esc(t('map.noResult'))}</li>`;
+  };
+  sIn.addEventListener('input', debounce(showResults, 120));
+  sIn.addEventListener('keydown', (e) => {
+    const items = [...sOut.querySelectorAll('[data-goto]')];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      sIdx = Math.max(0, Math.min(items.length - 1, sIdx + (e.key === 'ArrowDown' ? 1 : -1)));
+      items.forEach((li, i) => li.classList.toggle('on', i === sIdx));
+      sIn.setAttribute('aria-activedescendant', items[sIdx]?.id || '');
+    }
+    if (e.key === 'Enter') { e.preventDefault(); const li = items[Math.max(0, sIdx)]; if (li) { sOut.hidden = true; reveal(li.dataset.goto); } }
+    if (e.key === 'Escape') { sOut.hidden = true; }
+  });
+  sOut.addEventListener('mousedown', (e) => { const li = e.target.closest('[data-goto]'); if (li) { e.preventDefault(); sOut.hidden = true; reveal(li.dataset.goto); } });
+  sIn.addEventListener('blur', () => setTimeout(() => (sOut.hidden = true), 150));
+
+  // Exports : la vue choisie avec libellés, légende et contexte (mode, couleur, filtres, périmètre).
+  const exportImage = () => {
+    const h = state.vizHandle;
+    const src = h?.canvas();
+    if (!src) return null;
+    const legendItemsNow = legendItems(o, M, t, dirs);
+    const W = src.width;
+    const H = src.height;
+    const ratio = W / src.clientWidth || 1;
+    const foot = Math.round(70 * ratio);
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H + foot;
+    const g2 = c.getContext('2d');
+    g2.fillStyle = '#0b1220';
+    g2.fillRect(0, 0, c.width, c.height);
+    g2.drawImage(src, 0, 0);
+    g2.font = `${600} ${12 * ratio}px Inter, system-ui, sans-serif`;
+    g2.textBaseline = 'top';
+    for (const l of h.overlayLabels()) {
+      const w = g2.measureText(l.text).width;
+      g2.fillStyle = 'rgba(11,18,28,.88)';
+      g2.fillRect(l.x * ratio - 4 * ratio, l.y * ratio - 2 * ratio, w + 8 * ratio, 18 * ratio);
+      g2.fillStyle = l.sel ? '#b4f321' : '#eef2f7';
+      g2.fillText(l.text, l.x * ratio, l.y * ratio + 1 * ratio);
+    }
+    let x = 16 * ratio;
+    const y = H + 14 * ratio;
+    for (const [col, label] of legendItemsNow) {
+      g2.fillStyle = col;
+      g2.beginPath();
+      g2.arc(x + 5 * ratio, y + 7 * ratio, 5 * ratio, 0, Math.PI * 2);
+      g2.fill();
+      g2.fillStyle = '#cbd5e1';
+      g2.fillText(label, x + 14 * ratio, y);
+      x += g2.measureText(label).width + 32 * ratio;
+    }
+    g2.fillStyle = '#94a3b8';
+    g2.fillText(exportContext().join(' · '), 16 * ratio, y + 26 * ratio);
+    return { url: c.toDataURL('image/png'), legend: legendItemsNow };
+  };
+  const exportContext = () => [hostOf(), t('map.mode.' + o.mode), o.dim.toUpperCase(), t('map.color.' + o.colorBy), t('map.size.' + o.sizeBy), ...(matched ? [t('map.matched', { n: matched.size })] : []), ...(ctx.isolate ? [t('map.isolatedNote', { label: ctx.isolate.label })] : []), t('map.pagesShown', { n: scene.nodes.filter((n) => n.page).length, total: M.pages.length })];
+  view.querySelectorAll('[data-exp]').forEach((b) => b.addEventListener('click', () => {
+    $m('#mapExport').open = false;
+    const kind = b.dataset.exp;
+    if (kind === 'csv') {
+      const rows = (matched ? M.pages.filter((p) => matched.has(p.url)) : M.pages).map((p) => ({ url: p.url, title: p.title || '', depth: p.depth ?? '', linkScore: p.linkScore ?? '', inlinks: M.inl.get(p.url)?.size || 0, outlinks: M.out.get(p.url)?.size || 0, issues: (M.issues.get(p.url) || []).map((i) => t('issue.' + i.id + '.label', i.params)).join(' | ') }));
+      return exportCsv({ cols: [C.url, { k: 'title', l: 'col.title' }, { k: 'depth', l: 'map.depth' }, { k: 'linkScore', l: 'col.linkScore' }, { k: 'inlinks', l: 'map.sources' }, { k: 'outlinks', l: 'map.outlinks' }, { k: 'issues', l: 'map.tab.issues' }] }, rows, '', t('map.title'));
+    }
+    const img = exportImage();
+    if (!img) return toast(t('viz.loadFailed'), 'error');
+    if (kind === 'png') {
+      const a = document.createElement('a');
+      a.href = img.url;
+      a.download = `${hostOf()}_${o.mode}_${o.dim}.png`;
+      a.click();
+    } else vizPdf({ img: img.url, title: `${t('map.title')} — ${t('map.mode.' + o.mode)} (${o.dim.toUpperCase()})`, legend: img.legend, notes: exportContext() });
+  }));
+
+  // --- Liste (alternative à la 3D) ---
+  const renderList = () => {
+    const rows = (matched ? M.pages.filter((p) => matched.has(p.url)) : M.pages).slice().sort((a, b) => (a.depth ?? 99) - (b.depth ?? 99) || (b.linkScore || 0) - (a.linkScore || 0));
+    $m("#mapListWrap").innerHTML = mapListHtml(rows, ctx.listPage, M, mapX());
+    $m('#mapListWrap').querySelectorAll('[data-lpg]').forEach((b) => b.addEventListener('click', () => { ctx.listPage = Number(b.dataset.lpg); renderList(); }));
+    $m('#mapListWrap').querySelectorAll('tr[data-goto]').forEach((tr) => {
+      const go = () => { ctx.sel = nodeIdForUrl(M, o.mode, ctx.key, tr.dataset.goto) || tr.dataset.goto; ctx.tab = 'page'; inspector(); pathBar(); };
+      tr.addEventListener('click', go);
+      tr.addEventListener('keydown', (e) => e.key === 'Enter' && go());
+    });
+  };
+  inspector();
+  if (o.list) return renderList();
+
+  // --- Rendu du graphe ---
+  const el = $m('#mapCanvas');
+  const tip = $m('#mapTip');
+  const t0 = performance.now();
   try {
-    el.innerHTML = '';
-    const R = state.R;
-    // Clic sur un nœud : détails de la page, ou directement ses problèmes quand la couleur montre les problèmes.
-    const onSelect = (url, n) => {
-      if (o.colorBy === 'issues' && n?.issues?.length) state.detailTab = 'issues';
-      selectUrl(url);
-    };
-    const handle = await renderGraph(el, data, { view: o.view, dim: o.dim, t, onSelect });
+    const handle = await createMap(el, {
+      dim: o.dim,
+      data: scene,
+      style: { ...style, ...styleForSelection() },
+      t,
+      reducedMotion: reducedMotion(),
+      onHover: (n, ev) => {
+        if (!n) return (tip.hidden = true);
+        tip.innerHTML = tipHtml(n, M, mapX());
+        tip.hidden = false;
+        const b = el.getBoundingClientRect();
+        const px = ev ? ev.clientX - b.left : b.width / 2;
+        const py = ev ? ev.clientY - b.top : b.height / 2;
+        tip.style.transform = `translate(${Math.min(px + 14, b.width - 280)}px, ${Math.max(8, py - 10)}px)`;
+      },
+      onClick: (n) => {
+        tip.hidden = true;
+        if (!n) return;
+        ctx.tab = 'page';
+        select(n.id);
+      },
+      onReady: () => {
+        el.querySelector('.map-loading')?.remove();
+        performance.measure?.('map:firstView', { start: t0 });
+        if (!scene.fixed && scene.posKey) rememberPositions(scene.posKey, state.vizHandle?.positions());
+        if (ctx.pendingFocus && byId.has(ctx.pendingFocus)) state.vizHandle?.focus(ctx.pendingFocus);
+        ctx.pendingFocus = null;
+      },
+    });
     if (state.R !== R || state.tab !== 'viz' || !document.body.contains(el)) return handle.destroy();
     state.vizHandle = handle;
-    $('#vizFit').addEventListener('click', () => handle.graph.zoomToFit(500, 30));
-    $('#vizPng').addEventListener('click', () => {
-      const url = handle.png();
-      if (!url) return toast(t('toast.copyFailed'), 'error');
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${hostOf()}_${o.view}_${o.dim}.png`;
-      a.click();
-    });
-    $('#vizPdf').addEventListener('click', () => {
-      const img = handle.png();
-      if (!img) return toast(t('toast.copyFailed'), 'error');
-      vizPdf({ img, title: `${t('tab.viz')} — ${t('viz.view.' + o.view)} (${o.dim.toUpperCase()})`, legend: legend.map(([k, l]) => [swatch(k), t(l)]), notes: [t('viz.color.' + o.colorBy), t('viz.sizeHint.' + o.sizeBy), note] });
-    });
+    el.querySelector('.map-loading')?.remove();
+    pathBar();
+    $m('#mapZoomIn').addEventListener('click', () => handle.zoomBy(1.35));
+    $m('#mapZoomOut').addEventListener('click', () => handle.zoomBy(1 / 1.35));
+    $m('#mapFit').addEventListener('click', () => (ctx.sel ? handle.focus(ctx.sel) : handle.fit()));
+    $m('#mapReset').addEventListener('click', () => { ctx.sel = null; handle.setStyle(styleForSelection()); inspector(); pathBar(); handle.fit(); });
+    const helpBox = $m('#mapHelpBox');
+    $m('#mapHelp').addEventListener('click', (e) => { helpBox.hidden = !helpBox.hidden; e.currentTarget.setAttribute('aria-expanded', !helpBox.hidden); });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Escape') $m('#mapReset').click(); });
+    el.tabIndex = 0;
+    el.setAttribute('aria-label', t('map.canvasLabel', { n: scene.nodes.length }));
   } catch (err) {
-    el.innerHTML = `<div class="empty">${icon('error')} ${esc(t('viz.loadFailed'))}<br><small>${esc(err.message)}</small></div>`;
+    el.innerHTML = `<div class="empty">${icon('error')}<p>${esc(t(o.dim === '3d' ? 'map.no3d' : 'viz.loadFailed'))}</p><small>${esc(err.message)}</small>${o.dim === '3d' ? `<button class="btn" id="mapTo2d">${esc(t('map.use2d'))}</button>` : ''}<button class="btn" id="mapToList">${esc(t('map.listView'))}</button></div>`;
+    $m('#mapTo2d')?.addEventListener('click', () => { save({ dim: '2d' }); renderViz(view); });
+    $m('#mapToList')?.addEventListener('click', () => { save({ list: true }); renderViz(view); });
   }
 }
 

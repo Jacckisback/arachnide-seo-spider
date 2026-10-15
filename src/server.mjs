@@ -154,7 +154,7 @@ const server = http.createServer(async (req, res) => {
 
     // Bibliothèques de visualisation servies depuis node_modules (fonctionne hors ligne)
     if (p.startsWith('/vendor/')) {
-      const VENDOR = { 'force-graph.min.js': 'force-graph/dist/force-graph.min.js', '3d-force-graph.min.js': '3d-force-graph/dist/3d-force-graph.min.js' };
+      const VENDOR = { 'force-graph.min.js': 'force-graph/dist/force-graph.min.js', '3d-force-graph.min.js': '3d-force-graph/dist/3d-force-graph.min.js', 'three.module.js': 'three/build/three.module.js', 'three.core.js': 'three/build/three.core.js' };
       const rel = VENDOR[p.slice('/vendor/'.length)];
       if (!rel) return send(res, 404, 'Not found', 'text/plain');
       res.writeHead(200, { 'content-type': MIME['.js'], 'cache-control': 'public, max-age=86400' });

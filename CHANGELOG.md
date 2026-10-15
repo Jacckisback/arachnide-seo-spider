@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.9.0 — 2026-10-15
+
+### New: site map redesign (“Cartographie”)
+- **Three distinct representations**: *Crawl tree* — each page under its parent on the shortest click path from the home page, now recorded by the engine (`pathParent`), so the displayed path always has exactly “depth” clicks (crawls made before 3.9 fall back to an inferred parent, and say so); pages not reached by a followed link are grouped under a virtual “Not reached from the home page” node instead of an invented link. *Directories* — URL path hierarchy; folders are virtual and never counted as pages; a page whose URL is the folder itself is carried by the folder. *Internal linking* — the real directed links between crawled pages (deduplicated page pairs, cycles kept, nofollow excluded); the counter shows that number, never the number of discovery links.
+- **Layout**: deterministic radial tree computed once (branch angles proportional to their size, gaps between main branches, depth by distance, relief in 3D) — no physics simulation for trees, identical positions until the structure changes. Internal linking starts from a per-directory layout refined by a bounded simulation, then cached. Large trees are progressively collapsed into groups that show their page count and most serious issue.
+- **Rendering**: 3D nodes drawn as one `Points` object with a shaded sphere shader, issue rings as a second one, all links as one `LineSegments`, screen-space picking, render-on-demand (nothing is redrawn while idle), links hidden only while rotating a very dense linking graph. 2D draws all links in one path per frame. Three.js is loaded only in 3D and shared with 3d-force-graph.
+- **Colours & sizes**: depth (turquoise → blue → violet; unknown is grey, never “good”), SEO issues, HTTP status, indexability (unknown shown as such), directory; error / warning rings; bounded Link Score size explained as Arachnide’s relative internal PageRank — not a Google metric.
+- **Inspector**: title, URL (copy / open), status, indexability only when known, depth in clicks, Link Score, source pages, outgoing links, discovery path, issues with the existing recommendations; *Isolate the branch / neighbourhood*, *See internal links* (keeps the selection), *See the action plan* (opens the right action), *Back to the overall view*.
+- **Search** across all pages (expands collapsed groups or adds the page, then frames it), **filters** on the whole corpus (issues, severity, depth, directory, HTTP status, indexability, weak inbound linking with an explicit adjustable threshold, Link Score range) in *highlight* or *isolate* mode, **Analyse** presets, chips and reset. Wording never calls a page “orphan” — only “no inbound link observed in this crawl”.
+- **Exports**: PNG / PDF with labels, legend and context (mode, colour, filters, scope), CSV of the pages; **List** view (keyboard access), full screen, collapsible inspector, zoom / fit / reset / help controls, 2D fallback when WebGL is unavailable, reduced-motion support.
+- Sidebar: the site map now sits in the main navigation, after the action plan.
+
+### Measured (same machine and viewport, software rendering, synthetic sites crawled by the engine)
+| Dataset · view | Stabilisation | Main-thread blocking | Frames/s while rotating |
+|---|---|---|---|
+| 500 pages · tree 3D | 5.5 s → 0.7 s | 5.9 s → 0.3 s | 11 → 49 |
+| 1 500 pages · tree 3D | 6.5 s → 0.8 s | 6.9 s → 0.4 s | 4 → 46 |
+| 5 000 pages · tree 3D | 11.7 s → 0.9 s | 12.1 s → 0.5 s | 1 → 47 |
+| 5 000 pages · linking 3D | 13.9 s → 3.2 s | 14.5 s → 2.9 s | 1 → 59 |
+| 1 500 pages · tree 2D | 5.3 s → 0.8 s | 0.4 s → 0.15 s | 59 → 60 |
+| 1 500 pages · linking 2D | 5.5 s → 3.3 s | 4.8 s → 0.4 s | 15 → 48 |
+
+Selection → inspector: 4–13 ms. First 3D image is slightly later (≈0.15 s → 0.3–0.5 s) because Three.js is now loaded as a module; 2D linking on 5 000 pages went from 45 to 37 fps. After several audit changes, a heap snapshot shows only the current crawl kept in memory.
+
 ## 3.8.0 — 2026-10-15
 
 ### New: “Action plan” page redesign

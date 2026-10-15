@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.8.0-3d5f17" alt="Version 3.8.0">
+  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Version 3.9.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,17 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🕸️ Neu in 3.9: eine schnellere, übersichtlichere Website-Karte
+
+Erkunden Sie die Struktur und finden Sie die zu verbessernden Seiten – in 2D oder 3D, auf Tausenden von Seiten.
+
+<p align="center"><img src="docs/screenshots/viz-crawl-tree-3d.png" alt="Website-Karte in 3D: Crawl-Baum mit beschrifteten Zweigen, ausgewählte Seite, Entdeckungspfad und Seiteninspektor" width="100%"></p>
+
+- **Drei wirklich unterschiedliche Ansichten**: *Crawl-Baum* (jede Seite unter der Seite, über die sie auf dem kürzesten Weg von der Startseite erreicht wurde – der angezeigte Pfad entspricht immer der Klicktiefe), *Verzeichnisse* (URL-Pfade, virtuelle Ordner zählen nicht als Seiten) und *Interne Verlinkung* (die tatsächlich beobachteten, gerichteten Links, Zyklen inklusive).
+- **Seiteninspektor**: Status, Indexierbarkeit (nur wenn bekannt), Tiefe, Link Score, Quellseiten, ausgehende Links, Entdeckungspfad, Probleme und vorhandene Empfehlung, mit *Zweig / Umgebung isolieren*, *Interne Links ansehen* und *Maßnahmenplan ansehen*.
+- **Suche, Filter und Analysen** über alle gecrawlten Seiten (nicht nur die gezeichneten): SEO-Probleme, Tiefe, Verzeichnis, HTTP-Status, Indexierbarkeit, schwache eingehende Verlinkung mit ausdrücklichem Schwellenwert, Link-Score-Bereich – im Kontext hervorgehoben oder isoliert. Exporte (PNG, PDF, CSV) behalten Beschriftungen, Legende und Kontext; eine *Listen*-Ansicht ermöglicht die Bedienung per Tastatur.
+- **Deutlich schneller**: deterministische Anordnung statt Physiksimulation für Bäume, Knoten und Links in wenigen Stapeln gezeichnet, Neuzeichnen nur bei Änderungen. Gemessen auf demselben Rechner (Software-Rendering): 3D-Stabilisierung von 5,5–13,9 s auf 0,7–3,2 s, 3D-Bildrate beim Drehen von 1–11 auf 46–60 Bilder/s.
 
 ## 🗺️ Neu in 3.8: ein Maßnahmenplan, mit dem Sie arbeiten können
 

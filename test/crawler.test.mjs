@@ -98,3 +98,17 @@ test('rendu JavaScript (si Chrome est installé)', { skip: !findChrome() && 'Chr
   const ids = r.issues.map((i) => i.id);
   for (const id of ['js-content', 'js-title-changed', 'js-links']) assert.ok(ids.includes(id), id);
 });
+
+test('chemin de découverte : le parent enregistré est à un clic (ou une redirection) de la page', async () => {
+  const { r } = await crawlFixture();
+  const by = new Map(r.pages.map((p) => [p.url, p]));
+  let checked = 0;
+  for (const p of r.pages) {
+    if (!p.pathParent) continue;
+    const parent = by.get(p.pathParent);
+    assert.ok(parent, 'parent présent dans le crawl : ' + p.url);
+    assert.equal(p.depth, parent.depth + (p.pathViaRedirect ? 0 : 1), p.url);
+    checked++;
+  }
+  assert.ok(checked > 5);
+});
