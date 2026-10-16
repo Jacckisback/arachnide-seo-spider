@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.10.0 — 2026-10-16
+
+Based on user feedback: the 3.9 map was judged “accurate but too futuristic, less readable than before”, the main use being screenshots for clients and managers.
+
+### Site map
+- **Classic style, now the default**: white background, thin grey links, dark labels with a white halo, sober palette tuned for a white background (depth, issues, status, indexability, directory). The *Dark* style remains available in 2D and 3D; the choice is remembered.
+- **Horizontal tree layout** (2D, crawl tree and directories), in the spirit of Screaming Frog’s crawl tree: home on the left, one column per level, one row per leaf, curved links, one label per node as soon as rows are readable (≥ 12 px). Long sibling lists keep their 9 biggest branches and summarise the rest in a “+ N more pages” node that keeps the most serious issue of what it hides; *Show the full list* expands it; the selected page and its path are always kept. The radial layout is still available.
+- **Labels**: URL labels are shortened in the middle (`/catalogue/…/fiction_10/index.html`) and never overflow into the next column; counters (“· 21 pages”) are always kept. In *Directories*, labels are relative to the parent folder (file-explorer style). Framing leaves room for the legend and the labels.
+- **Exports** (PNG / PDF): header with the view, site, crawl date and pages shown; legend and context in the footer; colours follow the chosen style.
+- **Fixed — URLs that were never crawled in *Directories***: a page `/en` (no trailing slash) now carries the `/en/` folder instead of appearing next to a fake `/en/` node; a folder with no page at its own address is labelled as a grouping (`/blog/page/*`) and explained as such. First-level directory grouping and colours treat `/en` as part of `/en/`.
+- **Filters**: *Folder* now lists folders at every level with their page count and matches `/en` as part of `/en/`; new **URLs to include / to exclude** fields (one pattern per line: text, `*` wildcard or regular expression; an invalid regex is read as plain text and flagged, never blocks the map).
+- **Fixed**: editing a filter field then clicking elsewhere could throw a DOM error (render during blur); numeric filter values are clamped (0–100).
+
+### Crawler
+- `include` / `exclude`: one regular expression per line (UI textarea, repeatable `--include` / `--exclude` in the CLI); each line is validated; an invalid line found at crawl time is ignored and reported as a warning.
+- New **Stay in the start folder** option (`stayInFolder`, `--stay-in-folder`): only URLs below the start URL’s folder are crawled.
+- The start URL (and list-mode URLs) is always crawled even when it doesn’t match the include patterns; URLs left out by the scope are counted (“out of scope”).
+
+### Robustness (found by automated “chaos” testing)
+- Invalid start URLs (`htp:/x`, `javascript:…`, `12345`, 5 000-character strings, other schemes) are refused with HTTP 400 and a clear message instead of a 500 or a guessed host.
+- Malformed or non-object JSON bodies → 400; missing crawl file → 404 without internal paths; system errors no longer leak file paths.
+- Absurd numbers (`maxPages` ≤ 0 or infinite, negative depth, delays) are brought back to safe values.
+- Saved crawl file names are length-bounded; if a crawl cannot be saved, the interface now warns the user to export it.
+
+### Tests
+- New end-to-end test (`test/e2e-ui.test.mjs`) and seeded “monkey” test (`test/monkey-ui.test.mjs`) driving the real interface in Chromium with Playwright (skipped when Playwright is not installed): every page, every map view combination, filters, search, PNG export, configuration, mobile width, no JavaScript error, no injected script executed. `MONKEY_SEED` / `MONKEY_STEPS` replay or extend a run.
+- Unit tests for the folder carrier, folder and URL-pattern filters, horizontal layout (deep trees without recursion), sibling summaries, crawl scope and input validation.
+
 ## 3.9.0 — 2026-10-15
 
 ### New: site map redesign (“Cartographie”)

@@ -112,3 +112,27 @@ test('chemin de découverte : le parent enregistré est à un clic (ou une redir
   }
   assert.ok(checked > 5);
 });
+
+test('périmètre : plusieurs motifs, dossier de départ, regex invalide sans plantage', async () => {
+  const server = await startFixture();
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const paths = async (start, o) => (await new Crawler(start, { concurrency: 3, useSitemaps: false, ...o }).start()).pages.filter((p) => p.url.startsWith(base)).map((p) => p.url.replace(base, ''));
+    // Exclusions sur plusieurs lignes : aucune URL exclue n'est crawlée, l'URL de départ l'est toujours.
+    const ex = await paths(base + '/', { exclude: '/blog/(.*)\n/es/' });
+    assert.ok(ex.includes('/') && !ex.some((p) => p.startsWith('/blog/') && p !== '/blog/' && p.length > 6) && !ex.some((p) => p.startsWith('/es/')));
+    // Inclusion : seules les URL qui correspondent sont suivies, mais le point d'entrée reste exploré.
+    const inc = await paths(base + '/', { include: '/cours' });
+    assert.ok(inc.includes('/') && inc.filter((p) => p !== '/').every((p) => p.startsWith('/cours')) && inc.length > 1);
+    // Dossier de départ : https://site/blog/ → rien en dehors de /blog/.
+    const folder = await paths(base + '/blog/', { stayInFolder: true });
+    assert.ok(folder.length >= 2 && folder.every((p) => p.startsWith('/blog/')), folder.join(','));
+    // Regex invalide : ignorée et signalée.
+    const c = new Crawler(base + '/', { concurrency: 3, maxPages: 3, exclude: '(' });
+    const r = await c.start();
+    assert.ok(r.pages.length >= 1);
+    assert.ok(r.meta.warnings.some((w) => w.key === 'warn.badRegex'));
+  } finally {
+    server.close();
+  }
+});

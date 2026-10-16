@@ -1192,3 +1192,27 @@ button.link.accent { color: var(--accent); font-weight: 600; }
   .mf-grid { grid-template-columns: minmax(0, 1fr); }
   .map-legend .ml-hint { display: none; }
 }
+
+/* Cartographie — style classique : fond blanc, traits fins, panneaux clairs (lisible en capture d'écran). */
+.map.classic .map-stage { background: #fff; border-color: #dbe2ea; }
+.map.classic .map-stage::before { display: none; }
+.map.classic .map-loading, .map.classic .map-canvas .empty { color: #475569; }
+.map.classic .map-label { color: #1e293b; background: rgba(255,255,255,.94); border-color: #cbd5e1; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+.map.classic .map-label.sel { border-color: #ea580c; color: #0f172a; }
+.map.classic .map-controls .btn { background: #fff; border-color: #cbd5e1; color: #334155; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+.map.classic .map-controls .btn:hover { background: #f1f5f9; }
+.map.classic .map-help, .map.classic .map-tip { background: #fff; border-color: #cbd5e1; color: #1e293b; box-shadow: 0 6px 18px rgba(15,23,42,.14); }
+.map.classic .map-tip .tt { color: #334155; }
+.map.classic .map-tip span { color: #64748b; }
+.map.classic .map-legend, .map.classic .map-path, .map.classic .map-notice { background: rgba(255,255,255,.95); border-color: #dbe2ea; color: #334155; box-shadow: 0 1px 3px rgba(15,23,42,.08); }
+.map.classic .ml-k, .map.classic .ml-hint { color: #64748b; }
+.map.classic .ml-row i.ring.dash { border-color: #64748b; }
+.map.classic .ml-row i.sq { border-color: #64748b; }
+.map.classic .map-path .link { color: #1e293b; }
+.map.classic .map-path .link.cur { color: #c2410c; }
+.mf-urls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 10px; }
+.mf-urls label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.mf-urls textarea { font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; min-height: 44px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); }
+.mf-urls p { grid-column: 1 / -1; margin: 0; }
+.mf-bad { color: var(--warning, #f59e0b); font-size: 12px; }
+@media (max-width: 640px) { .mf-urls { grid-template-columns: 1fr; } }

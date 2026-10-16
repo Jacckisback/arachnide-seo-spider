@@ -8,10 +8,10 @@ import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.
 import { summarize, filterSort, summaryHtml, listHtml, detailHtml } from './issues.js';
 import { reconcile, storeKey, summary as planSummary, visible as planVisible, actionTitles as planTitles, defaultStatus as planDefault, cardsHtml as planCardsHtml, tableHtml as planTableHtml, detailHtml as planDetailHtml } from './plan.js';
 import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
-import { createMap, SEV_COLORS, DIR_COLORS, UNKNOWN } from './viz.js';
-import { buildModel, topDir } from './map-model.js';
+import { createMap, paletteOf } from './viz.js';
+import { buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
-import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, pathTo, pathClicks, descendants } from './map-view.js';
+import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -812,10 +812,18 @@ function mapCtx() {
 }
 
 async function renderViz(view) {
+  // Un champ encore actif (filtre en cours de saisie) déclenche « change » en perdant le focus : on le fait avant de
+  // remplacer le contenu, sinon le navigateur relance un rendu au milieu du remplacement (erreur DOM).
+  const ae = document.activeElement;
+  if (ae && view.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) ae.blur();
   const ctx = mapCtx();
   const { M } = ctx;
-  const o = { mode: 'crawl', dim: '3d', colorBy: 'depth', sizeBy: 'linkScore', list: false, panel: true, ...store.get('map', {}) };
-  const save = (patch) => { Object.assign(o, patch); store.set('map', { mode: o.mode, dim: o.dim, colorBy: o.colorBy, sizeBy: o.sizeBy, list: o.list, panel: o.panel }); };
+  // Par défaut : style classique, arbre horizontal en 2D (lisible et présentable en capture d'écran).
+  const o = { mode: 'crawl', dim: '2d', layout: 'tree', look: 'classic', colorBy: 'depth', sizeBy: 'linkScore', list: false, panel: true, ...store.get('map', {}) };
+  if (!['classic', 'dark'].includes(o.look)) o.look = 'classic';
+  if (!['tree', 'radial'].includes(o.layout)) o.layout = 'tree';
+  const save = (patch) => { Object.assign(o, patch); store.set('map', { mode: o.mode, dim: o.dim, layout: o.layout, look: o.look, colorBy: o.colorBy, sizeBy: o.sizeBy, list: o.list, panel: o.panel }); };
+  const P = paletteOf(o.look);
   const dirs = dirsOf(M);
   const matched = activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length ? matchPages(M, ctx.filters) : null;
   const relKey = o.mode === 'crawl' ? 'map.rel.crawl' : o.mode === 'dir' ? 'map.rel.dir' : 'map.rel.links';
@@ -823,10 +831,10 @@ async function renderViz(view) {
   const stats = [t('map.pagesExplored', { n: M.pages.length }), t(relKey, { n: relN })];
   if (M.resources) stats.push(t('map.resourcesOut', { n: M.resources }));
   if (isPartial(state.R)) stats.push(t('map.partial'));
-  view.innerHTML = `<div class="map${o.panel ? '' : ' no-panel'}" id="mapRoot">
+  view.innerHTML = `<div class="map ${o.look}${o.panel ? '' : ' no-panel'}" id="mapRoot">
     ${headHtml(stats, mapX())}
     ${toolbarHtml(o, matched ? activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length : 0, mapX())}
-    <div id="mapFiltersWrap" hidden>${filtersHtml(ctx.filters, o.mode, dirs, mapX())}</div>
+    <div id="mapFiltersWrap" hidden>${filtersHtml(ctx.filters, o.mode, folderOptions(M), mapX())}</div>
     <div id="mapChips">${matched ? chipsHtml(ctx.filters, matched.size, mapX()) : ''}</div>
     <div class="map-work">
       <div class="map-stage">
@@ -862,11 +870,13 @@ async function renderViz(view) {
   // --- Scène ---
   if (state.vizHandle) { state.vizHandle.destroy(); state.vizHandle = null; }
   const R = state.R;
-  const scene = makeScene(M, { mode: o.mode, dim: o.dim, expanded: ctx.expanded[o.mode], isolate: ctx.isolate?.mode === o.mode ? ctx.isolate.ids : null, extra: ctx.extra }, ctx.key, t);
+  ctx.showAll ||= { crawl: new Set(), dir: new Set() };
+  const pin = new Set(ctx.sel && o.mode !== 'links' && treeOf(M, o.mode, ctx.key).tree.nodes.has(ctx.sel) ? [ctx.sel, ...ancestorsOf(M, o.mode, ctx.key, ctx.sel)] : []);
+  const scene = makeScene(M, { mode: o.mode, dim: o.dim, layout: o.layout, showAll: ctx.showAll[o.mode], pin, expanded: ctx.expanded[o.mode], isolate: ctx.isolate?.mode === o.mode ? ctx.isolate.ids : null, extra: ctx.extra }, ctx.key, t);
   const byId = new Map(scene.nodes.map((n) => [n.id, n]));
   const crawl = treeOf(M, 'crawl', ctx.key);
-  const dirColor = (() => { const m = new Map(dirs.slice(0, 8).map((d, i) => [d, i])); return (n) => (n.url ? (m.has(topDir(n.url)) ? DIR_COLORS[m.get(topDir(n.url))] : UNKNOWN) : null); })();
-  const style = { colorBy: o.colorBy, sizeBy: o.sizeBy, dirColor };
+  const dirColor = (() => { const m = new Map(dirs.slice(0, P.dir.length).map((d, i) => [d, i])); return (n) => (n.url ? (m.has(M.dirOf(n.url)) ? P.dir[m.get(M.dirOf(n.url))] : P.unknown) : null); })();
+  const style = { colorBy: o.colorBy, sizeBy: o.sizeBy, dirColor, look: o.look };
 
   const notices = [];
   if (scene.groups) notices.push(t('map.groupsNote', { n: scene.groups }));
@@ -880,7 +890,7 @@ async function renderViz(view) {
   const legend = () => {
     const items = legendItems(o, M, t, dirs);
     $m('#mapLegend').innerHTML = `<div class="ml-row"><span class="ml-k">${esc(t('map.color.' + o.colorBy))} :</span>${items.map(([c, l]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join('')}</div>
-      <div class="ml-row"><span class="ml-k">${esc(t('map.sizeLabel'))} ${esc(t('map.size.' + o.sizeBy))}</span>${o.colorBy !== 'issues' ? `<span><i class="ring" style="border-color:${SEV_COLORS.error}"></i>${esc(t('map.sev.error'))}</span><span><i class="ring" style="border-color:${SEV_COLORS.warning}"></i>${esc(t('map.sev.warning'))}</span>` : ''}${o.mode === 'dir' ? `<span><i class="sq"></i>${esc(t('map.virtualFolder'))}</span>` : ''}${scene.groups ? `<span><i class="ring dash"></i>${esc(t('map.group'))}</span>` : ''}</div>
+      <div class="ml-row"><span class="ml-k">${esc(t('map.sizeLabel'))} ${esc(t('map.size.' + o.sizeBy))}</span>${o.colorBy !== 'issues' ? `<span><i class="ring" style="border-color:${P.sev.error}"></i>${esc(t('map.sev.error'))}</span><span><i class="ring" style="border-color:${P.sev.warning}"></i>${esc(t('map.sev.warning'))}</span>` : ''}${o.mode === 'dir' ? `<span><i class="sq"></i>${esc(t('map.virtualFolder'))}</span>` : ''}${scene.groups ? `<span><i class="ring dash"></i>${esc(t('map.group'))}</span>` : ''}</div>
       <p class="ml-hint">${esc(t('map.sizeHint.' + o.sizeBy))}</p>`;
   };
   legend();
@@ -953,7 +963,7 @@ async function renderViz(view) {
     insp.querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => { state.plIssue = b.dataset.plan; state.plFollow = true; state.plDetailOpen = true; state.plFilter = 'all'; state.plQ = ''; goTab('plan'); }));
     insp.querySelector('#mapCopy')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(node.url); toast(t('toast.copied', { n: 1 }), 'ok'); } catch { toast(t('toast.copyFailed'), 'error'); } });
     insp.querySelector('#mapGlobal')?.addEventListener('click', () => { ctx.sel = null; ctx.isolate = null; renderViz(view); });
-    insp.querySelector('#mapExpand')?.addEventListener('click', () => { ctx.expanded[o.mode].add(node.id); ctx.pendingFocus = node.id; renderViz(view); });
+    insp.querySelector('#mapExpand')?.addEventListener('click', () => { const id = node.expandId || node.id; (node.expandId ? ctx.showAll[o.mode] : ctx.expanded[o.mode]).add(id); ctx.sel = node.expandId ? null : ctx.sel; ctx.pendingFocus = id; renderViz(view); });
     insp.querySelector('#mapIsoBranch')?.addEventListener('click', () => {
       const { tree } = treeOf(M, o.mode, ctx.key);
       const ids = descendants(tree, node.id);
@@ -981,6 +991,8 @@ async function renderViz(view) {
     renderViz(view);
   }));
   view.querySelectorAll('[data-dim]').forEach((b) => b.addEventListener('click', () => { save({ dim: b.dataset.dim }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
+  view.querySelectorAll('[data-layout]').forEach((b) => b.addEventListener('click', () => { save({ layout: b.dataset.layout }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
+  view.querySelectorAll('[data-look]').forEach((b) => b.addEventListener('click', () => { save({ look: b.dataset.look }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
   $m('#mapColor').addEventListener('change', (e) => { save({ colorBy: e.target.value }); style.colorBy = o.colorBy; legend(); state.vizHandle?.setStyle({ colorBy: o.colorBy }); });
   $m('#mapSize').addEventListener('change', (e) => { save({ sizeBy: e.target.value }); legend(); state.vizHandle?.setStyle({ sizeBy: o.sizeBy }); });
   const fWrap = $m('#mapFiltersWrap');
@@ -992,9 +1004,14 @@ async function renderViz(view) {
   };
   fWrap.querySelectorAll('[data-f]').forEach((el) => el.addEventListener('change', () => {
     const k = el.dataset.f;
-    const v = el.type === 'checkbox' ? el.checked : el.value === '' ? (k === 'depthMin' || k.startsWith('ls') ? null : '') : ['depthMin', 'inlinksMax', 'lsMin', 'lsMax'].includes(k) ? Number(el.value) : el.value;
+    const numeric = ['depthMin', 'inlinksMax', 'lsMin', 'lsMax'].includes(k);
+    const n = Number(el.value);
+    // Valeur numérique hors bornes ou illisible : on la ramène dans 0–100 ou on l'ignore, jamais NaN.
+    const v = el.type === 'checkbox' ? el.checked : el.value.trim() === '' ? (numeric && k !== 'inlinksMax' ? null : '') : numeric ? (Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null) : el.value.slice(0, 2000);
+    if (ctx.filters[k] === v) return;
     ctx.filters[k] = v;
-    applyFilters();
+    // Différé : l'événement peut venir d'une perte de focus pendant un autre rendu.
+    setTimeout(applyFilters);
   }));
   fWrap.querySelectorAll('[data-fmode]').forEach((b) => b.addEventListener('click', () => { ctx.filters._mode = b.dataset.fmode; applyFilters(); }));
   $m('#mapFiltersReset').addEventListener('click', () => { ctx.filters = { ...DEFAULT_FILTERS, _mode: ctx.filters._mode }; if (ctx.isolate?.filter) ctx.isolate = null; renderViz(view); });
@@ -1003,7 +1020,7 @@ async function renderViz(view) {
     const p = b.dataset.preset;
     const mode = ctx.filters._mode;
     ctx.filters = { ...DEFAULT_FILTERS, _mode: mode, ...(p === 'issues' ? { issues: 'any' } : p === 'deep' ? { depthMin: 4 } : p === 'weak' ? { lowInlinks: true, inlinksMax: 1 } : {}) };
-    if (p === 'reset') { ctx.isolate = null; ctx.sel = null; ctx.expanded[o.mode] = new Set(); }
+    if (p === 'reset') { ctx.isolate = null; ctx.sel = null; ctx.expanded[o.mode] = new Set(); if (ctx.showAll) ctx.showAll[o.mode] = new Set(); }
     else if (mode === 'isolate') applyIsolateFilter();
     renderViz(view);
   }));
@@ -1041,6 +1058,7 @@ async function renderViz(view) {
   sIn.addEventListener('blur', () => setTimeout(() => (sOut.hidden = true), 150));
 
   // Exports : la vue choisie avec libellés, légende et contexte (mode, couleur, filtres, périmètre).
+  // Image prête à montrer à un client : en-tête (site, vue, date du crawl), graphe avec libellés, légende et contexte.
   const exportImage = () => {
     const h = state.vizHandle;
     const src = h?.canvas();
@@ -1049,39 +1067,65 @@ async function renderViz(view) {
     const W = src.width;
     const H = src.height;
     const ratio = W / src.clientWidth || 1;
-    const foot = Math.round(70 * ratio);
+    const head = Math.round(58 * ratio);
+    const foot = Math.round(78 * ratio);
     const c = document.createElement('canvas');
     c.width = W;
-    c.height = H + foot;
+    c.height = head + H + foot;
     const g2 = c.getContext('2d');
-    g2.fillStyle = '#0b1220';
+    const classic = o.look === 'classic';
+    g2.fillStyle = P.bg;
     g2.fillRect(0, 0, c.width, c.height);
-    g2.drawImage(src, 0, 0);
-    g2.font = `${600} ${12 * ratio}px Inter, system-ui, sans-serif`;
+    const font = (w, px) => `${w} ${px * ratio}px Inter, system-ui, sans-serif`;
     g2.textBaseline = 'top';
+    g2.fillStyle = classic ? '#0f172a' : '#eef2f7';
+    g2.font = font(700, 17);
+    g2.fillText(`${t('map.title')} — ${t('map.mode.' + o.mode)}`, 16 * ratio, 12 * ratio);
+    g2.font = font(500, 12);
+    g2.fillStyle = P.muted;
+    g2.fillText(`${hostOf()} · ${new Date(state.R.meta.finishedAt || Date.now()).toLocaleDateString(t.lang)} · ${t('map.pagesShown', { n: scene.nodes.filter((n) => n.page).length, total: M.pages.length })}`, 16 * ratio, 35 * ratio);
+    g2.strokeStyle = classic ? '#e2e8f0' : 'rgba(148,163,184,.25)';
+    g2.lineWidth = ratio;
+    g2.beginPath();
+    g2.moveTo(0, head - 0.5);
+    g2.lineTo(W, head - 0.5);
+    g2.moveTo(0, head + H + 0.5);
+    g2.lineTo(W, head + H + 0.5);
+    g2.stroke();
+    g2.drawImage(src, 0, head);
+    g2.font = font(600, 12);
     for (const l of h.overlayLabels()) {
       const w = g2.measureText(l.text).width;
-      g2.fillStyle = 'rgba(11,18,28,.88)';
-      g2.fillRect(l.x * ratio - 4 * ratio, l.y * ratio - 2 * ratio, w + 8 * ratio, 18 * ratio);
-      g2.fillStyle = l.sel ? '#b4f321' : '#eef2f7';
-      g2.fillText(l.text, l.x * ratio, l.y * ratio + 1 * ratio);
+      g2.fillStyle = classic ? 'rgba(255,255,255,.92)' : 'rgba(11,18,28,.88)';
+      g2.fillRect(l.x * ratio - 4 * ratio, head + l.y * ratio - 2 * ratio, w + 8 * ratio, 18 * ratio);
+      g2.fillStyle = l.sel ? P.accent : P.label;
+      g2.fillText(l.text, l.x * ratio, head + l.y * ratio + 1 * ratio);
     }
     let x = 16 * ratio;
-    const y = H + 14 * ratio;
+    const y = head + H + 14 * ratio;
+    g2.fillStyle = P.legendText;
+    g2.font = font(700, 12);
+    const k = t('map.color.' + o.colorBy) + ' :';
+    g2.fillText(k, x, y);
+    x += g2.measureText(k).width + 12 * ratio;
+    g2.font = font(500, 12);
     for (const [col, label] of legendItemsNow) {
       g2.fillStyle = col;
       g2.beginPath();
       g2.arc(x + 5 * ratio, y + 7 * ratio, 5 * ratio, 0, Math.PI * 2);
       g2.fill();
-      g2.fillStyle = '#cbd5e1';
+      g2.fillStyle = P.legendText;
       g2.fillText(label, x + 14 * ratio, y);
-      x += g2.measureText(label).width + 32 * ratio;
+      x += g2.measureText(label).width + 30 * ratio;
     }
-    g2.fillStyle = '#94a3b8';
-    g2.fillText(exportContext().join(' · '), 16 * ratio, y + 26 * ratio);
+    g2.fillStyle = P.muted;
+    g2.font = font(500, 11);
+    g2.fillText(exportContext().slice(0, -1).join(' · '), 16 * ratio, y + 26 * ratio);
+    g2.textAlign = 'right';
+    g2.fillText('Arachnide SEO Spider', W - 16 * ratio, y + 26 * ratio);
     return { url: c.toDataURL('image/png'), legend: legendItemsNow };
   };
-  const exportContext = () => [hostOf(), t('map.mode.' + o.mode), o.dim.toUpperCase(), t('map.color.' + o.colorBy), t('map.size.' + o.sizeBy), ...(matched ? [t('map.matched', { n: matched.size })] : []), ...(ctx.isolate ? [t('map.isolatedNote', { label: ctx.isolate.label })] : []), t('map.pagesShown', { n: scene.nodes.filter((n) => n.page).length, total: M.pages.length })];
+  const exportContext = () => [t('map.mode.' + o.mode), o.dim.toUpperCase(), t('map.color.' + o.colorBy), t('map.size.' + o.sizeBy), ...(matched ? [t('map.matched', { n: matched.size })] : []), ...(ctx.isolate ? [t('map.isolatedNote', { label: ctx.isolate.label })] : []), t('map.pagesShown', { n: scene.nodes.filter((n) => n.page).length, total: M.pages.length })];
   view.querySelectorAll('[data-exp]').forEach((b) => b.addEventListener('click', () => {
     $m('#mapExport').open = false;
     const kind = b.dataset.exp;

@@ -2,7 +2,7 @@
 import { USER_AGENTS } from './crawler.mjs';
 
 const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec', 'psiMax', 'gscDays'];
-const BOOLS = ['crawlSubdomains', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render'];
+const BOOLS = ['crawlSubdomains', 'stayInFolder', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render'];
 const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders', 'psiKey', 'gscKeyFile', 'gscProperty', 'gscCsv'];
 
 const bad = (key, detail) => Object.assign(new Error(`Invalid option: ${detail}`), { status: 400, key });
@@ -40,11 +40,16 @@ export function toCrawlerOptions(o = {}) {
     .filter((e) => e && e.name && e.selector)
     .slice(0, 20)
     .map((e) => ({ name: String(e.name).slice(0, 40), type: e.type === 'regex' ? 'regex' : 'css', selector: String(e.selector), target: ['text', 'html', 'attr', 'count'].includes(e.target) ? e.target : 'text', attr: String(e.attr || '') }));
-  for (const k of ['include', 'exclude']) if (opts[k]) checkRegex(opts[k], k);
+  // Une regex par ligne : chacune est vérifiée, l'erreur nomme la ligne fautive.
+  for (const k of ['include', 'exclude']) for (const line of String(opts[k] || '').split(/\r?\n/)) if (line.trim()) checkRegex(line.trim(), k);
   for (const l of opts.pathLimits) checkRegex(l.pattern, 'pathLimits');
   for (const e of opts.extractors) if (e.type === 'regex') checkRegex(e.selector, e.name);
   opts.userAgent = USER_AGENTS[o.userAgent] || (o.customUserAgent ? String(o.customUserAgent) : USER_AGENTS.arachnide);
   opts.concurrency = Math.min(Math.max(opts.concurrency || 5, 1), 30);
+  // Valeurs absurdes (négatives, infinies) ramenées à des bornes sûres plutôt que de bloquer ou de vider le crawl.
+  if (opts.maxPages != null) opts.maxPages = Number.isFinite(opts.maxPages) && opts.maxPages >= 1 ? Math.min(Math.round(opts.maxPages), 10000000) : 500;
+  if (opts.maxDepth != null) opts.maxDepth = Number.isFinite(opts.maxDepth) && opts.maxDepth >= 0 ? Math.min(Math.round(opts.maxDepth), 1000) : 20;
+  for (const k of ['delayMs', 'timeoutMs', 'maxUrlPerSec']) if (opts[k] != null && !(opts[k] >= 0 && Number.isFinite(opts[k]))) delete opts[k];
   if (opts.psiMax != null) opts.psiMax = Math.min(Math.max(Math.round(opts.psiMax), 0), 500);
   opts.psiStrategy = o.psiStrategy === 'desktop' ? 'desktop' : 'mobile';
   if (!opts.psiKey && process.env.ARACHNIDE_PSI_KEY) opts.psiKey = process.env.ARACHNIDE_PSI_KEY;

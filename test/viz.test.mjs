@@ -113,3 +113,76 @@ test('cartographie : filtres sur tout le corpus, seuil explicite', () => {
   assert.deepEqual([...matchPages(M, { ...DEFAULT_FILTERS, lowInlinks: true, inlinksMax: 0 })], [H + 'hors-lien']);
   assert.deepEqual([...matchPages(M, { ...DEFAULT_FILTERS, index: 'yes', dir: '/blog/' })].sort(), [H + 'blog/', H + 'blog/a']);
 });
+
+test('répertoires : « /en » porte le dossier /en/, jamais d’URL inventée', () => {
+  // Cas remonté sur coeurduweb.com : /en existe, /en/ n'existe pas, des pages vivent sous /en/…
+  const pages = [page(H, { depth: 0 }), page(H + 'en', { depth: 1 }), page(H + 'en/services', { depth: 2 }), page(H + 'en/blog', { depth: 2 }), page(H + 'en/blog/post-1', { depth: 3 }), page(H + 'contact')];
+  const M = buildModel({ meta: { startUrl: H }, pages, issues: [] }, graphOf([]));
+  const D = dirTree(M);
+  const urls = new Set([...D.nodes.values()].map((n) => n.url).filter(Boolean));
+  for (const u of urls) assert.ok(M.byUrl.has(u), `URL affichée mais non crawlée : ${u}`);
+  assert.equal(D.nodes.get('dir:/en/').url, H + 'en'); // la page /en porte son dossier
+  assert.equal(D.nodes.get('dir:/en/blog/').url, H + 'en/blog');
+  assert.ok(!D.nodes.has(H + 'en') && !D.nodes.has(H + 'en/blog'));
+  assert.equal(subtreeStats(D, M).pages.get(D.root), pages.length); // chaque page comptée une fois
+  // Un dossier sans page à son adresse est libellé comme un regroupement, pas comme une URL.
+  const M2 = buildModel({ meta: { startUrl: H }, pages: [page(H, { depth: 0 }), page(H + 'fr/a'), page(H + 'fr/b')], issues: [] }, graphOf([]));
+  const D2 = dirTree(M2);
+  assert.equal(D2.nodes.get('dir:/fr/').url, undefined);
+  assert.equal(D2.nodes.get('dir:/fr/').label, '/fr/*');
+  // Répertoire de premier niveau : /en appartient à /en/, /contact reste à la racine.
+  assert.equal(M.dirOf(H + 'en'), '/en/');
+  assert.equal(M.dirOf(H + 'contact'), '/');
+});
+
+test('filtres : dossier à tout niveau, motifs d’URL à inclure / exclure', async () => {
+  const { compilePatterns, folderOptions } = await import('../public/map-view.js');
+  const pages = [page(H, { depth: 0 }), page(H + 'en', { depth: 1 }), page(H + 'en/blog/a'), page(H + 'en/blog/b'), page(H + 'fr/blog/a'), page(H + 'fr/cours?page=2')];
+  const M = buildModel({ meta: { startUrl: H }, pages, issues: [] }, graphOf([]));
+  const m = (f) => [...matchPages(M, { ...DEFAULT_FILTERS, ...f })].map((u) => u.replace(H, '/')).sort();
+  assert.deepEqual(m({ dir: '/en/' }), ['/en', '/en/blog/a', '/en/blog/b']);
+  assert.deepEqual(m({ dir: '/en/blog/' }), ['/en/blog/a', '/en/blog/b']);
+  assert.deepEqual(m({ urlExc: '/en/(.*)\n/en' }), ['/', '/fr/blog/a', '/fr/cours?page=2']);
+  assert.deepEqual(m({ urlInc: '/*/blog/*' }), ['/en/blog/a', '/en/blog/b', '/fr/blog/a']);
+  assert.deepEqual(m({ urlInc: '?page=' }), ['/fr/cours?page=2']); // regex invalide → lue comme du texte
+  assert.deepEqual(m({ urlInc: 'blog', urlExc: '/fr/' }), ['/en/blog/a', '/en/blog/b']);
+  // Regex invalide : lue comme du texte et signalée, la carte n'est jamais bloquée.
+  assert.deepEqual(compilePatterns('(\n/ok/').bad, ['(']);
+  assert.equal(m({ urlInc: '(' }).length, 0);
+  const opts = new Map(folderOptions(M));
+  assert.equal(opts.get('/en/'), 3);
+  assert.equal(opts.get('/en/blog/'), 2);
+});
+
+test('arbre horizontal : une ligne par feuille, longues fratries résumées, rien de perdu', async () => {
+  const { hierTree } = await import('../public/map-layout.js');
+  const { SIBLINGS } = await import('../public/map-view.js');
+  const posts = Array.from({ length: 30 }, (_, i) => page(H + 'blog/p' + i, { depth: 2, pathParent: H + 'blog/' }));
+  const pages = [page(H, { depth: 0 }), page(H + 'blog/', { depth: 1, pathParent: H }), page(H + 'contact', { depth: 1, pathParent: H }), ...posts];
+  const M = buildModel({ meta: { startUrl: H }, pages, issues: [{ id: '4xx', severity: 'error', items: [{ url: H + 'blog/p29' }] }] }, graphOf([]));
+  const sc = makeScene(M, { mode: 'crawl', dim: '2d', layout: 'tree', expanded: new Set() }, 'k-tree', t);
+  assert.equal(sc.layout, 'tree');
+  const more = sc.nodes.find((n) => n.kind === 'more');
+  const shown = sc.nodes.filter((n) => n.page && n.id.startsWith(H + 'blog/p')).length;
+  assert.equal(shown, SIBLINGS - 1);
+  assert.equal(more.count + shown, 30); // chaque page est soit affichée, soit comptée dans « + N autres »
+  assert.equal(more.sev, 'error'); // le problème d'une page résumée reste signalé
+  assert.ok(sc.links.some((l) => l.s === H + 'blog/' && l.t === more.id));
+  // Lignes : toutes distinctes, colonnes = niveaux, parent centré sur ses enfants.
+  const ys = sc.nodes.filter((n) => !sc.nodes.some((c) => sc.links.some((l) => l.s === n.id && l.t === c.id))).map((n) => n.y);
+  assert.equal(new Set(ys).size, ys.length);
+  const blog = sc.nodes.find((n) => n.id === H + 'blog/');
+  assert.ok(blog.x > sc.nodes.find((n) => n.root).x);
+  // « Afficher toute la liste » : la fratrie entière revient.
+  const pinned = makeScene(M, { mode: 'crawl', dim: '2d', layout: 'tree', expanded: new Set(), pin: new Set([H + 'blog/p3']) }, 'k-tree', t);
+  assert.ok(pinned.nodes.some((n) => n.id === H + 'blog/p3')); // la page sélectionnée n'est jamais résumée
+  const all = makeScene(M, { mode: 'crawl', dim: '2d', layout: 'tree', expanded: new Set(), showAll: new Set([H + 'blog/']) }, 'k-tree', t);
+  assert.ok(!all.nodes.some((n) => n.kind === 'more'));
+  assert.equal(all.nodes.filter((n) => n.id.startsWith(H + 'blog/p')).length, 30);
+  // Arbre profond : pas de récursion, pas de débordement de pile.
+  const deep = { root: 'r', nodes: new Map(), parent: new Map(), children: new Map() };
+  let prev = 'r';
+  for (let i = 0; i < 20000; i++) (deep.children.set(prev, ['n' + i]), deep.parent.set('n' + i, prev), (prev = 'n' + i));
+  const L = hierTree(deep, new Set(['r', ...deep.parent.keys()]));
+  assert.equal(L.pos.size, 20001);
+});

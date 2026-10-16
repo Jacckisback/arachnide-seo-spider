@@ -51,6 +51,34 @@ export function radialTree(tree, sizes, { dim = '2d', level = 70 } = {}) {
   return { pos, depthOf };
 }
 
+// Arbre hiérarchique horizontal (lecture « à la Screaming Frog ») : la racine à gauche, un niveau par colonne,
+// une ligne par feuille visible, chaque parent centré sur ses enfants. Calculé sur les seuls nœuds visibles, pour que
+// les branches repliées ne laissent pas de trous ; l'ordre des enfants est celui de l'arbre (alphabétique).
+export function hierTree(tree, visible, { levelGap = 300, rowGap = 20, extra } = {}) {
+  const pos = new Map();
+  const depthOf = new Map();
+  let row = 0;
+  // extra : nœuds virtuels ajoutés après les enfants (« + 24 autres pages »), par parent.
+  const kidsOf = (id) => (tree.children.get(id) || []).filter((c) => visible.has(c)).concat(extra?.get(id) || []);
+  // Parcours postfixe itératif (pas de récursion : un arbre de 10 000 niveaux ne fait pas déborder la pile).
+  const stack = [[tree.root, 0, false]];
+  while (stack.length) {
+    const top = stack[stack.length - 1];
+    const [id, d, done] = top;
+    const kids = kidsOf(id);
+    if (!done && kids.length) {
+      top[2] = true;
+      for (let i = kids.length - 1; i >= 0; i--) stack.push([kids[i], d + 1, false]);
+      continue;
+    }
+    stack.pop();
+    depthOf.set(id, d);
+    const y = kids.length ? (pos.get(kids[0]).y + pos.get(kids[kids.length - 1]).y) / 2 : row++ * rowGap;
+    pos.set(id, { x: d * levelGap, y, z: 0 });
+  }
+  return { pos, depthOf };
+}
+
 // Nœuds visibles d'un arbre selon un budget : on déplie d'abord les niveaux hauts puis les plus grosses branches.
 // Un nœud non déplié devient un groupe qui affiche le nombre de pages qu'il contient : rien n'est supprimé.
 export function visibleTree(tree, sizes, { budget = 1500, expanded = new Set(), collapsed = new Set() } = {}) {
