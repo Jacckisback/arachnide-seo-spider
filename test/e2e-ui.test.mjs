@@ -29,7 +29,7 @@ test('interface : parcours complet sans erreur (navigation, cartographie, filtre
     await page.evaluate(() => document.querySelector('#tabs [data-tab=viz]').click());
     await page.waitForSelector('#mapCanvas canvas');
     assert.ok(await page.$('.map.classic'));
-    assert.equal(await page.getAttribute('[data-layout=tree]', 'aria-pressed'), 'true');
+    assert.equal(await page.$('[data-dim]'), null); // la cartographie est un plan 2D, sans bascule 3D
 
     // 3. Répertoires : « /en » porte son dossier, aucune URL « /en/ » inventée.
     await page.click('[data-mode=dir]');
@@ -54,21 +54,21 @@ test('interface : parcours complet sans erreur (navigation, cartographie, filtre
     await page.waitForSelector('.mf-bad');
     await page.click('#mapFiltersReset');
 
-    // 5. Toutes les combinaisons de vue s'affichent (mode × 2D/3D × disposition × style).
-    for (const mode of ['crawl', 'dir', 'links']) {
-      for (const dim of ['2d', '3d']) {
-        for (const look of ['classic', 'dark']) {
-          await page.evaluate(([m, d, l]) => localStorage.setItem('arachnide.map', JSON.stringify({ mode: m, dim: d, look: l, layout: 'tree' })), [mode, dim, look]);
+    // 5. Deux onglets : Cartographie (classique, 2D) et Visualisation 2D / 3D (sombre), tous les modes.
+    for (const [tab, key, look, dims] of [['viz', 'map', 'classic', ['2d']], ['graph', 'graph', 'dark', ['2d', '3d']]]) {
+      for (const mode of ['crawl', 'dir', 'links']) {
+        for (const dim of dims) {
+          await page.evaluate(([k, m, d]) => localStorage.setItem('arachnide.' + k, JSON.stringify({ mode: m, dim: d })), [key, mode, dim]);
           await page.evaluate(() => document.querySelector('#tabs [data-tab=dashboard]').click());
-          await page.evaluate(() => document.querySelector('#tabs [data-tab=viz]').click());
+          await page.evaluate((x) => document.querySelector(`#tabs [data-tab=${x}]`).click(), tab);
           await page.waitForSelector('#mapCanvas canvas, #mapCanvas .empty', { timeout: 20000 });
-          assert.ok(await page.$(`.map.${look}`), `${mode}/${dim}/${look}`);
+          assert.ok(await page.$(`.map.${look}`), `${tab}/${mode}/${dim}`);
         }
       }
     }
 
     // 6. Export PNG prêt à partager (en-tête, légende) : un vrai fichier image.
-    await page.evaluate(() => localStorage.setItem('arachnide.map', JSON.stringify({ mode: 'crawl', dim: '2d', look: 'classic', layout: 'tree' })));
+    await page.evaluate(() => localStorage.setItem('arachnide.map', JSON.stringify({ mode: 'crawl' })));
     await page.evaluate(() => document.querySelector('#tabs [data-tab=dashboard]').click());
     await page.evaluate(() => document.querySelector('#tabs [data-tab=viz]').click());
     await page.waitForSelector('#mapCanvas canvas');

@@ -1,6 +1,6 @@
 // Cartographie : gabarits HTML (barre d'outils, inspecteur, info-bulle, filtres, liste). Tout texte issu du crawl
 // (titres, URL) passe par esc() : il est affiché comme du texte, jamais interprété comme du HTML.
-import { MODES, COLORS, SIZES, LOOKS, LAYOUTS, activeFilters, compilePatterns } from './map-view.js';
+import { MODES, COLORS, SIZES, activeFilters, compilePatterns } from './map-view.js';
 import { SEV_COLORS } from './viz.js';
 
 const SEV_ICON = { error: 'error', warning: 'alert', notice: 'info' };
@@ -13,9 +13,10 @@ const pathOf = (url) => {
   }
 };
 
-export function headHtml(stats, X) {
+export function headHtml(stats, X, variant = 'viz') {
   const { t, esc } = X;
-  return `<header class="map-head"><div><h1>${esc(t('map.title'))}</h1><p>${esc(t('map.subtitle'))}</p></div>
+  const k = variant === 'graph' ? 'graph' : 'map';
+  return `<header class="map-head"><div><h1>${esc(t(k + '.title'))}</h1><p>${esc(t(k + '.subtitle'))}</p></div>
     <p class="map-stats">${stats.map(esc).join(' <span class="sep">·</span> ')}</p></header>`;
 }
 
@@ -25,9 +26,7 @@ export function toolbarHtml(o, filterCount, X) {
   const sel = (id, label, values, cur, key) => `<label class="map-select"><span>${esc(label)}</span><select id="${id}">${values.map((v) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${esc(t(key + v))}</option>`).join('')}</select></label>`;
   return `<div class="map-toolbar" role="toolbar" aria-label="${esc(t('map.toolbar'))}">
     ${seg('mode', MODES, 'map.modeLabel')}
-    ${seg('dim', ['2d', '3d'], 'map.dimLabel')}
-    ${o.mode !== 'links' && o.dim === '2d' ? seg('layout', LAYOUTS, 'map.layoutLabel') : ''}
-    ${seg('look', LOOKS, 'map.lookLabel')}
+    ${o.variant === 'graph' ? seg('dim', ['2d', '3d'], 'map.dimLabel') : ''}
     <div class="map-search" role="search">
       <label class="searchbox">${icon('search')}<input id="mapSearch" type="search" autocomplete="off" placeholder="${esc(t('map.search'))}" aria-label="${esc(t('map.search'))}" aria-controls="mapResults" aria-expanded="false"></label>
       <ul id="mapResults" class="map-results" role="listbox" hidden></ul>

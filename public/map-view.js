@@ -7,8 +7,6 @@ import { paletteOf } from './viz.js';
 export const MODES = ['crawl', 'dir', 'links'];
 export const COLORS = ['depth', 'issues', 'status', 'index', 'dir'];
 export const SIZES = ['linkScore', 'inlinks', 'uniform'];
-export const LOOKS = ['classic', 'dark'];
-export const LAYOUTS = ['tree', 'radial'];
 // Nœuds dessinés au plus ; au-delà, les branches se replient en groupes. L'arbre horizontal affiche un libellé par
 // nœud : son budget est plus serré pour rester lisible (et présentable en capture d'écran).
 export const BUDGET = { '2d': 2500, '3d': 1800, tree: 600 };

@@ -79,7 +79,9 @@ export async function openApp(pw, url, file, viewport = { width: 1440, height: 9
   const dialogs = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && !/favicon|Failed to load resource/.test(m.text()) && errors.push(m.text()));
-  page.on('dialog', (d) => (dialogs.push(d.message()), d.dismiss().catch(() => {})));
+  // Une confirmation de l'application (« Supprimer ce crawl ? ») est refusée et n'est pas une faute ;
+  // une alerte, elle, ne peut venir que d'un script injecté (l'application n'en affiche jamais).
+  page.on('dialog', (d) => (d.type() !== 'confirm' && dialogs.push(`${d.type()}: ${d.message()}`), d.dismiss().catch(() => {})));
   await page.goto(url);
   await page.evaluate(() => (localStorage.clear(), localStorage.setItem('lang', 'fr')));
   await page.reload();
