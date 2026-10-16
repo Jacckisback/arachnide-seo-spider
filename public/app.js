@@ -216,7 +216,8 @@ const TABS = [
     filters: { all: () => true, lowInlinks: (p) => (p.uniqueInlinks || 0) <= 1, noContentInlinks: (p) => !p.contentInlinks, deep: (p) => p.depth >= (TH().deepLevel || 4), unreachable: (p) => p.depth === null } },
   { id: 'sitemap', icon: 'sitemap', rows: (R) => R.pages, cols: [C.url, C.status, C.inSitemap, C.indexability, C.inlinks, C.depth],
     filters: { inSitemap: (p) => p.inSitemap, orphans: (p) => p.inSitemap && !p.uniqueInlinks && p.depth !== 0, nonIndexableInSitemap: (p) => p.inSitemap && !p.indexable, indexableNotInSitemap: (p) => !p.inSitemap && p.indexable && p.isHtml } },
-  { id: 'viz', icon: 'graph' },
+  { id: 'viz', icon: 'sitemap' },
+  { id: 'graph', icon: 'graph' },
   { id: 'robots', icon: 'robot' },
 ];
 const TAB_BY_ID = Object.fromEntries(TABS.filter((x) => x.id).map((x) => [x.id, x]));
@@ -229,12 +230,12 @@ const visibleTabs = () => {
 /* ---------- Barre latérale ---------- */
 // Pilotage et exploration en tête ; toutes les autres analyses restent accessibles dans « Plus d'analyses ».
 const NAV = [
-  { group: 'grp.pilot', items: ['dashboard', 'issues', 'plan', 'viz', 'fix', 'fixHistory'] },
+  { group: 'grp.pilot', items: ['dashboard', 'issues', 'plan', 'viz', 'graph', 'fix', 'fixHistory'] },
   { group: 'grp.explore', items: ['internal', 'linking', 'content', 'images', 'directives'] },
 ];
 const NAV_IDS = new Set(NAV.flatMap((g) => g.items));
 const SUB_ITEMS = new Set(['fixHistory']); // affiché en retrait sous « Corrections »
-const NO_COUNT = new Set(['viz', 'dashboard', 'plan', 'fix', 'fixHistory']); // pas de compteur qui ne veuille rien dire
+const NO_COUNT = new Set(['viz', 'graph', 'dashboard', 'plan', 'fix', 'fixHistory']); // pas de compteur qui ne veuille rien dire
 const navLabel = (id) => {
   const k = 'nav.' + id;
   const v = t(k);
@@ -295,11 +296,12 @@ function goTab(id) {
 /* ---------- Rendu principal ---------- */
 function render() {
   const view = $('#view');
-  if (state.vizHandle && state.tab !== 'viz') {
+  const isMap = state.tab === 'viz' || state.tab === 'graph';
+  if (state.vizHandle && !isMap) {
     state.vizHandle.destroy();
     state.vizHandle = null;
   }
-  view.classList.toggle('full', state.tab === 'viz' && !!state.R);
+  view.classList.toggle('full', isMap && !!state.R);
   if (!state.R) {
     if (state.tab === 'internal' && state.live.length) return renderTable(view, liveTab(), state.live);
     return state.running ? renderRunning(view) : renderHome(view);
@@ -308,7 +310,7 @@ function render() {
   if (state.tab === 'issues') return renderIssues(view);
   if (state.tab === 'plan') return renderPlan(view);
   if (state.tab === 'robots') return renderRobots(view);
-  if (state.tab === 'viz') return renderViz(view);
+  if (isMap) return renderViz(view);
   if (state.tab === 'fix') return renderFixTab(view);
   if (state.tab === 'fixHistory') return renderFixHistory(view);
   let tab = TAB_BY_ID[state.tab];
@@ -818,11 +820,15 @@ async function renderViz(view) {
   if (ae && view.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) ae.blur();
   const ctx = mapCtx();
   const { M } = ctx;
-  // Par défaut : style classique, arbre horizontal en 2D (lisible et présentable en capture d'écran).
-  const o = { mode: 'crawl', dim: '2d', layout: 'tree', look: 'classic', colorBy: 'depth', sizeBy: 'linkScore', list: false, panel: true, ...store.get('map', {}) };
-  if (!['classic', 'dark'].includes(o.look)) o.look = 'classic';
-  if (!['tree', 'radial'].includes(o.layout)) o.layout = 'tree';
-  const save = (patch) => { Object.assign(o, patch); store.set('map', { mode: o.mode, dim: o.dim, layout: o.layout, look: o.look, colorBy: o.colorBy, sizeBy: o.sizeBy, list: o.list, panel: o.panel }); };
+  // Deux onglets sur les mêmes données :
+  // - « Cartographie » (viz) : plan du site à la Screaming Frog — style classique, arbre horizontal, 2D ;
+  // - « Visualisation 2D / 3D » (graph) : la vue d'exploration — style sombre, disposition radiale, 2D ou 3D.
+  const variant = state.tab === 'graph' ? 'graph' : 'viz';
+  const key = variant === 'graph' ? 'graph' : 'map';
+  const o = { mode: 'crawl', dim: '2d', colorBy: variant === 'graph' ? 'issues' : 'depth', sizeBy: 'linkScore', list: false, panel: true, ...store.get(key, {}) };
+  Object.assign(o, variant === 'graph' ? { look: 'dark', layout: 'radial' } : { look: 'classic', layout: 'tree', dim: '2d' });
+  if (!['2d', '3d'].includes(o.dim)) o.dim = '2d';
+  const save = (patch) => { Object.assign(o, patch); store.set(key, { mode: o.mode, dim: o.dim, colorBy: o.colorBy, sizeBy: o.sizeBy, list: o.list, panel: o.panel }); };
   const P = paletteOf(o.look);
   const dirs = dirsOf(M);
   const matched = activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length ? matchPages(M, ctx.filters) : null;
@@ -832,8 +838,8 @@ async function renderViz(view) {
   if (M.resources) stats.push(t('map.resourcesOut', { n: M.resources }));
   if (isPartial(state.R)) stats.push(t('map.partial'));
   view.innerHTML = `<div class="map ${o.look}${o.panel ? '' : ' no-panel'}" id="mapRoot">
-    ${headHtml(stats, mapX())}
-    ${toolbarHtml(o, matched ? activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length : 0, mapX())}
+    ${headHtml(stats, mapX(), variant)}
+    ${toolbarHtml({ ...o, variant }, matched ? activeFilters(ctx.filters).filter(([k]) => k !== '_mode').length : 0, mapX())}
     <div id="mapFiltersWrap" hidden>${filtersHtml(ctx.filters, o.mode, folderOptions(M), mapX())}</div>
     <div id="mapChips">${matched ? chipsHtml(ctx.filters, matched.size, mapX()) : ''}</div>
     <div class="map-work">
@@ -991,8 +997,6 @@ async function renderViz(view) {
     renderViz(view);
   }));
   view.querySelectorAll('[data-dim]').forEach((b) => b.addEventListener('click', () => { save({ dim: b.dataset.dim }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
-  view.querySelectorAll('[data-layout]').forEach((b) => b.addEventListener('click', () => { save({ layout: b.dataset.layout }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
-  view.querySelectorAll('[data-look]').forEach((b) => b.addEventListener('click', () => { save({ look: b.dataset.look }); ctx.pendingFocus = ctx.sel; renderViz(view); }));
   $m('#mapColor').addEventListener('change', (e) => { save({ colorBy: e.target.value }); style.colorBy = o.colorBy; legend(); state.vizHandle?.setStyle({ colorBy: o.colorBy }); });
   $m('#mapSize').addEventListener('change', (e) => { save({ sizeBy: e.target.value }); legend(); state.vizHandle?.setStyle({ sizeBy: o.sizeBy }); });
   const fWrap = $m('#mapFiltersWrap');
@@ -1080,7 +1084,7 @@ async function renderViz(view) {
     g2.textBaseline = 'top';
     g2.fillStyle = classic ? '#0f172a' : '#eef2f7';
     g2.font = font(700, 17);
-    g2.fillText(`${t('map.title')} — ${t('map.mode.' + o.mode)}`, 16 * ratio, 12 * ratio);
+    g2.fillText(`${t(key + '.title')} — ${t('map.mode.' + o.mode)}`, 16 * ratio, 12 * ratio);
     g2.font = font(500, 12);
     g2.fillStyle = P.muted;
     g2.fillText(`${hostOf()} · ${new Date(state.R.meta.finishedAt || Date.now()).toLocaleDateString(t.lang)} · ${t('map.pagesShown', { n: scene.nodes.filter((n) => n.page).length, total: M.pages.length })}`, 16 * ratio, 35 * ratio);
@@ -1131,7 +1135,7 @@ async function renderViz(view) {
     const kind = b.dataset.exp;
     if (kind === 'csv') {
       const rows = (matched ? M.pages.filter((p) => matched.has(p.url)) : M.pages).map((p) => ({ url: p.url, title: p.title || '', depth: p.depth ?? '', linkScore: p.linkScore ?? '', inlinks: M.inl.get(p.url)?.size || 0, outlinks: M.out.get(p.url)?.size || 0, issues: (M.issues.get(p.url) || []).map((i) => t('issue.' + i.id + '.label', i.params)).join(' | ') }));
-      return exportCsv({ cols: [C.url, { k: 'title', l: 'col.title' }, { k: 'depth', l: 'map.depth' }, { k: 'linkScore', l: 'col.linkScore' }, { k: 'inlinks', l: 'map.sources' }, { k: 'outlinks', l: 'map.outlinks' }, { k: 'issues', l: 'map.tab.issues' }] }, rows, '', t('map.title'));
+      return exportCsv({ cols: [C.url, { k: 'title', l: 'col.title' }, { k: 'depth', l: 'map.depth' }, { k: 'linkScore', l: 'col.linkScore' }, { k: 'inlinks', l: 'map.sources' }, { k: 'outlinks', l: 'map.outlinks' }, { k: 'issues', l: 'map.tab.issues' }] }, rows, '', t(key + '.title'));
     }
     const img = exportImage();
     if (!img) return toast(t('viz.loadFailed'), 'error');
@@ -1140,7 +1144,7 @@ async function renderViz(view) {
       a.href = img.url;
       a.download = `${hostOf()}_${o.mode}_${o.dim}.png`;
       a.click();
-    } else vizPdf({ img: img.url, title: `${t('map.title')} — ${t('map.mode.' + o.mode)} (${o.dim.toUpperCase()})`, legend: img.legend, notes: exportContext() });
+    } else vizPdf({ img: img.url, title: `${t(key + '.title')} — ${t('map.mode.' + o.mode)} (${o.dim.toUpperCase()})`, legend: img.legend, notes: exportContext() });
   }));
 
   // --- Liste (alternative à la 3D) ---
@@ -1191,7 +1195,7 @@ async function renderViz(view) {
         ctx.pendingFocus = null;
       },
     });
-    if (state.R !== R || state.tab !== 'viz' || !document.body.contains(el)) return handle.destroy();
+    if (state.R !== R || state.tab !== variant || !document.body.contains(el)) return handle.destroy();
     state.vizHandle = handle;
     el.querySelector('.map-loading')?.remove();
     pathBar();

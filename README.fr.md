@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.10.0-3d5f17" alt="Version 3.10.0">
+  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Version 3.11.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,12 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🧭 Nouveau en 3.11 : cartographie et visualisation 2D / 3D, côte à côte
+
+- **Cartographie** (barre latérale) : le plan du site classique, façon Screaming Frog — fond blanc, arbre horizontal, pensé pour les captures et les rapports clients.
+- **Visualisation 2D / 3D** (nouvel onglet, juste en dessous) : la vue d’exploration — style sombre, disposition radiale, en 2D ou en 3D, colorée par problèmes SEO par défaut.
+- Les deux vues partagent les mêmes données, filtres, recherche et inspecteur de page ; chacune garde ses propres réglages.
 
 ## 🌳 Nouveau en 3.10 : une cartographie classique, prête à montrer
 

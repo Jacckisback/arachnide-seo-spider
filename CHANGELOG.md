@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.11.0 — 2026-10-16
+
+- **Two map tabs**: *Site map* is now the classic, Screaming Frog-style map only (white background, horizontal tree, 2D; the style / layout / 3D switches are gone from it). The 3.9 exploration view is back as its own tab, **2D / 3D visualisation**, right below *Site map* in the sidebar: dark style, radial layout, 2D or 3D, coloured by SEO issues by default. Both tabs share the data, filters, search and inspector, and remember their own settings.
+- Tests: the end-to-end test covers both tabs in every mode; UI tests no longer mistake the app's own confirmation dialogs for injected scripts.
+
 ## 3.10.0 — 2026-10-16
 
 Based on user feedback: the 3.9 map was judged “accurate but too futuristic, less readable than before”, the main use being screenshots for clients and managers.

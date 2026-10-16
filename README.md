@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.10.0-3d5f17" alt="Version 3.10.0">
+  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Version 3.11.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,12 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🧭 New in 3.11: site map and 2D / 3D visualisation, side by side
+
+- **Site map** (sidebar): the classic, Screaming Frog-style map — white background, horizontal tree, made for screenshots and client reports.
+- **2D / 3D visualisation** (new tab, right below): the exploration view — dark style, radial layout, 2D or 3D, coloured by SEO issues by default.
+- Both views share the same data, filters, search and page inspector; each remembers its own settings.
 
 ## 🌳 New in 3.10: a classic, screenshot-ready site map
 
