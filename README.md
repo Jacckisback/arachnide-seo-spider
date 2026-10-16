@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Version 3.9.0">
+  <img src="https://img.shields.io/badge/version-3.10.0-3d5f17" alt="Version 3.10.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,20 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🌳 New in 3.10: a classic, screenshot-ready site map
+
+A clearer site map you can show to a client or a manager as is — plus finer control of what you crawl and map.
+
+<p align="center"><img src="docs/screenshots/viz-classic-tree.png" alt="Site map in the Classic style: horizontal crawl tree on a white background, one label per page, long lists summarised as “+ N more pages”" width="100%"></p>
+
+- **Classic style (new default)**: white background, thin links, dark labels — in the spirit of Screaming Frog’s crawl tree. The *Dark* style is still one click away, in 2D and 3D.
+- **Horizontal tree**: home page on the left, one column per level, one label per page. Long lists are summarised (“+ 28 more pages”, problems of hidden pages still flagged) and *Show the full list* expands them; the selected page always stays visible. In *Directories*, each folder shows its path relative to its parent, like a file explorer.
+- **Client-ready exports**: the PNG / PDF now has a header (site, view, crawl date, pages shown), the legend and the context.
+- **No invented URLs**: in *Directories*, a page such as `/en` now carries its `/en/` folder instead of a fake `/en/` URL appearing next to it; a folder with no page at its address is shown as a grouping (`/blog/page/*`).
+- **URL include / exclude in the map**: one pattern per line — plain text (`/en/`), wildcard (`/en/*/page-*`) or regular expression (`/en/(.*)`). The *Folder* filter now works at any level (`/en/blog/`).
+- **Crawl scope**: include / exclude accept one regex per line, and a new *Stay in the start folder* option crawls only below the start URL’s folder (like unticking “Crawl Outside of Start Folder” in Screaming Frog). CLI: repeat `--include` / `--exclude`, add `--stay-in-folder`.
+- **Sturdier**: invalid start URLs (`htp:/x`, `javascript:…`, a bare number) are refused with a clear message, absurd numbers are brought back to safe limits, a crawl that cannot be saved now says so. New end-to-end and “monkey” tests drive the real interface in a browser (random clicks, garbage input, resizes) on every test run.
 
 ## 🕸️ New in 3.9: a faster, clearer site map
 

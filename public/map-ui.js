@@ -1,7 +1,6 @@
 // Cartographie : gabarits HTML (barre d'outils, inspecteur, info-bulle, filtres, liste). Tout texte issu du crawl
 // (titres, URL) passe par esc() : il est affiché comme du texte, jamais interprété comme du HTML.
-import { MODES, COLORS, SIZES, activeFilters } from './map-view.js';
-import { topDir } from './map-model.js';
+import { MODES, COLORS, SIZES, LOOKS, LAYOUTS, activeFilters, compilePatterns } from './map-view.js';
 import { SEV_COLORS } from './viz.js';
 
 const SEV_ICON = { error: 'error', warning: 'alert', notice: 'info' };
@@ -27,6 +26,8 @@ export function toolbarHtml(o, filterCount, X) {
   return `<div class="map-toolbar" role="toolbar" aria-label="${esc(t('map.toolbar'))}">
     ${seg('mode', MODES, 'map.modeLabel')}
     ${seg('dim', ['2d', '3d'], 'map.dimLabel')}
+    ${o.mode !== 'links' && o.dim === '2d' ? seg('layout', LAYOUTS, 'map.layoutLabel') : ''}
+    ${seg('look', LOOKS, 'map.lookLabel')}
     <div class="map-search" role="search">
       <label class="searchbox">${icon('search')}<input id="mapSearch" type="search" autocomplete="off" placeholder="${esc(t('map.search'))}" aria-label="${esc(t('map.search'))}" aria-controls="mapResults" aria-expanded="false"></label>
       <ul id="mapResults" class="map-results" role="listbox" hidden></ul>
@@ -41,20 +42,26 @@ export function toolbarHtml(o, filterCount, X) {
   </div>`;
 }
 
-export function filtersHtml(f, mode, dirs, X) {
+export function filtersHtml(f, mode, folders, X) {
   const { t, esc } = X;
   const opt = (v, l, cur) => `<option value="${esc(v)}" ${String(cur) === String(v) ? 'selected' : ''}>${esc(l)}</option>`;
   return `<div class="map-filters" id="mapFilters" role="dialog" aria-label="${esc(t('map.filters'))}">
     <div class="mf-grid">
       <label>${esc(t('map.f.issues'))}<select data-f="issues">${opt('', t('map.f.all'), f.issues)}${opt('any', t('map.f.anyIssue'), f.issues)}${['error', 'warning', 'notice'].map((s) => opt(s, t('map.sev.' + s), f.issues)).join('')}</select></label>
       <label>${esc(t('map.f.depthMin'))}<select data-f="depthMin">${opt('', t('map.f.all'), f.depthMin ?? '')}${[2, 3, 4, 5, 6].map((d) => opt(d, t('map.f.depthGte', { n: d }), f.depthMin ?? '')).join('')}</select></label>
-      <label>${esc(t('map.f.dir'))}<select data-f="dir">${opt('', t('map.f.all'), f.dir)}${dirs.map((d) => opt(d, d, f.dir)).join('')}</select></label>
+      <label>${esc(t('map.f.dir'))}<select data-f="dir">${opt('', t('map.f.all'), f.dir)}${folders.map(([d, n]) => opt(d, `${d} (${n})`, f.dir)).join('')}</select></label>
       <label>${esc(t('map.f.status'))}<select data-f="status">${opt('', t('map.f.all'), f.status)}${[['ok', '2xx'], ['redirect', '3xx'], ['client', '4xx'], ['server', '5xx'], ['none', t('map.noResponse')]].map(([v, l]) => opt(v, l, f.status)).join('')}</select></label>
       <label>${esc(t('map.f.index'))}<select data-f="index">${opt('', t('map.f.all'), f.index)}${opt('yes', t('idx.indexable'), f.index)}${opt('no', t('idx.nonIndexable'), f.index)}</select></label>
       <label class="mf-check"><input type="checkbox" data-f="lowInlinks" ${f.lowInlinks ? 'checked' : ''}> ${esc(t('map.f.lowInlinks'))}
         <select data-f="inlinksMax" aria-label="${esc(t('map.f.threshold'))}">${[0, 1, 2, 3, 5].map((n) => opt(n, t('map.f.inlinksLte', { n }), f.inlinksMax)).join('')}</select></label>
       <label>${esc(t('map.f.lsMin'))}<input type="number" min="0" max="100" data-f="lsMin" value="${f.lsMin ?? ''}" placeholder="0"></label>
       <label>${esc(t('map.f.lsMax'))}<input type="number" min="0" max="100" data-f="lsMax" value="${f.lsMax ?? ''}" placeholder="100"></label>
+    </div>
+    <div class="mf-urls">
+      <label>${esc(t('map.f.urlInc'))}<textarea data-f="urlInc" rows="2" spellcheck="false" placeholder="/en/\n/blog/(.*)">${esc(f.urlInc || '')}</textarea></label>
+      <label>${esc(t('map.f.urlExc'))}<textarea data-f="urlExc" rows="2" spellcheck="false" placeholder="/en/(.*)\n?page=">${esc(f.urlExc || '')}</textarea></label>
+      <p class="muted small">${esc(t('map.f.urlHelp'))}</p>
+      ${[...compilePatterns(f.urlInc).bad, ...compilePatterns(f.urlExc).bad].map((b) => `<p class="mf-bad">${esc(t('map.f.badPattern', { p: b }))}</p>`).join('')}
     </div>
     <p class="mf-note muted">${esc(t('map.f.note'))}</p>
     <div class="mf-foot">
@@ -75,6 +82,9 @@ export function chipsHtml(f, matched, X) {
     if (k === 'index') return t(v === 'yes' ? 'idx.indexable' : 'idx.nonIndexable');
     if (k === 'lsMin') return `Link Score ≥ ${v}`;
     if (k === 'lsMax') return `Link Score ≤ ${v}`;
+    if (k === 'dir') return t('map.f.inFolder', { d: v });
+    if (k === 'urlInc') return t('map.f.chipInc', { p: v.split('\n').filter((x) => x.trim()).join(', ') });
+    if (k === 'urlExc') return t('map.f.chipExc', { p: v.split('\n').filter((x) => x.trim()).join(', ') });
     return String(v);
   };
   return `<div class="map-chips">${act.map((a) => `<span class="map-chip">${esc(label(a))}<button data-unf="${a[0]}" aria-label="${esc(t('ui.close'))}">${icon('x')}</button></span>`).join('')}
@@ -106,7 +116,7 @@ export function inspectorHtml(ctx, X) {
       <div class="mi-tiles"><div class="mi-tile">${icon('file')}<div><span>${esc(t('map.pagesIn'))}</span><b>${num(node.count || 0)}</b></div></div>
       <div class="mi-tile">${icon(node.sev ? SEV_ICON[node.sev] : 'check')}<div><span>${esc(t('map.worstIssue'))}</span><b class="sev-${node.sev || 'none'}">${esc(node.sev ? t('map.sev.' + node.sev) : t('map.noIssue'))}</b></div></div></div>
       ${node.kind === 'unreached' ? `<p class="mi-note">${esc(t('map.unreachedHint'))}</p>` : node.kind === 'folder' ? `<p class="mi-note">${esc(t('map.virtualHint'))}</p>` : ''}
-      <div class="mi-actions">${node.group ? `<button class="btn" id="mapExpand">${icon('chevronRight')} ${esc(t('map.expand'))}</button>` : ''}${mode !== 'links' ? `<button class="btn" id="mapIsoBranch">${icon('graph')} ${esc(t('map.isolateBranch'))}</button>` : ''}</div>
+      <div class="mi-actions">${node.group ? `<button class="btn" id="mapExpand">${icon('chevronRight')} ${esc(node.kind === 'more' ? t('map.showAll') : t('map.expand'))}</button>` : ''}${mode !== 'links' && node.kind !== 'more' ? `<button class="btn" id="mapIsoBranch">${icon('graph')} ${esc(t('map.isolateBranch'))}</button>` : ''}</div>
       <button class="link mi-global" id="mapGlobal">${icon('chevronLeft')} ${esc(t('map.backGlobal'))}</button>`;
   }
   const p = node.page;
@@ -164,6 +174,6 @@ export function listHtml(rows, page, M, X) {
 
 export const dirsOf = (M) => {
   const c = new Map();
-  for (const p of M.pages) c.set(topDir(p.url), (c.get(topDir(p.url)) || 0) + 1);
+  for (const p of M.pages) c.set(M.dirOf(p.url), (c.get(M.dirOf(p.url)) || 0) + 1);
   return [...c.entries()].sort((a, b) => b[1] - a[1]).map(([d]) => d);
 };

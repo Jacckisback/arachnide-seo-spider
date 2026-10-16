@@ -212,3 +212,21 @@ test('hreflang : les versions linguistiques sont explorées et vérifiées (404,
     server.close();
   }
 });
+
+test('saisies absurdes : URL de départ refusée proprement, options ramenées à des bornes sûres', async () => {
+  const { startUrlOf } = await import('../src/crawler.mjs');
+  const { toCrawlerOptions } = await import('../src/options.mjs');
+  for (const bad of ['', 'htp:/x', 'javascript:alert(1)', '12345', 'a'.repeat(5000), '<script>alert(1)</script>', 'mailto:a@b.fr', 'ftp://x.fr/']) {
+    assert.throws(() => startUrlOf(bad), (e) => e.status === 400 && e.key === 'toast.badUrl', bad.slice(0, 20));
+  }
+  assert.equal(startUrlOf('exemple.fr'), 'https://exemple.fr/');
+  assert.equal(startUrlOf('localhost:4000'), 'https://localhost:4000/');
+  assert.equal(startUrlOf('http://127.0.0.1:8080/blog/'), 'http://127.0.0.1:8080/blog/');
+  assert.equal(toCrawlerOptions({ maxPages: -5 }).maxPages, 500);
+  assert.equal(toCrawlerOptions({ maxPages: 0 }).maxPages, 500);
+  assert.equal(toCrawlerOptions({ maxPages: 1e309 }).maxPages, 500);
+  assert.equal(toCrawlerOptions({ maxPages: 120.6 }).maxPages, 121);
+  assert.equal(toCrawlerOptions({ maxDepth: -1 }).maxDepth, 20);
+  assert.equal(toCrawlerOptions({ stayInFolder: true }).stayInFolder, true);
+  assert.throws(() => toCrawlerOptions({ exclude: '/ok/\n(' }), (e) => e.status === 400);
+});

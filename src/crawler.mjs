@@ -8,7 +8,7 @@ import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey } from './google.mjs';
 
-export const VERSION = '3.9.0';
+export const VERSION = '3.10.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -22,6 +22,31 @@ export const USER_AGENTS = {
     'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
   chrome: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
 };
+
+// URL de départ saisie par l'utilisateur → URL absolue, ou erreur 400 explicite. On refuse ce qui n'est pas une
+// adresse web plausible (« htp:/x », « javascript:… », « 12345 », texte de 5 000 caractères) au lieu de deviner
+// un hôte et d'aller le crawler.
+export function startUrlOf(x) {
+  const bad = () => Object.assign(new Error('Invalid URL'), { status: 400, key: 'toast.badUrl' });
+  let u = String(x ?? '').trim();
+  if (!u || u.length > 2048 || /\s/.test(u)) throw bad();
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(u);
+  if (scheme && !/^https?$/i.test(scheme[1])) throw bad();
+  if (!scheme && /^[a-z][a-z0-9+.-]*:(?!\d)/i.test(u)) throw bad(); // javascript:, mailto:, htp:/x (mais pas localhost:4000)
+  if (!scheme) u = 'https://' + u;
+  let url;
+  try {
+    url = new URL(u);
+  } catch {
+    throw bad();
+  }
+  const rawHost = u.replace(/^https?:\/\//i, '').split(/[/?#]/)[0].replace(/^[^@]*@/, '').replace(/:\d+$/, '').toLowerCase();
+  const host = url.hostname.toLowerCase();
+  const ip = /^\d{1,3}(\.\d{1,3}){3}$/.test(rawHost) || host.startsWith('[');
+  if (!ip && host !== 'localhost' && !(/^[a-z0-9-]+(\.[a-z0-9-]+)+\.?$/i.test(host) && /[a-z]/i.test(rawHost.split('.').pop() || ''))) throw bad();
+  if (host.length > 253) throw bad();
+  return url.href;
+}
 
 export const DEFAULT_OPTIONS = {
   maxPages: 500,
@@ -37,8 +62,9 @@ export const DEFAULT_OPTIONS = {
   crawlCanonicals: true,
   checkExternal: false,
   checkImages: false,
-  include: '',
-  exclude: '',
+  include: '', // une regex par ligne : seules les URL qui correspondent à l'une d'elles sont crawlées
+  exclude: '', // une regex par ligne : les URL qui correspondent à l'une d'elles ne sont pas crawlées
+  stayInFolder: false, // ne pas sortir du dossier de l'URL de départ (https://x.fr/blog/ → seulement /blog/…)
   maxExternal: 1000,
   maxImages: 2000,
   mode: 'spider', // 'spider' : suit les liens ; 'list' : crawle uniquement opts.urls
@@ -140,11 +166,7 @@ export class Crawler extends EventEmitter {
   constructor(startUrl, options = {}) {
     super();
     this.opts = { ...DEFAULT_OPTIONS, ...options };
-    const fix = (x) => {
-      let u = String(x || '').trim();
-      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
-      return new URL(u).href;
-    };
+    const fix = (x) => startUrlOf(x);
     if (this.opts.mode === 'list') {
       this.listUrls = [...new Set((this.opts.urls || []).map((x) => { try { return fix(x); } catch { return null; } }).filter(Boolean))];
       if (!this.listUrls.length) throw new Error('URL list is empty');
@@ -171,8 +193,11 @@ export class Crawler extends EventEmitter {
     this.warnings = [];
     this.botAccess = [];
     this.llmsTxt = null;
-    this.includeRe = this.opts.include ? new RegExp(this.opts.include, 'i') : null;
-    this.excludeRe = this.opts.exclude ? new RegExp(this.opts.exclude, 'i') : null;
+    // Une regex par ligne ; une ligne invalide est ignorée et signalée au lieu de faire échouer le crawl.
+    this.includeRes = this.compileScope(this.opts.include, 'include');
+    this.excludeRes = this.compileScope(this.opts.exclude, 'exclude');
+    const sp = new URL(this.startUrl).pathname;
+    this.startFolder = this.opts.stayInFolder ? sp.slice(0, sp.lastIndexOf('/') + 1) || '/' : null;
     this.pages = new Map(); // url -> enregistrement
     this.queue = [];
     this.qHead = 0;
@@ -244,9 +269,31 @@ export class Crawler extends EventEmitter {
     return false;
   }
 
+  compileScope(src, kind) {
+    const out = [];
+    for (const line of String(src || '').split(/\r?\n/)) {
+      const p = line.trim();
+      if (!p) continue;
+      try {
+        out.push(new RegExp(p, 'i'));
+      } catch {
+        this.warnings.push({ key: 'warn.badRegex', params: { kind, pattern: p.slice(0, 200) } });
+      }
+    }
+    return out;
+  }
+
   inScope(url) {
-    if (this.includeRe && !this.includeRe.test(url)) return false;
-    if (this.excludeRe && this.excludeRe.test(url)) return false;
+    if (this.includeRes.length && !this.includeRes.some((re) => re.test(url))) return false;
+    if (this.excludeRes.some((re) => re.test(url))) return false;
+    if (this.startFolder && this.startFolder !== '/') {
+      try {
+        const u = new URL(url);
+        if (!u.pathname.startsWith(this.startFolder)) return false;
+      } catch {
+        return false;
+      }
+    }
     return true;
   }
 
@@ -257,7 +304,9 @@ export class Crawler extends EventEmitter {
   enqueue(url, depth, via = 'link', hops = 0) {
     const n = this.normalize(url);
     if (!n || this.seen.has(n)) return;
-    if (!this.isInternal(n) || !this.inScope(n)) return;
+    if (!this.isInternal(n)) return;
+    // L'URL de départ (et celles d'une liste) est toujours explorée : c'est le point d'entrée, même hors des motifs.
+    if (via !== 'start' && via !== 'list' && !this.inScope(n)) return this.skip('scope');
     const o = this.opts;
     if (via !== 'start' && via !== 'list') {
       // Spider > Limites

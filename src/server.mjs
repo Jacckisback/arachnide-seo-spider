@@ -47,7 +47,14 @@ async function readBody(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
   const raw = Buffer.concat(chunks).toString('utf8');
-  return raw ? JSON.parse(raw) : {};
+  let body;
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw Object.assign(new Error('Invalid JSON body'), { status: 400, key: 'toast.badRequest' });
+  }
+  // null, nombre, tableau… : une requête mal formée n'est pas une erreur serveur.
+  return body && typeof body === 'object' && !Array.isArray(body) ? body : {};
 }
 
 async function startCrawl(body) {
@@ -69,7 +76,10 @@ async function startCrawl(body) {
       try {
         lastFile = await saveResult(result);
       } catch (e) {
+        lastFile = null;
         console.error('Sauvegarde impossible :', e.message);
+        // Le résultat reste affiché, mais l'utilisateur doit savoir qu'il n'est pas enregistré (et l'exporter).
+        broadcast('warning', { key: 'warn.saveFailed', params: { error: e.code || 'error' } });
       }
       broadcast('done', { file: lastFile, summary: result.summary });
       console.log(`Crawl terminé : ${result.summary.totalUrls} URLs, score ${result.summary.score}/100 → crawls/${lastFile}`);
@@ -169,6 +179,9 @@ const server = http.createServer(async (req, res) => {
     if (!data) return send(res, 404, 'Introuvable', 'text/plain');
     return send(res, 200, data, MIME[path.extname(file)] || 'application/octet-stream');
   } catch (e) {
+    // Erreur système (fichier absent, droits…) : pas de chemin interne dans la réponse.
+    if (e.code === 'ENOENT') return send(res, 404, { error: 'Not found', key: 'toast.notFound' });
+    if (e.code && !e.status) return send(res, 500, { error: e.code });
     return send(res, e.status || 500, { error: e.message, key: e.key });
   }
 });

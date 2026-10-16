@@ -55,7 +55,7 @@ export async function listCrawls() {
 
 export async function saveResult(result) {
   await fs.mkdir(CRAWLS, { recursive: true });
-  const host = new URL(result.meta.startUrl).hostname.replace(/[^\w.-]/g, '_');
+  const host = new URL(result.meta.startUrl).hostname.replace(/[^\w.-]/g, '_').slice(0, 100); // nom de fichier borné
   const stamp = result.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '');
   const file = `${host}_${stamp}.json`;
   await fs.writeFile(path.join(CRAWLS, file), JSON.stringify(result));

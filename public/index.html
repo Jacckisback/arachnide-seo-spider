@@ -130,11 +130,13 @@
           </section>
           <section data-pane="scope" hidden>
             <div class="cfg-grid one">
-              <label><span data-i18n="opt.include">Include only (regex)</span><input name="include" type="text" placeholder="/blog/"></label>
-              <label><span data-i18n="opt.exclude">Exclude (regex)</span><input name="exclude" type="text" placeholder="\?(replytocom|share)=|/wp-admin/"></label>
+              <label><span data-i18n="opt.include">Include only (regex)</span><textarea name="include" rows="2" spellcheck="false" placeholder="/blog/&#10;/produits/(.*)"></textarea><small data-i18n="opt.scopeHelp"></small></label>
+              <label><span data-i18n="opt.exclude">Exclude (regex)</span><textarea name="exclude" rows="2" spellcheck="false" placeholder="/en/(.*)&#10;\?(replytocom|share)=&#10;/wp-admin/"></textarea></label>
               <label><span data-i18n="opt.removeParams">Remove URL parameters</span><input name="removeParams" type="text" placeholder="utm_*, gclid, fbclid, sessionid"><small data-i18n="opt.removeParamsHelp"></small></label>
               <label><span data-i18n="opt.search">Custom search</span><input name="search" type="text" data-i18n-ph="opt.searchPh"></label>
             </div>
+            <label class="check"><input type="checkbox" name="stayInFolder"> <span data-i18n="opt.stayInFolder">Stay in the start folder</span></label>
+            <small class="cfg-help" data-i18n="opt.stayInFolderHelp"></small>
             <label class="check"><input type="checkbox" name="ignoreQuery"> <span data-i18n="opt.ignoreQuery">Ignore all URL parameters</span></label>
           </section>
           <section data-pane="extract" hidden>

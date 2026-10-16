@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Version 3.9.0">
+  <img src="https://img.shields.io/badge/version-3.10.0-3d5f17" alt="Version 3.10.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,20 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🌳 Neu in 3.10: eine klassische, präsentationsfertige Website-Karte
+
+Eine übersichtlichere Karte, die Sie einem Kunden oder Vorgesetzten unverändert zeigen können — plus feinere Kontrolle darüber, was Sie crawlen und abbilden.
+
+<p align="center"><img src="docs/screenshots/viz-classic-tree.png" alt="Website-Karte im Stil Klassisch: horizontaler Crawl-Baum auf weißem Hintergrund, ein Label pro Seite, lange Listen zusammengefasst als „+ N weitere Seiten“" width="100%"></p>
+
+- **Klassischer Stil (neuer Standard)**: weißer Hintergrund, dünne Verbindungen, dunkle Labels — im Geist des Crawl-Baums von Screaming Frog. Der Stil *Dunkel* ist weiterhin einen Klick entfernt, in 2D wie in 3D.
+- **Horizontaler Baum**: Startseite links, eine Spalte pro Ebene, ein Label pro Seite. Lange Listen werden zusammengefasst („+ 28 weitere Seiten“, Probleme ausgeblendeter Seiten bleiben markiert) und *Gesamte Liste anzeigen* klappt sie auf; die ausgewählte Seite bleibt immer sichtbar. In *Verzeichnisse* zeigt jedes Verzeichnis seinen Pfad relativ zum übergeordneten Verzeichnis, wie ein Datei-Explorer.
+- **Exporte für Kunden**: PNG / PDF enthalten jetzt eine Kopfzeile (Website, Ansicht, Crawl-Datum, angezeigte Seiten), die Legende und den Kontext.
+- **Keine erfundenen URLs**: In *Verzeichnisse* trägt eine Seite wie `/en` jetzt ihr Verzeichnis `/en/`, statt dass daneben eine falsche URL `/en/` erscheint; ein Verzeichnis ohne Seite unter seiner Adresse wird als Gruppierung dargestellt (`/blog/page/*`).
+- **URLs in der Karte ein- / ausschließen**: ein Muster pro Zeile — einfacher Text (`/en/`), Platzhalter (`/en/*/page-*`) oder regulärer Ausdruck (`/en/(.*)`). Der Filter *Verzeichnis* funktioniert jetzt auf jeder Ebene (`/en/blog/`).
+- **Crawl-Umfang**: Ein- / Ausschließen akzeptieren eine Regex pro Zeile, und die neue Option *Im Startverzeichnis bleiben* crawlt nur unterhalb des Verzeichnisses der Start-URL (wie das Abwählen von „Crawl Outside of Start Folder“ in Screaming Frog). Auf der Kommandozeile: `--include` / `--exclude` wiederholen, `--stay-in-folder` hinzufügen.
+- **Robuster**: Ungültige Start-URLs (`htp:/x`, `javascript:…`, eine bloße Zahl) werden mit einer klaren Meldung abgelehnt, absurde Zahlen werden auf sichere Grenzen zurückgesetzt, ein Crawl, der sich nicht speichern lässt, meldet das. Neue End-to-End- und „Monkey“-Tests steuern bei jedem Testlauf die echte Oberfläche in einem Browser (zufällige Klicks, unsinnige Eingaben, Größenänderungen).
 
 ## 🕸️ Neu in 3.9: eine schnellere, übersichtlichere Website-Karte
 

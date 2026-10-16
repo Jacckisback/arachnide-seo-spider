@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Versione 3.9.0">
+  <img src="https://img.shields.io/badge/version-3.10.0-3d5f17" alt="Versione 3.10.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,20 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🌳 Novità della 3.10: una mappa classica, pronta da mostrare
+
+Una mappa più leggibile, da mostrare così com’è a un cliente o a un responsabile — e un controllo più fine di ciò che scansioni e mappi.
+
+<p align="center"><img src="docs/screenshots/viz-classic-tree.png" alt="Mappa in stile Classico: albero di scansione orizzontale su sfondo bianco, un’etichetta per pagina, elenchi lunghi riassunti come «+ N altre pagine»" width="100%"></p>
+
+- **Stile classico (nuovo predefinito)**: sfondo bianco, collegamenti sottili, etichette scure — nello spirito dell’albero di scansione di Screaming Frog. Lo stile *Scuro* resta a un clic, in 2D come in 3D.
+- **Albero orizzontale**: la home a sinistra, una colonna per livello, un’etichetta per pagina. Gli elenchi lunghi vengono riassunti («+ 28 altre pagine», i problemi delle pagine nascoste restano segnalati) e *Mostra l’elenco completo* li espande; la pagina selezionata resta sempre visibile. In *Directory*, ogni directory mostra il proprio percorso relativo alla directory padre, come in un file manager.
+- **Esportazioni pronte da inviare**: il PNG / PDF ha ora un’intestazione (sito, vista, data della scansione, pagine mostrate), la legenda e il contesto.
+- **Nessun URL inventato**: in *Directory*, una pagina come `/en` porta ora la sua directory `/en/` invece di mostrare accanto un falso URL `/en/`; una directory senza pagina al proprio indirizzo è presentata come un raggruppamento (`/blog/page/*`).
+- **Includere / escludere URL nella mappa**: un pattern per riga — testo semplice (`/en/`), carattere jolly (`/en/*/page-*`) o espressione regolare (`/en/(.*)`). Il filtro *Directory* ora funziona a tutti i livelli (`/en/blog/`).
+- **Perimetro della scansione**: includi / escludi accettano una regex per riga, e la nuova opzione *Resta nella directory di partenza* scansiona solo sotto la directory dell’URL di partenza (come deselezionare «Crawl Outside of Start Folder» in Screaming Frog). Da riga di comando: ripeti `--include` / `--exclude`, aggiungi `--stay-in-folder`.
+- **Più robusto**: un URL di partenza non valido (`htp:/x`, `javascript:…`, un semplice numero) viene rifiutato con un messaggio chiaro, i numeri assurdi vengono riportati a limiti sicuri, una scansione che non può essere salvata lo segnala. Nuovi test end-to-end e «monkey» pilotano la vera interfaccia in un browser (clic casuali, input insensati, ridimensionamenti) a ogni esecuzione dei test.
 
 ## 🕸️ Novità della 3.9: una mappa del sito più veloce e più chiara
 

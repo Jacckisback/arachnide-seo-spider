@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.9.0-3d5f17" alt="Version 3.9.0">
+  <img src="https://img.shields.io/badge/version-3.10.0-3d5f17" alt="Version 3.10.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,20 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🌳 Nouveau en 3.10 : une cartographie classique, prête à montrer
+
+Une cartographie plus lisible, à montrer telle quelle à un client ou à un manager — et un contrôle plus fin de ce que vous crawlez et cartographiez.
+
+<p align="center"><img src="docs/screenshots/viz-classic-tree.png" alt="Cartographie en style Classique : arbre de crawl horizontal sur fond blanc, un libellé par page, longues listes résumées en « + N autres pages »" width="100%"></p>
+
+- **Style classique (nouveau par défaut)** : fond blanc, liens fins, libellés foncés — dans l’esprit de l’arbre de crawl de Screaming Frog. Le style *Sombre* reste à un clic, en 2D comme en 3D.
+- **Arbre horizontal** : l’accueil à gauche, une colonne par niveau, un libellé par page. Les longues listes sont résumées (« + 28 autres pages », les problèmes des pages masquées restent signalés) et *Afficher toute la liste* les déplie ; la page sélectionnée reste toujours visible. En *Répertoires*, chaque dossier affiche son chemin relatif au dossier parent, comme un explorateur de fichiers.
+- **Exports prêts à envoyer** : le PNG / PDF a désormais un en-tête (site, vue, date du crawl, pages affichées), la légende et le contexte.
+- **Aucune URL inventée** : en *Répertoires*, une page comme `/en` porte désormais son dossier `/en/` au lieu d’afficher une fausse URL `/en/` à côté ; un dossier sans page à son adresse est présenté comme un regroupement (`/blog/page/*`).
+- **Inclure / exclure des URL dans la carte** : un motif par ligne — texte (`/en/`), joker (`/en/*/page-*`) ou expression régulière (`/en/(.*)`). Le filtre *Dossier* fonctionne désormais à tous les niveaux (`/en/blog/`).
+- **Périmètre du crawl** : inclure / exclure acceptent une regex par ligne, et la nouvelle option *Rester dans le dossier de départ* ne crawle que sous le dossier de l’URL de départ (comme « Crawl Outside of Start Folder » décoché dans Screaming Frog). En ligne de commande : répétez `--include` / `--exclude`, ajoutez `--stay-in-folder`.
+- **Plus robuste** : une URL de départ invalide (`htp:/x`, `javascript:…`, un simple nombre) est refusée avec un message clair, les nombres absurdes sont ramenés à des bornes sûres, un crawl impossible à enregistrer le signale. De nouveaux tests de bout en bout et « singe » pilotent la vraie interface dans un navigateur (clics au hasard, saisies absurdes, redimensionnements) à chaque lancement des tests.
 
 ## 🕸️ Nouveau en 3.9 : une cartographie plus rapide et plus lisible
 

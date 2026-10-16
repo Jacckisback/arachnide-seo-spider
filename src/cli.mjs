@@ -59,8 +59,9 @@ Usage : node src/cli.mjs <url> [options]
   --ignore-robots     Ignore robots.txt (same as --robots ignore)
   --subdomains        Crawl subdomains too
   --no-sitemap        Do not read XML sitemaps
-  --include REGEX     Only crawl matching URLs
-  --exclude REGEX     Skip matching URLs
+  --include REGEX     Only crawl matching URLs (repeatable: one regex per flag)
+  --exclude REGEX     Skip matching URLs (repeatable)
+  --stay-in-folder    Do not crawl outside the start URL's folder (https://x.com/blog/ → /blog/… only)
   --search TEXT       Custom search in the source code (/regex/ supported)
   --lang CODE         en | fr | de | es | it | pt (labels, CSV, report)
   --csv               Also export pages.csv and issues.csv
@@ -89,8 +90,9 @@ const opts = toCrawlerOptions({
   crawlSubdomains: flag('subdomains'),
   useSitemaps: !flag('no-sitemap'),
   render: flag('render'),
-  include: val('include', ''),
-  exclude: val('exclude', ''),
+  include: vals('include').join('\n'),
+  exclude: vals('exclude').join('\n'),
+  stayInFolder: flag('stay-in-folder'),
   search: val('search', ''),
   removeParams: val('remove-params', ''),
   httpUser,

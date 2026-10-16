@@ -39,18 +39,55 @@ export function buildModel(R, graph) {
     }
   }
   const resources = R.pages.filter((p) => p.url.startsWith('http') && !isPageNode(p)).length;
-  const maxDepth = Math.max(0, ...pages.map((p) => p.depth ?? 0));
-  return { R, home, pages, byUrl, issues, out, inl, linkCount, resources, maxDepth, worst: (u) => issues.get(u)?.[0]?.severity || null };
+  const maxDepth = pages.reduce((m, p) => Math.max(m, p.depth ?? 0), 0);
+  const folders = foldersOf(pages);
+  return { R, home, pages, byUrl, issues, out, inl, linkCount, resources, maxDepth, folders, dirOf: (u) => topDir(u, folders), worst: (u) => issues.get(u)?.[0]?.severity || null };
 }
 
 // Premier segment du chemin (« /agenda/ ») : sert au regroupement et à la couleur par répertoire.
-export function topDir(url) {
+// Une URL sans barre finale (« /en ») appartient au dossier « /en/ » quand d'autres pages vivent sous ce dossier :
+// c'est la racine de la section, pas une page isolée à la racine du site. `folders` = dossiers observés dans le crawl.
+export function topDir(url, folders) {
   try {
-    const seg = new URL(url).pathname.split('/').filter(Boolean);
-    return seg.length > 1 || new URL(url).pathname.endsWith('/') ? (seg[0] ? '/' + seg[0] + '/' : '/') : '/';
+    const path = new URL(url).pathname;
+    const seg = path.split('/').filter(Boolean);
+    if (!seg.length) return '/';
+    if (seg.length > 1 || path.endsWith('/')) return '/' + seg[0] + '/';
+    return folders?.has('/' + seg[0] + '/') ? '/' + seg[0] + '/' : '/';
   } catch {
     return '/';
   }
+}
+
+// Dossiers réellement observés (au moins une page dont l'URL passe par ce dossier), chemin complet : « /en/blog/ ».
+export function foldersOf(pages) {
+  const out = new Set();
+  for (const p of pages) {
+    let path;
+    try {
+      path = new URL(p.url).pathname;
+    } catch {
+      continue;
+    }
+    const seg = path.split('/').filter(Boolean);
+    const n = path.endsWith('/') ? seg.length : seg.length - 1;
+    let cur = '/';
+    for (let i = 0; i < n; i++) out.add((cur += seg[i] + '/'));
+  }
+  return out;
+}
+
+// Une page appartient à un dossier si son chemin commence par celui-ci, ou si elle en est la racine sans barre finale
+// (« /en » pour « /en/ »). Le dossier « / » contient tout.
+export function inFolder(url, folder) {
+  if (!folder || folder === '/') return true;
+  let path;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  return path.startsWith(folder) || path + '/' === folder;
 }
 
 // Structure d'arbre commune : nœuds { id, kind: page | folder | unreached, url?, page? }, parent et enfants.
@@ -94,14 +131,16 @@ export function crawlTree(M) {
   return { ...tree, inferred };
 }
 
-// Arbre des répertoires : un dossier virtuel par segment ; une page dont l'URL est le dossier lui-même
-// (« /blog/ ») est rattachée au dossier au lieu de créer un doublon.
+// Arbre des répertoires : un dossier virtuel par segment. Une page dont l'URL est le dossier lui-même (« /blog/ »)
+// ou sa racine sans barre finale (« /blog ») est portée par le dossier au lieu de créer un doublon : la carte n'affiche
+// jamais une URL qui n'a pas été crawlée. Un dossier sans page à son adresse est libellé « /blog/* » (regroupement).
 export function dirTree(M) {
   const rootId = 'dir:/';
   const tree = makeTree(rootId);
   const homePage = M.byUrl.get(M.home);
   tree.nodes.set(rootId, { id: rootId, kind: 'folder', label: hostOf(M.home), path: '/', page: homePage, url: homePage?.url });
   const origin = safeOrigin(M.home);
+  const items = [];
   for (const p of [...M.pages].sort((a, b) => a.url.localeCompare(b.url))) {
     if (p === homePage) continue;
     let u;
@@ -113,31 +152,46 @@ export function dirTree(M) {
     const segs = u.pathname.split('/').filter(Boolean);
     const isDir = u.pathname.endsWith('/');
     let parent = rootId;
-    if (u.origin !== origin) {
+    const pre = u.origin !== origin ? u.origin : '';
+    if (pre) {
       parent = 'dir:' + u.origin;
       if (!tree.nodes.has(parent)) {
-        tree.nodes.set(parent, { id: parent, kind: 'folder', label: u.host, path: u.origin });
+        tree.nodes.set(parent, { id: parent, kind: 'folder', label: u.host, path: u.origin + '/', other: true });
         attach(tree, parent, rootId);
       }
     }
-    const dirSegs = isDir ? segs : segs.slice(0, -1);
-    let path = (u.origin !== origin ? u.origin : '') + '/';
-    for (const s of dirSegs) {
+    let path = pre + '/';
+    for (const s of isDir ? segs : segs.slice(0, -1)) {
       path += s + '/';
       const id = 'dir:' + path;
       if (!tree.nodes.has(id)) {
-        tree.nodes.set(id, { id, kind: 'folder', label: path, path });
+        tree.nodes.set(id, { id, kind: 'folder', path });
         attach(tree, id, parent);
       }
       parent = id;
     }
-    // L'URL du dossier est une vraie page : on la porte par le dossier (sans query, sinon c'est une page enfant).
-    if (isDir && !u.search && tree.nodes.get(parent).kind === 'folder' && !tree.nodes.get(parent).page) {
-      Object.assign(tree.nodes.get(parent), { page: p, url: p.url });
+    items.push({ p, u, isDir, parent, self: !isDir && segs.length ? 'dir:' + path + segs[segs.length - 1] + '/' : null });
+  }
+  // 1) L'URL exacte du dossier (« /blog/ ») porte le dossier ; 2) à défaut, sa variante sans barre (« /blog »).
+  const place = [];
+  for (const it of items) {
+    const f = tree.nodes.get(it.parent);
+    if (it.isDir && !it.u.search && f.kind === 'folder' && !f.page && !f.other) Object.assign(f, { page: it.p, url: it.p.url });
+    else place.push(it);
+  }
+  for (const it of place) {
+    const f = it.self && !it.u.search ? tree.nodes.get(it.self) : null;
+    if (f && !f.page) {
+      Object.assign(f, { page: it.p, url: it.p.url, noSlash: true });
       continue;
     }
-    tree.nodes.set(p.url, { id: p.url, kind: 'page', url: p.url, page: p });
-    attach(tree, p.url, parent);
+    tree.nodes.set(it.p.url, { id: it.p.url, kind: 'page', url: it.p.url, page: it.p });
+    attach(tree, it.p.url, it.parent);
+  }
+  for (const n of tree.nodes.values()) {
+    if (n.kind !== 'folder' || n.id === rootId || n.other) continue;
+    const path = n.path.replace(/^https?:\/\/[^/]+/, '');
+    n.label = n.page ? safePath(n.page.url) : decodeSafe(path) + '*';
   }
   return tree;
 }
@@ -199,6 +253,21 @@ function hostOf(u) {
     return new URL(u).host;
   } catch {
     return u;
+  }
+}
+function safePath(u) {
+  try {
+    const x = new URL(u);
+    return decodeSafe(x.pathname + x.search);
+  } catch {
+    return u;
+  }
+}
+function decodeSafe(s) {
+  try {
+    return decodeURI(s);
+  } catch {
+    return s;
   }
 }
 function safeOrigin(u) {
