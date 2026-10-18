@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Version 3.11.0">
+  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Version 3.12.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,14 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🎨 New in 3.12: a design pass across the whole app
+
+A full UX, colour and typography audit of every page, in both themes, on desktop and mobile — then the fixes.
+
+- **Real typography**: the Inter Variable font is now bundled (offline, SIL OFL licence), so every weight renders the same on every machine; 23 scattered text sizes became one 8-step scale, with consistent headings, radii and spacing.
+- **Readable light theme**: every coloured text (warnings, OK states, links, muted labels, effort badges) now meets WCAG AA contrast (4.5:1) on the backgrounds it sits on — 103 measured failures brought to 0.
+- **Smoother details**: the Fixes page now works on a crawl opened from a file; the page detail panel no longer lingers on pages without a table; the selected table row is marked cleanly; the theme button shows what it will do; the simulation switch is visible again.
 
 ## 🧭 New in 3.11: site map and 2D / 3D visualisation, side by side
 

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Version 3.11.0">
+  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Version 3.12.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,14 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🎨 Neu in 3.12: ein Design-Feinschliff für die gesamte App
+
+Ein umfassendes UX-, Farb- und Typografie-Audit jeder Seite, in beiden Designs, auf Desktop und Mobilgerät – anschließend die Korrekturen.
+
+- **Echte Typografie**: Die Schrift Inter Variable ist jetzt mitgeliefert (offline, SIL-OFL-Lizenz), sodass jede Schriftstärke auf jedem Rechner gleich dargestellt wird; 23 verstreute Schriftgrößen wurden zu einer Skala mit 8 Stufen, mit einheitlichen Überschriften, Rundungen und Abständen.
+- **Gut lesbares helles Design**: Jeder farbige Text (Warnungen, OK-Zustände, Links, nachrangige Beschriftungen, Aufwands-Badges) erreicht auf seinem Hintergrund jetzt den WCAG-AA-Kontrast (4,5:1) – 103 gemessene Verstöße wurden auf 0 gesenkt.
+- **Geschmeidigere Details**: Die Seite „Korrekturen“ funktioniert jetzt auch bei einem aus einer Datei geöffneten Crawl; das Seitendetail-Panel bleibt auf Seiten ohne Tabelle nicht mehr stehen; die ausgewählte Tabellenzeile ist sauber markiert; die Design-Schaltfläche zeigt, was sie bewirkt; der Simulationsschalter ist wieder sichtbar.
 
 ## 🧭 Neu in 3.11: Sitemap und 2D-/3D-Visualisierung nebeneinander
 

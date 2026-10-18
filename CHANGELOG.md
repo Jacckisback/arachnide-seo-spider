@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.12.0 — 2026-10-18
+
+Design audit of the whole interface (every page, dark and light themes, 1440 px and 390 px), measured with real contrast ratios, then fixed.
+
+### Typography
+- **Inter Variable bundled** (`public/fonts`, latin + latin-ext, upright and italic, SIL OFL 1.1). The stylesheet named Inter but never loaded it, so most machines rendered a system font and the intermediate weights (550 / 650 / 750) did not exist. Weights are now 400 / 500 / 600 / 700 / 800 on a variable font, with the `cv11` / `ss01` features and a preload of the main file.
+- One type scale (`--fs-xs` … `--fs-hero`, 8 steps) replaces 23 distinct sizes; page titles share one size (`--fs-h1`), section titles another (`--fs-h2`); eyebrow letter-spacing unified; `h1`–`h4` get a shared line-height and wrapping rule.
+- Radii reduced to a 4-step scale (`--r-sm` / `--r-md` / `--r-lg` / `--r-xl`), applied to buttons, inputs, cards and dialogs.
+
+### Colour & contrast
+- Light theme palette rebuilt so that every text colour reaches ≥ 4.5:1 on every background it is used on (page, card, secondary card, soft badge backgrounds): `--muted`, `--accent`, `--err`, `--warn`, `--ok`, `--info` darkened; effort colours (`--eff-lo` / `--eff-mid` / `--eff-hi`) and Core Web Vitals colours become theme tokens instead of dark-only hex values (they were 1.5:1 on white).
+- Dark theme: white text on warning / OK badges replaced by the ink colour (it was 1.7:1); tooltip, CWV, switch and warning fallbacks now use tokens.
+- Measured with an in-browser WCAG script over all pages: 103 failing text elements in the light theme → 0 (the 3 remaining hits are false positives on the dark visualisation stage).
+
+### UX fixes found by the audit
+- **Fixes tab on an imported crawl** showed a raw English “No crawl loaded”: a crawl opened from a file is now also sent to the server (`POST /api/result`), so Fixes, comparisons and the MCP tools work on what the user is looking at; error keys are translated.
+- The page detail panel stayed open on pages without a table (Robots, dashboard…); it now hides there and comes back with its selection on table pages.
+- Selected table row: the accent marker is painted on the first cell (the row box-shadow drew a full-width line in Chrome).
+- Theme button shows a sun in dark mode and a moon in light mode (it always showed a moon); duplicate icon removed.
+- Simulation switch on the Fixes page was an invisible checkbox with its label cut off; banners wrap on narrow widths.
+- Dashboard card headers wrap on mobile instead of breaking the title word by word; buttons have a visible hover background; `.woff2` files are served with the right MIME type.
+
 ## 3.11.0 — 2026-10-16
 
 - **Two map tabs**: *Site map* is now the classic, Screaming Frog-style map only (white background, horizontal tree, 2D; the style / layout / 3D switches are gone from it). The 3.9 exploration view is back as its own tab, **2D / 3D visualisation**, right below *Site map* in the sidebar: dark style, radial layout, 2D or 3D, coloured by SEO issues by default. Both tabs share the data, filters, search and inspector, and remember their own settings.
