@@ -120,7 +120,8 @@ export async function renderFixTab(view) {
   try {
     await loadFixData();
   } catch (e) {
-    view.innerHTML = `<div class="banner warn">${C.icon('alert')} ${esc(e.message)}</div>`;
+    // Message traduit quand le serveur donne une clé (ex. aucun crawl côté serveur), sinon le message brut.
+    view.innerHTML = `<div class="banner warn">${C.icon('alert')} ${esc(e.key ? T(e.key) : e.message)}</div>`;
     return;
   }
   paint();
@@ -348,7 +349,8 @@ export async function renderFixHistory(view) {
   try {
     ({ fixes: FS.fixes } = await api('/api/fix/list'));
   } catch (e) {
-    view.innerHTML = `<div class="banner warn">${C.icon('alert')} ${esc(e.message)}</div>`;
+    // Message traduit quand le serveur donne une clé (ex. aucun crawl côté serveur), sinon le message brut.
+    view.innerHTML = `<div class="banner warn">${C.icon('alert')} ${esc(e.key ? T(e.key) : e.message)}</div>`;
     return;
   }
   paintHistory(view);

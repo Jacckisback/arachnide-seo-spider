@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Versione 3.11.0">
+  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Versione 3.12.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,14 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🎨 Novità della 3.12: una revisione del design su tutta l'applicazione
+
+Un audit completo di UX, colori e tipografia di ogni pagina, in entrambi i temi, su desktop e su mobile, e poi le correzioni.
+
+- **Una vera tipografia**: il font Inter Variable è ora incluso (offline, licenza SIL OFL), così ogni peso viene visualizzato allo stesso modo su qualsiasi macchina; 23 dimensioni di testo sparse diventano una scala di 8 livelli, con titoli, raggi e spaziature coerenti.
+- **Tema chiaro leggibile**: tutti i testi colorati (avvisi, stati OK, link, etichette secondarie, badge di impegno) raggiungono ora il contrasto WCAG AA (4,5:1) sugli sfondi su cui sono posti: 103 difetti misurati ridotti a 0.
+- **Dettagli più curati**: la pagina «Correzioni» funziona con una scansione aperta da un file; il pannello di dettaglio della pagina non resta più visibile sulle pagine senza tabella; la riga selezionata di una tabella è evidenziata in modo pulito; il pulsante del tema mostra ciò che farà; l'interruttore della simulazione è di nuovo visibile.
 
 ## 🧭 Novità della 3.11: mappa del sito e visualizzazione 2D / 3D, fianco a fianco
 

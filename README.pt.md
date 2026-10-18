@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Versão 3.11.0">
+  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Versão 3.12.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,14 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🎨 Novidades da 3.12: uma revisão de design em toda a aplicação
+
+Uma auditoria completa de UX, cores e tipografia de cada página, nos dois temas, no computador e no telemóvel, e depois as correções.
+
+- **Uma tipografia a sério**: o tipo de letra Inter Variable passa a vir incluído (offline, licença SIL OFL), pelo que cada espessura aparece igual em todas as máquinas; 23 tamanhos de texto dispersos tornam-se uma escala de 8 níveis, com títulos, raios e espaçamentos coerentes.
+- **Tema claro legível**: todos os textos coloridos (avisos, estados OK, ligações, etiquetas secundárias, selos de esforço) atingem agora o contraste WCAG AA (4,5:1) sobre os fundos em que estão colocados: 103 falhas medidas reduzidas a 0.
+- **Detalhes mais cuidados**: a página «Correções» funciona com um rastreio aberto a partir de um ficheiro; o painel de detalhe da página já não fica visível nas páginas sem tabela; a linha selecionada de uma tabela é assinalada de forma limpa; o botão do tema mostra o que vai fazer; o interruptor de simulação voltou a estar visível.
 
 ## 🧭 Novidades da 3.11: mapa do site e visualização 2D / 3D, lado a lado
 

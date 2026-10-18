@@ -302,6 +302,7 @@ function render() {
     state.vizHandle = null;
   }
   view.classList.toggle('full', isMap && !!state.R);
+  renderDetail();
   if (!state.R) {
     if (state.tab === 'internal' && state.live.length) return renderTable(view, liveTab(), state.live);
     return state.running ? renderRunning(view) : renderHome(view);
@@ -1245,7 +1246,8 @@ function selectUrl(url) {
 function renderDetail() {
   const box = $('#detail');
   const url = state.selected;
-  if (!url) { box.hidden = true; return; }
+  // Le panneau accompagne un tableau : sur les autres pages il se cache (la sélection est gardée pour le retour).
+  if (!url || !TAB_BY_ID[state.tab]?.rows) { box.hidden = true; return; }
   const p = state.R ? linkGraph().byUrl.get(url) : state.live.find((x) => x.url === url);
   box.hidden = false;
   const pageIssues = state.R ? state.R.issues.filter((i) => i.items.some((it) => it.url === url)) : [];
@@ -1453,8 +1455,10 @@ $('#reportForm').addEventListener('submit', async (e) => {
 });
 
 /* ---------- Chargement ---------- */
-async function loadResult(R) {
+async function loadResult(R, { sync = true } = {}) {
   if (!R || !R.pages || !R.summary) throw new Error(t('toast.invalidFile'));
+  // Crawl ouvert depuis un fichier : le serveur l'adopte aussi, pour que Corrections et MCP voient le même audit.
+  if (sync) fetch('/api/result', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) }).catch(() => {});
   if (!R.version || R.version < 2) toast(t('toast.oldVersion'), 'info');
   state.R = R;
   state.graph = null;
@@ -1871,7 +1875,7 @@ function connect() {
   es.addEventListener('done', async () => {
     setRunning(false);
     try {
-      await loadResult(await fetch('/api/result').then((r) => r.json()));
+      await loadResult(await fetch('/api/result').then((r) => r.json()), { sync: false });
       toast(t('toast.done'), 'ok');
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -1880,13 +1884,15 @@ function connect() {
 
 /* ---------- Thème & langue ---------- */
 const savedTheme = store.get('theme');
-if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-else document.documentElement.dataset.theme = 'dark'; // thème sombre par défaut (direction graphique du tableau de bord)
+document.documentElement.dataset.theme = savedTheme === 'light' ? 'light' : 'dark'; // thème sombre par défaut (direction graphique du tableau de bord)
+// Le bouton montre ce qu'il fera : un soleil en thème sombre, une lune en thème clair.
+const paintThemeBtn = () => { $('#themeBtn').innerHTML = icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon'); };
+paintThemeBtn();
 $('#themeBtn').addEventListener('click', () => {
-  const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const next = cur === 'dark' ? 'light' : 'dark';
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   store.set('theme', next);
+  paintThemeBtn();
 });
 
 async function setLang(code) {
@@ -1936,6 +1942,6 @@ document.addEventListener('keydown', (e) => {
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());
-    if (s.hasResult && !s.running) await loadResult(await fetch('/api/result').then((r) => r.json()));
+    if (s.hasResult && !s.running) await loadResult(await fetch('/api/result').then((r) => r.json()), { sync: false });
   } catch { /* serveur indisponible */ }
 })();

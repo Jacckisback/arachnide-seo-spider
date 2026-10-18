@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Version 3.11.0">
+  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Version 3.12.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,14 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🎨 Nouveau en 3.12 : une passe de design sur toute l’application
+
+Un audit complet UX, couleurs et typographie de chaque page, dans les deux thèmes, sur ordinateur et sur mobile — puis les corrections.
+
+- **Une vraie typographie** : la police Inter Variable est désormais embarquée (hors ligne, licence SIL OFL), donc chaque graisse s’affiche pareil sur toutes les machines ; 23 tailles de texte éparses deviennent une échelle de 8 crans, avec titres, arrondis et espacements cohérents.
+- **Thème clair lisible** : tous les textes colorés (avertissements, états OK, liens, libellés secondaires, badges d’effort) atteignent le contraste WCAG AA (4,5:1) sur les fonds où ils sont posés — 103 défauts mesurés ramenés à 0.
+- **Détails plus fluides** : la page Corrections fonctionne sur un crawl ouvert depuis un fichier ; le panneau de détail d’une page ne reste plus affiché sur les pages sans tableau ; la ligne sélectionnée d’un tableau est marquée proprement ; le bouton de thème montre ce qu’il va faire ; l’interrupteur de simulation est de nouveau visible.
 
 ## 🧭 Nouveau en 3.11 : cartographie et visualisation 2D / 3D, côte à côte
 

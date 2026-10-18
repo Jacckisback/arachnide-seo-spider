@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.11.0-3d5f17" alt="Versión 3.11.0">
+  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Versión 3.12.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,14 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 🎨 Novedades de la 3.12: un repaso de diseño en toda la aplicación
+
+Una auditoría completa de UX, color y tipografía de cada página, en ambos temas, en ordenador y en móvil, y después las correcciones.
+
+- **Una tipografía de verdad**: la fuente Inter Variable ahora va incluida (sin conexión, licencia SIL OFL), así que cada grosor se ve igual en todos los equipos; 23 tamaños de texto dispersos pasan a ser una escala de 8 niveles, con títulos, radios y espaciados coherentes.
+- **Tema claro legible**: todos los textos de color (avisos, estados OK, enlaces, etiquetas secundarias, insignias de esfuerzo) alcanzan ahora el contraste WCAG AA (4,5:1) sobre los fondos en que se muestran: 103 fallos medidos se reducen a 0.
+- **Detalles más cuidados**: la página «Correcciones» funciona con un rastreo abierto desde un archivo; el panel de detalle de página ya no se queda en las páginas sin tabla; la fila seleccionada de una tabla se marca limpiamente; el botón de tema muestra lo que va a hacer; el interruptor de simulación vuelve a ser visible.
 
 ## 🧭 Novedades de la 3.11: mapa del sitio y visualización 2D / 3D, lado a lado
 
