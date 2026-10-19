@@ -1240,3 +1240,14 @@ button.link.accent { color: var(--accent); font-weight: 600; }
 .mf-urls p { grid-column: 1 / -1; margin: 0; }
 .mf-bad { color: var(--warn); font-size: 12px; }
 @media (max-width: 640px) { .mf-urls { grid-template-columns: 1fr; } }
+
+/* Paramètres → Agents IA */
+.ag-block { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); margin: 10px 0; }
+.ag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ag-k { min-width: 170px; color: var(--muted); font-size: var(--fs-md); }
+.ag-row code { flex: 1 1 200px; min-width: 0; padding: 5px 8px; border-radius: var(--r-sm); background: var(--panel); border: 1px solid var(--line); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.ag-token[data-shown="0"] { letter-spacing: .04em; }
+.ag-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.ag-log td { padding: 4px 6px; vertical-align: top; }
+.ag-log .nowrap { white-space: nowrap; }
+.ag-log code { font-size: var(--fs-sm); }

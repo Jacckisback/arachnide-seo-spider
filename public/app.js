@@ -5,6 +5,7 @@ import { buildReport } from './shared/report.js';
 import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
 import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.js';
+import { initAgents } from './agents.js';
 import { summarize, filterSort, summaryHtml, listHtml, detailHtml } from './issues.js';
 import { reconcile, storeKey, summary as planSummary, visible as planVisible, actionTitles as planTitles, defaultStatus as planDefault, cardsHtml as planCardsHtml, tableHtml as planTableHtml, detailHtml as planDetailHtml } from './plan.js';
 import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
@@ -18,6 +19,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const PAGE_SIZE = 100;
+const agentListeners = [];
 const store = {
   get(k, d = null) {
     try { const v = localStorage.getItem('arachnide.' + k); return v === null ? d : JSON.parse(v); } catch { return d; }
@@ -1871,6 +1873,9 @@ function connect() {
   es.addEventListener('status', (e) => showProgress({ ...(state.progress || { crawled: 0, queued: 0, discovered: 0, maxPages: 1, elapsed: 0 }), phase: JSON.parse(e.data).phase }));
   es.addEventListener('progress', (e) => showProgress(JSON.parse(e.data)));
   es.addEventListener('warning', (e) => { const w = JSON.parse(e.data); toast(t(w.key, w.params), 'error'); });
+  // Activité des agents IA (MCP / REST) : le journal se met à jour et un crawl lancé par un agent est annoncé.
+  es.addEventListener('agent', (e) => { const d = JSON.parse(e.data); agentListeners.forEach((fn) => fn(d)); if (d.tool && !/status|list|get_|search|summary|plan|geo/.test(d.tool)) toast(t('toast.agentCall', { tool: d.tool.replace(/^arachnide_/, '') }), 'info'); });
+  es.addEventListener('reset', (e) => { const d = JSON.parse(e.data || '{}'); if (d.via === 'agent') toast(t('toast.agentCrawl', { url: d.startUrl }), 'info'); });
   es.addEventListener('pages', (e) => { state.live.push(...JSON.parse(e.data)); throttledRender(); });
   es.addEventListener('done', async () => {
     setRunning(false);
@@ -1939,6 +1944,7 @@ document.addEventListener('keydown', (e) => {
   if (state.env.version) $('#version').textContent = 'v' + state.env.version;
   await setLang(detectLang(store.get('lang')));
   initFix({ t: () => t, esc, icon, toast, getResult: () => state.R, rerender: () => { renderTabs(); render(); } }).catch(() => {});
+  initAgents({ t: () => t, esc, toast, onAgentEvent: (fn) => agentListeners.push(fn) }).catch(() => {});
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Versione 3.12.0">
+  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Versione 3.13.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,15 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🤝 Novità della 3.13: collega il tuo agente IA (Claude, ChatGPT…) ad Arachnide
+
+Arachnide diventa gli occhi e le mani del tuo agente SEO / GEO. L’agente legge l’audit che hai aperto, avvia crawl che compaiono in diretta nell’applicazione, esplora le pagine, ottiene il piano d’azione prioritizzato e il nuovo report sulla **prontezza GEO**, e corregge il sito con la tua approvazione.
+
+- **Tre accessi, 24 strumenti**: MCP via stdio (Claude Code, Claude Desktop), **MCP via HTTP** (`/mcp`, per i connettori personalizzati di claude.ai e gli agenti ospitati) e **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` — da importare con un clic come Action di ChatGPT). Gli stessi strumenti ovunque, definiti una sola volta.
+- **Token di accesso** creato al primo avvio, visibile e rinnovabile in *Impostazioni → Agenti IA*, con snippet pronti da incollare (configurazione di Claude Desktop, impostazioni dell’Action di ChatGPT, richiesta di prova), un campo per l’URL pubblico per i tunnel (cloudflared, ngrok, Tailscale) e il registro delle ultime chiamate degli agenti.
+- **Nuovi strumenti**: `arachnide_action_plan` (il piano ordinato dell’app, con i quick win segnalati), `arachnide_search_pages` (filtrare e ordinare le pagine per Link Score, profondità, stato, cartella, problema), `arachnide_geo_readiness` (accesso dei crawler IA, llms.txt, dati strutturati, profondità dei contenuti → punteggio 0-100 e raccomandazioni), `arachnide_start_crawl` + `arachnide_crawl_status` (crawl in background, visibile in diretta nell’app). `crawl_id: "current"` indica sempre l’audit aperto nell’app.
+- Guida e istruzioni di sistema suggerite per un agente SEO / GEO: [docs/AGENTS.md](docs/AGENTS.md).
 
 ## 🎨 Novità della 3.12: una revisione del design su tutta l'applicazione
 

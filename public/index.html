@@ -71,6 +71,7 @@
           <button type="button" data-cfg="auth" data-i18n="cfg.auth">Authentication</button>
           <button type="button" data-cfg="google" data-i18n="cfg.google">Google</button>
           <button type="button" data-cfg="ai" data-i18n="cfg.ai">AI</button>
+          <button type="button" data-cfg="agents" data-i18n="cfg.agents">AI agents</button>
         </nav>
         <div class="cfg-body">
           <section data-pane="spider">
@@ -183,6 +184,32 @@
             </div>
             <div class="ai-actions"><button type="button" class="btn small" id="aiSave" data-i18n="ai.save">Save</button><button type="button" class="btn small" id="aiTest" data-i18n="ai.test">Test the connection</button><button type="button" class="btn small" id="aiForget" data-i18n="ai.forget">Forget the key</button><span id="aiStatus" class="muted"></span></div>
             <p class="cfg-help" data-i18n="ai.privacy"></p>
+          </section>
+          <section data-pane="agents" hidden>
+            <!-- Pas d'attribut name : rien ici n'est une option de crawl. -->
+            <h4 data-i18n="agents.title">Connect your AI agents (Claude, ChatGPT…)</h4>
+            <p class="cfg-help" data-i18n="agents.help"></p>
+            <label class="check"><input type="checkbox" id="agEnabled"> <span data-i18n="agents.enabled">Allow AI agents to connect</span></label>
+            <div class="ag-block">
+              <div class="ag-row"><span class="ag-k" data-i18n="agents.token">Access token</span><code id="agToken" class="ag-token" data-shown="0"></code>
+                <button type="button" class="btn small" id="agReveal" data-i18n="agents.reveal">Show</button>
+                <button type="button" class="btn small" id="agCopy" data-i18n="agents.copy">Copy</button>
+                <button type="button" class="btn small ghost" id="agRotate" data-i18n="agents.rotate">Renew</button></div>
+              <p class="muted small" id="agFromEnv" hidden data-i18n="agents.fromEnv"></p>
+              <div class="ag-row"><span class="ag-k" data-i18n="agents.mcpUrl">MCP URL (Claude)</span><code id="agMcpUrl"></code><button type="button" class="btn small" id="agCopyMcp" data-i18n="agents.copy">Copy</button></div>
+              <div class="ag-row"><span class="ag-k" data-i18n="agents.openapiUrl">OpenAPI URL (ChatGPT)</span><code id="agOpenapiUrl"></code><button type="button" class="btn small" id="agCopyOpenapi" data-i18n="agents.copy">Copy</button></div>
+              <p class="muted small" id="agTools"></p>
+            </div>
+            <label class="block"><span data-i18n="agents.publicUrl">Public URL (HTTPS), when Arachnide is reachable from the internet</span><input id="agPublicUrl" type="url" placeholder="https://seo.example.com" spellcheck="false"></label>
+            <p class="cfg-help" id="agLocalNote" data-i18n="agents.localNote"></p>
+            <div class="ag-actions">
+              <button type="button" class="btn" id="agCopyDesktop" data-icon="copy"><span data-i18n="agents.copyDesktop">Copy the Claude Desktop config</span></button>
+              <button type="button" class="btn" id="agCopyChatgpt" data-icon="copy"><span data-i18n="agents.copyChatgpt">Copy the ChatGPT Action settings</span></button>
+              <button type="button" class="btn ghost" id="agCopyCurl" data-icon="code"><span data-i18n="agents.copyCurl">Copy a test request</span></button>
+              <a class="btn ghost" href="https://github.com/Jacckisback/arachnide-seo-spider/blob/main/docs/AGENTS.md" target="_blank" rel="noopener" data-icon="external"><span data-i18n="agents.docs">Full guide</span></a>
+            </div>
+            <h4 data-i18n="agents.log">Latest agent calls</h4>
+            <div id="agLog"></div>
           </section>
         </div>
       </div>
