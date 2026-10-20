@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.15.0 — 2026-10-20
+
+### New: Google Analytics 4 — orphan pages that get traffic
+Suggested by an SEO professional after 3.14: Search Console only sees pages that show up in Google; GA4 sees every visit (direct, email, social, ads, search).
+- **Connection**: GA4 Data API with a service account (the Search Console one works once it is a Viewer of the property), property auto-detected from the site's web data stream (Admin API) or given as an ID (`123456789`, `properties/…` or a GA4 URL); or **import of a GA4 CSV export** (*Pages and screens* or *Landing page*; `#` comment lines, the 6 interface languages, `,` `;` or tab separators, paths or full URLs). Period up to 730 days.
+- **Matching**: host + path rows are tied to crawled URLs (trailing slash and query variants added up); other hosts and `(not set)` are ignored. Each page gets `ga4 = { sessions, views, users, engaged }`; pages seen only in GA4 go to `ga4Only`.
+- **4 new checks**: *Orphan pages that get traffic* (sessions but no internal link: missing from the crawl, or reached only through the sitemap / Search Console), *Pages in error that still get traffic* (4xx / 5xx with sessions), *Non-indexable pages that get traffic*, *Indexable pages with no sessions*. Each has its action-plan title and fix steps.
+- **Google Analytics tab** (sessions, views, users, engagement rate, in crawl, inlinks, status, indexability) with filters: with sessions, orphans with traffic, no sessions, errors with traffic, non-indexable with traffic. Settings → Google: key file, property ID, period, CSV import.
+- **Segments**: new rule field *GA4 sessions*; GA4 orphans belong to their segment; sessions column in the Segments card.
+- **Orphan URLs outside the crawl** (`gsc-orphan`, `ga4-orphan`) now count as pages, not as a site-wide issue: the issues page shows their URL count, they are split by segment and weigh in the score by share of pages (shared `issueShare`).
+- **CLI**: `--ga4-key`, `--ga4-property`, `--ga4-days`, `--ga4-csv`; sessions and views columns in `pages.csv`. **AI agents**: `ga4_key_file`, `ga4_property`, `ga4_csv` on the crawl tools, `google_analytics` in the summary, sessions in page search (sortable).
+- **Tests**: `test/ga4.test.mjs` — property IDs, CSV variants, API token scope / property discovery / pagination / errors, matching and the 4 checks on the fixture site, segments, failure without stopping the crawl.
+
 ## 3.14.0 — 2026-10-20
 
 ### New: segments — audit a big site section by section

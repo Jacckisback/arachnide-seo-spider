@@ -3,7 +3,7 @@
 import { titlePixels, descPixels } from './pixel.mjs';
 import { similarity } from './text.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
-import { issuePoints, computePillars } from '../public/shared/pillars.js';
+import { issuePoints, computePillars, issueShare, OUTSIDE_CRAWL } from '../public/shared/pillars.js';
 import { imageFormat } from './parse.mjs';
 import { applySegments } from '../public/shared/segments.js';
 
@@ -418,6 +418,55 @@ export function analyze(crawler) {
     for (const p of pages) if (p.isHtml && p.status === 200 && !p.gsc) p.gsc = { clicks: 0, impressions: 0, ctr: 0, position: null };
     gscMeta = { source: crawler.gsc.source, property: crawler.gsc.property, start: crawler.gsc.start, end: crawler.gsc.end, rows: crawler.gsc.rows.length, clicks, impressions, matched: crawler.gsc.rows.length - gscOnly.length };
   }
+  // Google Analytics 4 : sessions par page. Les lignes GA4 portent un hôte et un chemin (sans paramètres) : on cherche
+  // d'abord l'URL exacte, puis la même URL sans paramètres. Une page vue dans GA4 mais absente du crawl est orpheline.
+  const ga4Only = [];
+  let ga4Meta = null;
+  if (crawler.ga4) {
+    const site = new URL(crawler.finalStart || crawler.startUrl);
+    const host = site.hostname.replace(/^www\./, '').toLowerCase();
+    const byKey = new Map();
+    const byBare = new Map();
+    for (const p of pages) {
+      const k = gscKey(p.url);
+      if (!byKey.has(k)) byKey.set(k, p);
+      const bare = k.replace(/\?.*$/, '');
+      if (!byBare.has(bare) || (p.isHtml && p.status === 200 && !(byBare.get(bare).isHtml && byBare.get(bare).status === 200))) byBare.set(bare, p);
+    }
+    const merged = new Map();
+    let sessions = 0;
+    let rowsOnSite = 0;
+    for (const r of crawler.ga4.rows) {
+      const h = (r.host || site.hostname).replace(/^www\./, '').toLowerCase();
+      if (h !== host || !r.path || !r.path.startsWith('/')) continue; // autre domaine (sous-domaine, appli, (not set))
+      rowsOnSite++;
+      sessions += r.sessions || 0;
+      let url;
+      try {
+        url = new URL(r.path, site.origin).href;
+      } catch {
+        continue;
+      }
+      const k = gscKey(url);
+      const p = byKey.get(k) || byBare.get(k.replace(/\?.*$/, ''));
+      const key = p ? p.url : k;
+      const cur = merged.get(key) || { url: p ? p.url : url, page: p, sessions: 0, views: 0, users: 0, engaged: 0 };
+      // Plusieurs lignes pour une même page (slash final, paramètres) : on additionne.
+      cur.sessions += r.sessions || 0;
+      cur.views += r.views || 0;
+      cur.users += r.users || 0;
+      cur.engaged += r.engaged || 0;
+      merged.set(key, cur);
+    }
+    for (const m of merged.values()) {
+      const data = { sessions: m.sessions, views: m.views, users: m.users, engaged: m.engaged };
+      if (m.page) m.page.ga4 = data;
+      else ga4Only.push({ url: m.url, ...data });
+    }
+    for (const p of pages) if (p.isHtml && p.status === 200 && !p.ga4) p.ga4 = { sessions: 0, views: 0, users: 0, engaged: 0 };
+    ga4Only.sort((a, b) => b.sessions - a.sessions || b.views - a.views);
+    ga4Meta = { source: crawler.ga4.source, property: crawler.ga4.property, start: crawler.ga4.start, end: crawler.ga4.end, rows: rowsOnSite, sessions, matched: merged.size - ga4Only.length, orphans: ga4Only.length };
+  }
   let psiMeta = null;
   if (crawler.psi?.size) {
     for (const [u, r] of crawler.psi) {
@@ -557,6 +606,14 @@ export function analyze(crawler) {
   add('gsc-orphan', 'warning', 'sitemap', 'high', 'medium', gscOnly.filter((r) => r.impressions > 0).map((r) => ({ url: r.url, detail: D('d.gsc', { clicks: r.clicks, impressions: r.impressions }) })));
   add('gsc-no-impressions', 'notice', 'content', 'medium', 'high', crawler.gsc ? u(indexableHtml.filter((p) => p.gsc && !p.gsc.impressions)) : []);
   add('gsc-low-ctr', 'warning', 'titles', 'high', 'low', u(indexableHtml.filter((p) => p.gsc?.impressions >= 100 && p.gsc.position && p.gsc.position <= 10 && p.gsc.ctr < EXPECTED_CTR[Math.max(0, Math.round(p.gsc.position) - 1)] / 2), (p) => `CTR ${(p.gsc.ctr * 100).toFixed(1)} % · pos. ${p.gsc.position} · ${p.gsc.impressions} impr.`));
+  // Google Analytics 4 : trafic réel (toutes sources) croisé avec le crawl.
+  // Orphelines avec trafic : vues dans GA4 mais introuvables en suivant les liens (absentes du crawl, ou crawlées
+  // seulement via le sitemap / Search Console, sans aucun lien interne).
+  const ga4Linkless = html200.filter((p) => p.ga4?.sessions > 0 && !p.uniqueInlinks && p.url !== start && p.url !== crawler.finalStart);
+  add('ga4-orphan', 'warning', 'sitemap', 'high', 'medium', [...ga4Only.filter((r) => r.sessions > 0), ...ga4Linkless.map((p) => ({ url: p.url, ...p.ga4 }))].sort((a, b) => b.sessions - a.sessions).map((r) => ({ url: r.url, detail: D('d.ga4', { sessions: r.sessions, views: r.views }) })));
+  add('ga4-error-traffic', 'error', 'codes', 'high', 'low', u(pages.filter((p) => p.status >= 400 && p.ga4?.sessions > 0), (p) => D('d.ga4Status', { status: p.status, sessions: p.ga4.sessions })));
+  add('ga4-non-indexable-traffic', 'warning', 'directives', 'medium', 'low', u(html200.filter((p) => !p.indexable && p.ga4?.sessions > 0), (p) => D('d.ga4', { sessions: p.ga4.sessions, views: p.ga4.views })));
+  add('ga4-no-sessions', 'notice', 'content', 'medium', 'high', crawler.ga4 ? u(indexableHtml.filter((p) => p.ga4 && !p.ga4.sessions && p.url !== start && p.url !== crawler.finalStart)) : []);
   add('gsc-non-indexable-traffic', 'warning', 'directives', 'high', 'low', u(html200.filter((p) => !p.indexable && p.gsc?.clicks > 0), (p) => D('d.gsc', { clicks: p.gsc.clicks, impressions: p.gsc.impressions })));
   add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable && !p.rateLimited), (p) => D('idx.' + p.indexabilityReason)));
   add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap && !crawler.sitemapsTruncated ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
@@ -627,7 +684,7 @@ export function analyze(crawler) {
 
   // Problèmes de site (robots.txt, https, sitemap…) : leurs éléments ne sont pas des pages, ils touchent tout le site.
   const pageSet = new Set(pages.map((p) => p.url));
-  for (const is of issues) is.scope = is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site';
+  for (const is of issues) is.scope = OUTSIDE_CRAWL.has(is.id) || is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site';
   const htmlN = Math.max(1, html200.length);
   for (const is of issues) {
     const n = is.scope === 'site' ? htmlN : is.count;
@@ -649,7 +706,7 @@ export function analyze(crawler) {
   const keepByCat = {};
   for (const is of issues) {
     if (is.severity === 'notice') continue;
-    const share = is.scope === 'site' ? 1 : Math.min(1, new Set(is.items.map((it) => it.url).filter((u) => scoredSet.has(u))).size / N);
+    const share = issueShare(is, scoredSet, N);
     const pts = issuePoints(is, share);
     keep *= 1 - pts / 100;
     keepByCat[is.category] = (keepByCat[is.category] ?? 1) * (1 - pts / 40);
@@ -702,8 +759,9 @@ export function analyze(crawler) {
       finishedAt: crawler.finishedAt,
       stopped: crawler.stopped,
       rendered: !!crawler.renderer,
-      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '', psiKey: crawler.opts.psiKey ? '••••' : '', gscCsv: crawler.opts.gscCsv ? true : undefined, googleFetch: undefined },
+      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '', psiKey: crawler.opts.psiKey ? '••••' : '', gscCsv: crawler.opts.gscCsv ? true : undefined, ga4Csv: crawler.opts.ga4Csv ? true : undefined, googleFetch: undefined },
       gsc: gscMeta,
+      ga4: ga4Meta,
       psi: psiMeta,
       robotsTxt: crawler.robotsTxt,
       llmsTxt: crawler.llmsTxt,
@@ -746,6 +804,7 @@ export function analyze(crawler) {
     cannibalization: cannibal.map(([keyword, arr]) => ({ keyword, urls: arr.map((p) => p.url) })),
     images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, emptyAlt: i.emptyAlt || undefined, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
     gscOnly,
+    ga4Only,
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
     links: { urls, edges },
   };

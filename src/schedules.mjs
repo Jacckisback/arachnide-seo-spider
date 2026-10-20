@@ -36,7 +36,7 @@ export function normalizeSchedule(input, prev = {}) {
   const time = /^\d{1,2}:\d{2}$/.test(input.time || '') ? input.time.padStart(5, '0') : '06:00';
   const emails = (Array.isArray(input.emails) ? input.emails : String(input.emails || '').split(/[,;\s]+/)).map((e) => e.trim()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
   const options = { ...(input.options || prev.options || {}) };
-  for (const k of ['httpPass', 'gscCsv']) delete options[k]; // jamais stockés
+  for (const k of ['httpPass', 'gscCsv', 'ga4Csv']) delete options[k]; // jamais stockés
   return {
     id: prev.id || crypto.randomBytes(6).toString('hex'),
     name: String(input.name || prev.name || new URL(url).hostname).slice(0, 80),

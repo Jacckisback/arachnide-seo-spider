@@ -30,6 +30,10 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
 
+## 📊 Novedades de la 3.15: Google Analytics 4 — páginas huérfanas con tráfico
+
+Conecte **Google Analytics 4** (API con una cuenta de servicio o exportación CSV de «Páginas y pantallas») para ver las sesiones de cada página y detectar lo que un rastreo solo no ve: **páginas huérfanas que reciben visitas**, **páginas con error aún visitadas**, páginas no indexables con tráfico y páginas sin visitas. Nueva pestaña *Google Analytics*, 4 controles nuevos, *Sesiones GA4* en los segmentos, `--ga4-key` / `--ga4-csv` en la CLI y soporte para agentes de IA.
+
 ## 🧩 Novedades de la 3.14: segmentos — audite un sitio grande sección por sección
 
 En un sitio grande, una puntuación global esconde dónde están realmente los problemas. Los **segmentos** dividen la auditoría en secciones con nombre — fichas de producto, categorías, blog, un idioma, páginas sin tráfico… — igual que los segmentos de Screaming Frog.
@@ -343,6 +347,7 @@ node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report 
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
+node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

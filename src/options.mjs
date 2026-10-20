@@ -2,9 +2,9 @@
 import { USER_AGENTS } from './crawler.mjs';
 import { normalizeSegments } from '../public/shared/segments.js';
 
-const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec', 'psiMax', 'gscDays'];
+const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec', 'psiMax', 'gscDays', 'ga4Days'];
 const BOOLS = ['crawlSubdomains', 'stayInFolder', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render'];
-const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders', 'psiKey', 'gscKeyFile', 'gscProperty', 'gscCsv'];
+const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders', 'psiKey', 'gscKeyFile', 'gscProperty', 'gscCsv', 'ga4KeyFile', 'ga4Property', 'ga4Csv'];
 
 const bad = (key, detail) => Object.assign(new Error(`Invalid option: ${detail}`), { status: 400, key });
 
@@ -57,5 +57,6 @@ export function toCrawlerOptions(o = {}) {
   opts.psiStrategy = o.psiStrategy === 'desktop' ? 'desktop' : 'mobile';
   if (!opts.psiKey && process.env.ARACHNIDE_PSI_KEY) opts.psiKey = process.env.ARACHNIDE_PSI_KEY;
   if (opts.gscDays != null) opts.gscDays = Math.min(Math.max(Math.round(opts.gscDays), 1), 480);
+  if (opts.ga4Days != null) opts.ga4Days = Math.min(Math.max(Math.round(opts.ga4Days), 1), 730);
   return opts;
 }

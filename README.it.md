@@ -30,6 +30,10 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
 
+## 📊 Novità della 3.15: Google Analytics 4 — pagine orfane con traffico
+
+Collega **Google Analytics 4** (API con account di servizio o esportazione CSV «Pagine e schermate») per vedere le sessioni di ogni pagina e trovare ciò che la sola scansione non vede: **pagine orfane che ricevono visite**, **pagine in errore ancora visitate**, pagine non indicizzabili con traffico e pagine senza visite. Nuova scheda *Google Analytics*, 4 nuovi controlli, *Sessioni GA4* nei segmenti, `--ga4-key` / `--ga4-csv` nella CLI e supporto per gli agenti IA.
+
 ## 🧩 Novità della 3.14: segmenti — analizza un sito grande sezione per sezione
 
 Su un sito grande, un punteggio globale nasconde dove sono davvero i problemi. I **segmenti** suddividono l’audit in sezioni con un nome — schede prodotto, categorie, blog, una lingua, pagine senza traffico… — esattamente come i segmenti di Screaming Frog.
@@ -343,6 +347,7 @@ node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report 
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
+node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

@@ -216,6 +216,9 @@ const TABS = [
   { id: 'gsc', icon: 'search', show: (R) => !!R.meta.gsc, rows: (R) => [...html200(R), ...(R.gscOnly || []).map((r) => ({ ...r, gsc: r, gscOnly: true }))],
     cols: [C.url, { k: 'clicks', l: 'col.clicks', num: true, v: (r) => r.gsc?.clicks ?? '' }, { k: 'impressions', l: 'col.impressions', num: true, v: (r) => r.gsc?.impressions ?? '' }, { k: 'ctr', l: 'col.ctr', num: true, v: (r) => (r.gsc ? +(r.gsc.ctr * 100).toFixed(2) : ''), html: (r) => (r.gsc ? `${dec(r.gsc.ctr * 100, 1)} %` : '') }, { k: 'position', l: 'col.position', num: true, v: (r) => r.gsc?.position ?? '' }, { k: 'inCrawl', l: 'col.inCrawl', v: (r) => (r.gscOnly ? t('ui.no') : t('ui.yes')), html: (r) => (r.gscOnly ? `<span class="chip warning">${t('ui.no')}</span>` : t('ui.yes')) }, { ...C.indexability, html: (r) => (r.gscOnly ? '' : C.indexability.html(r)) }, C.linkScore],
     filters: { all: () => true, withClicks: (r) => r.gsc?.clicks > 0, gscOrphans: (r) => r.gscOnly, noImpressions: (r) => !r.gscOnly && r.indexable && !r.gsc?.impressions, lowCtr: (r) => r.gsc?.impressions >= 100 && r.gsc.position <= 10 && r.gsc.ctr < 0.02, nonIndexableTraffic: (r) => !r.gscOnly && !r.indexable && r.gsc?.clicks > 0 } },
+  { id: 'ga4', icon: 'trend', show: (R) => !!R.meta.ga4, rows: (R) => [...html200(R), ...R.pages.filter((p) => p.ga4?.sessions > 0 && !(p.isHtml && p.status === 200)), ...(R.ga4Only || []).map((r) => ({ ...r, ga4: r, ga4Only: true }))],
+    cols: [C.url, { k: 'sessions', l: 'col.sessions', num: true, v: (r) => r.ga4?.sessions ?? '' }, { k: 'views', l: 'col.views', num: true, v: (r) => r.ga4?.views ?? '' }, { k: 'users', l: 'col.users', num: true, v: (r) => r.ga4?.users ?? '' }, { k: 'engagement', l: 'col.engagementRate', num: true, v: (r) => (r.ga4?.sessions ? Math.round((100 * (r.ga4.engaged || 0)) / r.ga4.sessions) : ''), html: (r) => (r.ga4?.sessions ? `${num(Math.round((100 * (r.ga4.engaged || 0)) / r.ga4.sessions))} %` : '') }, { k: 'inCrawl', l: 'col.inCrawl', v: (r) => (r.ga4Only ? t('ui.no') : t('ui.yes')), html: (r) => (r.ga4Only ? `<span class="chip warning">${t('ui.no')}</span>` : t('ui.yes')) }, { k: 'uniqueInlinks', l: 'col.inlinks', num: true, v: (r) => (r.ga4Only ? '' : r.uniqueInlinks ?? 0) }, { ...C.status, html: (r) => (r.ga4Only ? '' : C.status.html(r)) }, { ...C.indexability, html: (r) => (r.ga4Only ? '' : C.indexability.html(r)) }],
+    filters: { all: () => true, withSessions: (r) => r.ga4?.sessions > 0, ga4Orphans: (r) => r.ga4?.sessions > 0 && (r.ga4Only || (!r.uniqueInlinks && r.depth !== 0)), noSessions: (r) => !r.ga4Only && r.indexable && !r.ga4?.sessions, errorTraffic: (r) => !r.ga4Only && r.status >= 400 && r.ga4?.sessions > 0, nonIndexableTraffic: (r) => !r.ga4Only && r.isHtml && !r.indexable && r.ga4?.sessions > 0 } },
   { id: 'cwv', icon: 'bolt', show: (R) => !!R.meta.psi, rows: (R) => html200(R).filter((p) => p.psi),
     cols: [C.url, { k: 'psiScore', l: 'col.psiScore', num: true, v: (r) => r.psi.score ?? '', html: (r) => scoreCell(r.psi.score) }, ...['lcp', 'inp', 'cls', 'fcp', 'ttfb'].map((m) => ({ k: 'f_' + m, l: 'col.' + m, num: true, v: (r) => r.psi.field?.[m]?.p75 ?? '', html: (r) => cwvCell(r.psi.field?.[m], m) })), { k: 'fieldSrc', l: 'col.fieldData', v: (r) => (r.psi.field ? t('ui.yes') : t('cwv.noField')) }, { k: 'labLcp', l: 'col.labLcp', num: true, v: (r) => (r.psi.lab?.lcp ? Math.round(r.psi.lab.lcp) : ''), html: (r) => (r.psi.lab?.lcp ? `${dec(r.psi.lab.lcp / 1000, 1)} s` : '') }, { k: 'tbt', l: 'col.tbt', num: true, v: (r) => (r.psi.lab?.tbt != null ? Math.round(r.psi.lab.tbt) : '') }],
     filters: { all: () => true, poor: (p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field?.[k]?.cat === 'poor'), needsImprovement: (p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field?.[k]?.cat === 'ni'), good: (p) => p.psi.field && ['lcp', 'inp', 'cls'].every((k) => !p.psi.field[k] || p.psi.field[k].cat === 'good'), noField: (p) => !p.psi.field } },
@@ -531,7 +534,7 @@ function openIssue(id) {
 /* ---------- Segments ---------- */
 // Le crawl complet garde p.segment sur chaque page ; state.R est sa découpe sur le segment actif, si bien que
 // tous les onglets, le plan d'action, le rapport et les exports suivent le filtre sans code particulier.
-const SEG_COL_TABS = new Set(['internal', 'codes', 'urls', 'titles', 'desc', 'h1', 'h2', 'content', 'canonicals', 'directives', 'schema', 'perf', 'security', 'linking', 'sitemap', 'gsc', 'cwv', 'javascript', 'hreflang', 'extraction', 'search']);
+const SEG_COL_TABS = new Set(['internal', 'codes', 'urls', 'titles', 'desc', 'h1', 'h2', 'content', 'canonicals', 'directives', 'schema', 'perf', 'security', 'linking', 'sitemap', 'gsc', 'ga4', 'cwv', 'javascript', 'hreflang', 'extraction', 'search']);
 const segX = () => ({ t, esc, icon, num });
 const segDefs = () => state.full?.meta?.segments || [];
 const segLabel = (id) => (!id ? '' : id === NONE ? t('seg.none') : segDefs().find((s) => s.id === id)?.name || id);
@@ -1730,7 +1733,7 @@ async function openSchedules(edit) {
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const o = readOptions();
-      for (const k of [...SECRET, 'gscCsv']) delete o[k];
+      for (const k of [...SECRET, 'gscCsv', 'ga4Csv']) delete o[k];
       const payload = { id: s.id, url: f.url.value, name: f.name.value, frequency: f.frequency.value, weekday: +f.weekday.value, monthday: +f.monthday.value, time: f.time.value, emails: f.emails.value, lang: t.lang, alerts: { scoreDrop: +f.scoreDrop.value, errors: f.errors.checked, newIssues: f.newIssues.checked, always: f.always.checked }, options: s.id ? s.options : o, enabled: s.enabled !== false };
       const r = await fetch('/api/schedules', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
       if (!r.ok) return toast(t('sched.invalid'), 'error');
@@ -1790,6 +1793,7 @@ function readOptions() {
   });
   o.extractors = readExtractors();
   if (state.gscCsv) o.gscCsv = state.gscCsv.text;
+  if (state.ga4Csv) o.ga4Csv = state.ga4Csv.text;
   return o;
 }
 function applyOptions(saved) {
@@ -1811,6 +1815,7 @@ function saveOptions() {
   const o = readOptions();
   for (const k of SECRET) delete o[k];
   delete o.gscCsv; // gros fichier : gardé en mémoire pour la session seulement
+  delete o.ga4Csv;
   store.set('options', o);
 }
 
@@ -1840,6 +1845,18 @@ $('#gscCsvFile').addEventListener('change', async (e) => {
   showGscCsv();
 });
 $('#gscCsvClear').addEventListener('click', () => { state.gscCsv = null; $('#gscCsvFile').value = ''; showGscCsv(); });
+// Import d'un export CSV de Google Analytics 4 : même principe.
+$('#ga4CsvFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  state.ga4Csv = { name: f.name, text: await f.text() };
+  showGa4Csv();
+});
+$('#ga4CsvClear').addEventListener('click', () => { state.ga4Csv = null; $('#ga4CsvFile').value = ''; showGa4Csv(); });
+function showGa4Csv() {
+  $('#ga4CsvName').textContent = state.ga4Csv ? `${state.ga4Csv.name} · ${num(Math.round(state.ga4Csv.text.length / 1024))} KB` : '';
+  $('#ga4CsvClear').hidden = !state.ga4Csv;
+}
 function showGscCsv() {
   $('#gscCsvName').textContent = state.gscCsv ? `${state.gscCsv.name} · ${num(Math.round(state.gscCsv.text.length / 1024))} KB` : '';
   $('#gscCsvClear').hidden = !state.gscCsv;

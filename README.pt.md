@@ -30,6 +30,10 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
 
+## 📊 Novidades da 3.15: Google Analytics 4 — páginas órfãs com tráfego
+
+Ligue o **Google Analytics 4** (API com conta de serviço ou exportação CSV «Páginas e ecrãs») para ver as sessões de cada página e encontrar o que um rastreio sozinho não vê: **páginas órfãs que recebem visitas**, **páginas com erro ainda visitadas**, páginas não indexáveis com tráfego e páginas sem visitas. Novo separador *Google Analytics*, 4 novas verificações, *Sessões GA4* nos segmentos, `--ga4-key` / `--ga4-csv` na CLI e suporte para agentes de IA.
+
 ## 🧩 Novidades da 3.14: segmentos — audite um site grande secção a secção
 
 Num site grande, uma pontuação global esconde onde estão realmente os problemas. Os **segmentos** dividem a auditoria em secções com nome — páginas de produto, categorias, blog, um idioma, páginas sem tráfego… — exatamente como os segmentos do Screaming Frog.
@@ -343,6 +347,7 @@ node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report 
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
+node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

@@ -10,7 +10,7 @@
 // - segmentStats() donne la vue d'ensemble : une ligne par segment avec son score, ses erreurs et ses moyennes.
 //
 // Partagé par le moteur (src/), la CLI, les outils agents (MCP / REST) et l'interface : un seul calcul partout.
-import { issuePoints, computePillars, scoredPages } from './pillars.js';
+import { issuePoints, computePillars, scoredPages, issueShare, OUTSIDE_CRAWL } from './pillars.js';
 
 export const NONE = '__none';
 export const MAX_SEGMENTS = 50;
@@ -47,6 +47,7 @@ export const FIELDS = {
   linkScore: { type: 'number', get: (p) => p.linkScore },
   responseTime: { type: 'number', get: (p) => p.responseTime },
   gscClicks: { type: 'number', get: (p) => p.gsc?.clicks },
+  ga4Sessions: { type: 'number', get: (p) => p.ga4?.sessions },
   indexable: { type: 'bool', get: (p) => !!p.indexable },
   inSitemap: { type: 'bool', get: (p) => !!p.inSitemap },
   isHtml: { type: 'bool', get: (p) => !!p.isHtml },
@@ -171,6 +172,7 @@ export function assignSegments(R, segments) {
     if (p.segment) counts.set(p.segment, (counts.get(p.segment) || 0) + 1);
   }
   for (const g of R.gscOnly || []) g.segment = segments?.length ? of({ url: g.url, gsc: g }) : undefined;
+  for (const g of R.ga4Only || []) g.segment = segments?.length ? of({ url: g.url, ga4: g }) : undefined;
   return counts;
 }
 
@@ -195,7 +197,7 @@ export function computeSummary(R) {
   const keepByCat = {};
   for (const is of issues) {
     if (is.severity === 'notice') continue;
-    const share = is.scope === 'site' ? 1 : Math.min(1, new Set(is.items.map((it) => it.url).filter((u) => scoredSet.has(u))).size / N);
+    const share = issueShare(is, scoredSet, N);
     const pts = issuePoints(is, share);
     keep *= 1 - pts / 100;
     keepByCat[is.category] = (keepByCat[is.category] ?? 1) * (1 - pts / 40);
@@ -258,7 +260,7 @@ export function computeSummary(R) {
 export function sliceIssues(issues, urlSet, pageSet) {
   const out = [];
   for (const is of issues || []) {
-    const scope = is.scope || (is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site');
+    const scope = is.scope || (OUTSIDE_CRAWL.has(is.id) || is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site');
     const items = scope === 'site' ? is.items : is.items.filter((it) => urlSet.has(it.url));
     if (!items.length) continue;
     const copy = { ...is, scope, items, count: items.length };
@@ -278,7 +280,10 @@ export function sliceResult(R, segId, segments = R.meta?.segments || []) {
   const def = segId === NONE ? { id: NONE, name: '', color: NONE_COLOR } : segments.find((s) => s.id === segId);
   if (!def) return R;
   const pages = R.pages.filter((p) => segOf(p) === segId);
-  const urlSet = new Set(pages.map((p) => p.url));
+  const gscOnly = (R.gscOnly || []).filter((g) => (g.segment || NONE) === segId);
+  const ga4Only = (R.ga4Only || []).filter((g) => (g.segment || NONE) === segId);
+  // URL du segment : ses pages, plus les orphelines Search Console / GA4 qui lui appartiennent.
+  const urlSet = new Set([...pages, ...gscOnly, ...ga4Only].map((p) => p.url));
   const pageSet = new Set(R.pages.map((p) => p.url));
   const inSeg = (u) => urlSet.has(u);
   const S = {
@@ -291,7 +296,8 @@ export function sliceResult(R, segId, segments = R.meta?.segments || []) {
     cannibalization: (R.cannibalization || []).filter((g) => g.urls.some(inSeg)),
     images: (R.images || []).filter((i) => inSeg(i.firstPage)),
     externals: (R.externals || []).filter((e) => inSeg(e.firstPage)),
-    gscOnly: (R.gscOnly || []).filter((g) => (g.segment || NONE) === segId),
+    gscOnly,
+    ga4Only,
     meta: { ...R.meta, segment: { id: def.id, name: def.name, color: def.color, pages: pages.length, total: R.pages.length } },
   };
   S.summary = computeSummary(S);
@@ -332,6 +338,7 @@ export function segmentStats(R, segments = R.meta?.segments || [], { topIssues =
       avgLinkScore: round(avg(h.map((p) => p.linkScore).filter((x) => x != null))),
       inSitemap: pages.filter((p) => p.inSitemap).length,
       clicks: pages.some((p) => p.gsc) ? pages.reduce((a, p) => a + (p.gsc?.clicks || 0), 0) : null,
+      sessions: R.meta?.ga4 || pages.some((p) => p.ga4) ? pages.reduce((a, p) => a + (p.ga4?.sessions || 0), 0) + S.ga4Only.reduce((a, g) => a + (g.sessions || 0), 0) : null,
       pillars: S.summary.pillars.map((p) => ({ id: p.id, score: p.score })),
       topIssues: top,
     };

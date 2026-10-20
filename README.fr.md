@@ -30,6 +30,10 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
 
+## 📊 Nouveau en 3.15 : Google Analytics 4 — les pages orphelines qui font du trafic
+
+Connectez **Google Analytics 4** (API avec un compte de service, ou export CSV « Pages et écrans ») pour voir les sessions de chaque page et attraper ce qu’un crawl seul ne voit pas : les **pages orphelines qui reçoivent des visites** (landing pages de campagne, anciennes URL, pages présentes seulement dans le sitemap), les **pages en erreur encore visitées**, les pages non indexables avec du trafic et celles que personne ne visite. Nouvel onglet *Google Analytics*, 4 nouveaux contrôles, *Sessions GA4* dans les segments, `--ga4-key` / `--ga4-csv` en ligne de commande et prise en charge par les agents IA.
+
 ## 🧩 Nouveau en 3.14 : les segments — auditez un gros site section par section
 
 Sur un gros site, un score global cache l’endroit où sont vraiment les problèmes. Les **segments** découpent l’audit en sections nommées — fiches produit, catégories, blog, une langue, les pages sans trafic… — exactement comme les segments de Screaming Frog.
@@ -356,6 +360,7 @@ node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report 
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
+node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```
