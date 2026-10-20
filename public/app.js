@@ -12,8 +12,10 @@ import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories,
 import { createMap, paletteOf } from './viz.js';
 import { buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
-import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants } from './map-view.js';
+import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants, COLORS as MAP_COLORS } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
+import { sliceResult, applySegments, assignSegments, segmentStats, issueBySegment, suggestFromFolders, NONE, NONE_COLOR } from './shared/segments.js';
+import { barHtml as segBarHtml, bannerHtml as segBannerHtml, cardHtml as segCardHtml, breakdownHtml as segBreakdownHtml, openManager as openSegManager } from './segments-ui.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -31,7 +33,9 @@ const store = {
 
 let t = (k) => k;
 const state = {
-  R: null,
+  R: null, // résultat affiché : le crawl complet, ou sa découpe sur le segment actif
+  full: null, // crawl complet
+  segId: '', // segment actif ('' = tous)
   live: [],
   running: false,
   tab: 'dashboard',
@@ -83,7 +87,8 @@ function debounce(fn, ms) {
 
 function linkGraph() {
   if (state.graph) return state.graph;
-  const { urls, edges } = state.R.links;
+  const F = state.full || state.R;
+  const { urls, edges } = F.links;
   const POS = ['content', 'nav', 'header', 'footer', 'aside'];
   const inl = new Map();
   const out = new Map();
@@ -94,7 +99,7 @@ function linkGraph() {
     if (!inl.has(e.to)) inl.set(e.to, []);
     inl.get(e.to).push(e);
   }
-  state.graph = { inl, out, byUrl: new Map(state.R.pages.map((p) => [p.url, p])) };
+  state.graph = { inl, out, byUrl: new Map(F.pages.map((p) => [p.url, p])) };
   return state.graph;
 }
 
@@ -128,6 +133,7 @@ const C = {
   size: { k: 'size', l: 'col.size', num: true, html: (r) => kb(r.size) },
   inSitemap: { k: 'inSitemap', l: 'col.inSitemap', v: (r) => (r.inSitemap ? t('ui.yes') : t('ui.no')), html: (r) => yn(r.inSitemap) },
   focus: { k: 'focusKeyword', l: 'col.focusKeyword', cls: 'trunc' },
+  segment: { k: 'segment', l: 'col.segment', v: (r) => segLabel(r.segment), html: (r) => (r.segment ? `<span class="seg-tag"><span class="seg-dot" style="--c:${esc(segColor(r.segment))}"></span>${esc(segLabel(r.segment))}</span>` : '') },
   dup: (k, sev = 'error') => ({ k, l: 'col.duplicate', v: (r) => (r[k] ? t('ui.yes') : ''), html: (r) => (r[k] ? `<span class="chip ${sev}">${t('ui.yes')}</span>` : '') }),
 };
 function pxCell(px, max) {
@@ -322,6 +328,8 @@ function render() {
     // Une colonne par extracteur défini dans la configuration du crawl.
     tab = { ...tab, cols: [C.url, ...state.R.meta.options.extractors.map((ex) => ({ k: 'x:' + ex.name, l: ex.name, raw: true, cls: 'wrap', v: (r) => (r.extracted?.[ex.name] || []).join(' | ') }))] };
   }
+  // Segments définis : colonne « Segment » après l'URL (toujours dans Toutes les pages, sinon hors filtre de segment).
+  if (segDefs().length && tab.cols[0] === C.url && SEG_COL_TABS.has(tab.id) && (tab.id === 'internal' || !state.segId)) tab = { ...tab, cols: [C.url, C.segment, ...tab.cols.slice(1)] };
   renderTable(view, tab, tab.rows(state.R));
 }
 
@@ -471,8 +479,10 @@ function renderDashboard(view) {
   // Animation au premier affichage d'un résultat (depuis les valeurs précédentes s'il y en avait), pas à chaque retour.
   const animate = state.ovShown !== key;
   const from = animate ? state.ovPrev || { score: 0, pillars: {}, kpis: {} } : null;
-  const prevDelta = state.compare && state.compare.reliable !== false ? state.compare.scoreDelta : null;
+  const prevDelta = !state.segId && state.compare && state.compare.reliable !== false ? state.compare.scoreDelta : null;
   view.innerHTML = overviewHtml(R, { t, esc, icon, num, prevDelta }, { pillars, actions: topActions(R), good: strengths(R), partial: isPartial(R), from });
+  view.querySelector('.ov-grid')?.insertAdjacentHTML('afterend', segDashboardHtml());
+  wireSegCard(view);
   playOverview(view, num, { animate });
   wireHighlight(view);
   state.ovShown = key;
@@ -518,6 +528,106 @@ function openIssue(id) {
   goTab('issues');
 }
 
+/* ---------- Segments ---------- */
+// Le crawl complet garde p.segment sur chaque page ; state.R est sa découpe sur le segment actif, si bien que
+// tous les onglets, le plan d'action, le rapport et les exports suivent le filtre sans code particulier.
+const SEG_COL_TABS = new Set(['internal', 'codes', 'urls', 'titles', 'desc', 'h1', 'h2', 'content', 'canonicals', 'directives', 'schema', 'perf', 'security', 'linking', 'sitemap', 'gsc', 'cwv', 'javascript', 'hreflang', 'extraction', 'search']);
+const segX = () => ({ t, esc, icon, num });
+const segDefs = () => state.full?.meta?.segments || [];
+const segLabel = (id) => (!id ? '' : id === NONE ? t('seg.none') : segDefs().find((s) => s.id === id)?.name || id);
+const segColor = (id) => (id === NONE ? NONE_COLOR : segDefs().find((s) => s.id === id)?.color || NONE_COLOR);
+const segOfUrl = (url) => (segDefs().length ? linkGraph().byUrl.get(url)?.segment || '' : '');
+const hostKey = () => (state.full?.meta?.startUrl ? new URL(state.full.meta.startUrl).hostname : 'crawl');
+function segCounts() {
+  const c = new Map([...segDefs().map((s) => [s.id, 0]), [NONE, 0]]);
+  for (const p of state.full?.pages || []) c.set(p.segment || NONE, (c.get(p.segment || NONE) || 0) + 1);
+  return c;
+}
+function segStats() {
+  const key = state.full.meta.finishedAt + '|' + JSON.stringify(segDefs());
+  if (state.segStats?.key !== key) state.segStats = { key, rows: segmentStats(state.full) };
+  return state.segStats.rows;
+}
+function applyView() {
+  const F = state.full;
+  if (!F) return renderSegChrome();
+  if (state.segId && state.segId !== NONE && !segDefs().some((s) => s.id === state.segId)) state.segId = '';
+  if (state.segId === NONE && !segDefs().length) state.segId = '';
+  state.R = state.segId ? sliceResult(F, state.segId) : F;
+  renderSegChrome();
+}
+function renderSegChrome() {
+  const bar = $('#segBar');
+  bar.hidden = !state.full;
+  bar.innerHTML = state.full ? segBarHtml(segDefs(), segCounts(), state.segId, segX()) : '';
+  const seg = state.full && state.R?.meta?.segment;
+  const ban = $('#segBanner');
+  ban.hidden = !seg;
+  ban.innerHTML = seg ? segBannerHtml(seg, segX()) : '';
+  document.body.classList.toggle('seg-active', !!seg);
+  if (seg) ban.style.setProperty('--c', seg.color || NONE_COLOR);
+}
+function setSegment(id, { keepIssue = false } = {}) {
+  state.segId = id || '';
+  store.set('seg:' + hostKey(), state.segId);
+  Object.assign(state, { selected: null, page: 0, ivUrls: null, ivPage: 0, pillarFilter: null });
+  if (!keepIssue) state.issue = null;
+  else state.ivFollow = true;
+  applyView();
+  renderTabs();
+  render();
+  renderDetail();
+}
+function postSegments(segments) {
+  return fetch('/api/segments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ segments }) }).catch(() => {});
+}
+function saveSegments(list, { quiet = false } = {}) {
+  applySegments(state.full, list);
+  store.set('segdefs:' + hostKey(), segDefs());
+  state.segStats = null;
+  applyView();
+  renderTabs();
+  render();
+  postSegments(segDefs());
+  if (!quiet) toast(segDefs().length ? t('seg.saved', { n: segDefs().length }) : t('seg.removed'), 'ok');
+}
+function manageSegments() {
+  if (!state.full) return;
+  openSegManager({ dialog: $('#segDialog'), R: state.full, segments: segDefs(), X: segX(), onApply: (list) => saveSegments(list), toast, download, host: hostKey() });
+}
+function segDashboardHtml() {
+  const F = state.full;
+  if (!segDefs().length) return F.pages.length >= 30 ? segCardHtml([], state.segId, segX()) : '';
+  return segCardHtml(segStats(), state.segId, segX());
+}
+function wireSegCard(view) {
+  const card = view.querySelector('.seg-card');
+  if (!card) return;
+  card.querySelector('#segAuto')?.addEventListener('click', () => {
+    const sug = suggestFromFolders(state.full);
+    if (!sug.length) return manageSegments();
+    saveSegments(sug);
+  });
+  card.querySelector('#segCreate')?.addEventListener('click', manageSegments);
+  card.querySelector('#segManage2')?.addEventListener('click', manageSegments);
+  card.querySelectorAll('[data-seg-issue]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    state.segId = b.dataset.segOf;
+    store.set('seg:' + hostKey(), state.segId);
+    applyView();
+    openIssue(b.dataset.segIssue);
+  }));
+  card.querySelectorAll('tr[data-seg]').forEach((tr) => {
+    const go = () => setSegment(state.segId === tr.dataset.seg ? '' : tr.dataset.seg);
+    tr.addEventListener('click', go);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+}
+$('#segBar').addEventListener('change', (e) => { if (e.target.id === 'segSelect') setSegment(e.target.value); });
+$('#segBar').addEventListener('click', (e) => { if (e.target.closest('#segManage')) manageSegments(); });
+$('#segBanner').addEventListener('click', (e) => { if (e.target.closest('#segClear')) setSegment(''); });
+$('#segCancel').addEventListener('click', () => $('#segDialog').close());
+
 /* ---------- Problèmes ---------- */
 const ivX = () => ({ t, esc, icon, num, detailText });
 const ivState = () => ({ sev: state.sevFilter, q: state.ivQ || '', sort: state.ivSort || 'priority', page: state.ivPage || 0, issue: state.issue });
@@ -534,7 +644,7 @@ function renderIssues(view) {
   if (urlsOf) {
     view.innerHTML = `<div class="iv"><button class="link iv-back-list" id="ivBackList">${icon('chevronLeft')} ${esc(t('iv.backToIssues'))}</button><div id="issueTable"></div></div>`;
     $('#ivBackList').onclick = () => { state.ivUrls = null; state.search = ''; state.page = 0; render(); };
-    renderTable($('#issueTable'), { id: 'issue-' + urlsOf.id, cols: [C.url, { k: 'detail', l: 'col.detail', cls: 'wrap' }] }, ivItems(urlsOf), { title: t('issue.' + urlsOf.id + '.label', urlsOf.params), help: t('iv.urlsHelp') });
+    renderTable($('#issueTable'), { id: 'issue-' + urlsOf.id, cols: [C.url, ...(segDefs().length && !state.segId ? [C.segment] : []), { k: 'detail', l: 'col.detail', cls: 'wrap' }] }, ivItems(urlsOf), { title: t('issue.' + urlsOf.id + '.label', urlsOf.params), help: t('iv.urlsHelp') });
     return;
   }
   const st = ivState();
@@ -561,7 +671,7 @@ function renderIssues(view) {
 
 const IV_PAGE = 10;
 const ivHead = () => `<header class="iv-head"><h1>${esc(t('iv.title'))}</h1><p>${esc(t('iv.subtitle'))}</p></header>`;
-const ivItems = (is) => is.items.map((it) => ({ url: it.url, detail: detailText(it.detail, t) }));
+const ivItems = (is) => is.items.map((it) => ({ url: it.url, detail: detailText(it.detail, t), segment: segOfUrl(it.url) }));
 
 function wireIssues(view, rows) {
   const R = state.R;
@@ -608,6 +718,12 @@ function wireIssues(view, rows) {
 }
 
 function wireDetail(view, is) {
+  // Répartition du problème par segment (vue « tous les segments ») : un clic filtre l'audit sur ce segment.
+  if (segDefs().length && !state.segId) {
+    const full = state.full.issues.find((i) => i.id === is.id);
+    view.querySelector('.iv-detail .iv-urls-head')?.insertAdjacentHTML('beforebegin', segBreakdownHtml(issueBySegment(state.full, full), segX()));
+    view.querySelectorAll('[data-seg-pick]').forEach((b) => b.addEventListener('click', () => setSegment(b.dataset.segPick, { keepIssue: true })));
+  }
   $('#ivSeeUrls', view)?.addEventListener('click', () => { state.ivUrls = is.id; state.search = ''; state.page = 0; render(); });
   $('#ivExport', view)?.addEventListener('click', () => exportCsv({ cols: [C.url, { k: 'detail', l: 'col.detail' }] }, ivItems(is), '', t('issue.' + is.id + '.label', is.params)));
   $('#ivFix', view)?.addEventListener('click', () => goTab('fix'));
@@ -799,11 +915,12 @@ h1{font-size:18px;margin:0 0 2px}.meta{color:#5b6578;margin-bottom:8px}img{width
 // Données (map-model) → scène visible (map-view) → rendu (viz). Les changements de couleur, de sélection ou de
 // filtre en surbrillance ne font que restyler la scène ; seuls le mode, la dimension, le dépliage et l'isolement
 // la reconstruisent (positions en cache : rien ne bouge sans raison).
-const mapX = () => ({ t, esc, icon, num });
+const mapX = () => ({ t, esc, icon, num, segLabel });
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function mapCtx() {
-  const R = state.R;
+  // La carte garde tout le site (l'arbre de crawl reste entier) ; le segment actif y est mis en avant.
+  const R = state.full || state.R;
   const key = (R.meta.finishedAt || '') + '|' + (R.meta.startUrl || '');
   if (state.map?.key !== key) {
     clearLayoutCache();
@@ -823,12 +940,17 @@ async function renderViz(view) {
   if (ae && view.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) ae.blur();
   const ctx = mapCtx();
   const { M } = ctx;
+  ctx.filters.segment = state.segId || '';
   // Deux onglets sur les mêmes données :
   // - « Cartographie » (viz) : plan du site à la Screaming Frog — style classique, arbre horizontal, 2D ;
   // - « Visualisation 2D / 3D » (graph) : la vue d'exploration — style sombre, disposition radiale, 2D ou 3D.
   const variant = state.tab === 'graph' ? 'graph' : 'viz';
   const key = variant === 'graph' ? 'graph' : 'map';
   const o = { mode: 'crawl', dim: '2d', colorBy: variant === 'graph' ? 'issues' : 'depth', sizeBy: 'linkScore', list: false, panel: true, ...store.get(key, {}) };
+  // Couleur par segment : proposée dès que des segments existent.
+  o.colors = segDefs().length ? [...MAP_COLORS, 'segment'] : MAP_COLORS;
+  if (!o.colors.includes(o.colorBy)) o.colorBy = variant === 'graph' ? 'issues' : 'depth';
+  o.segLegend = [...segDefs().map((s) => [s.color, s.name]), [NONE_COLOR, t('seg.none')]];
   Object.assign(o, variant === 'graph' ? { look: 'dark', layout: 'radial' } : { look: 'classic', layout: 'tree', dim: '2d' });
   if (!['2d', '3d'].includes(o.dim)) o.dim = '2d';
   const save = (patch) => { Object.assign(o, patch); store.set(key, { mode: o.mode, dim: o.dim, colorBy: o.colorBy, sizeBy: o.sizeBy, list: o.list, panel: o.panel }); };
@@ -885,7 +1007,7 @@ async function renderViz(view) {
   const byId = new Map(scene.nodes.map((n) => [n.id, n]));
   const crawl = treeOf(M, 'crawl', ctx.key);
   const dirColor = (() => { const m = new Map(dirs.slice(0, P.dir.length).map((d, i) => [d, i])); return (n) => (n.url ? (m.has(M.dirOf(n.url)) ? P.dir[m.get(M.dirOf(n.url))] : P.unknown) : null); })();
-  const style = { colorBy: o.colorBy, sizeBy: o.sizeBy, dirColor, look: o.look };
+  const style = { colorBy: o.colorBy, sizeBy: o.sizeBy, dirColor, segColor: (n) => (n.page ? segColor(n.page.segment || NONE) : null), look: o.look };
 
   const notices = [];
   if (scene.groups) notices.push(t('map.groupsNote', { n: scene.groups }));
@@ -1022,7 +1144,7 @@ async function renderViz(view) {
   }));
   fWrap.querySelectorAll('[data-fmode]').forEach((b) => b.addEventListener('click', () => { ctx.filters._mode = b.dataset.fmode; applyFilters(); }));
   $m('#mapFiltersReset').addEventListener('click', () => { ctx.filters = { ...DEFAULT_FILTERS, _mode: ctx.filters._mode }; if (ctx.isolate?.filter) ctx.isolate = null; renderViz(view); });
-  view.querySelectorAll('[data-unf]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.unf; ctx.filters[k] = DEFAULT_FILTERS[k]; if (ctx.filters._mode === 'isolate') applyIsolateFilter(); renderViz(view); }));
+  view.querySelectorAll('[data-unf]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.unf; if (k === 'segment') return setSegment(''); ctx.filters[k] = DEFAULT_FILTERS[k]; if (ctx.filters._mode === 'isolate') applyIsolateFilter(); renderViz(view); }));
   view.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
     const p = b.dataset.preset;
     const mode = ctx.filters._mode;
@@ -1252,7 +1374,7 @@ function renderDetail() {
   if (!url || !TAB_BY_ID[state.tab]?.rows) { box.hidden = true; return; }
   const p = state.R ? linkGraph().byUrl.get(url) : state.live.find((x) => x.url === url);
   box.hidden = false;
-  const pageIssues = state.R ? state.R.issues.filter((i) => i.items.some((it) => it.url === url)) : [];
+  const pageIssues = state.R ? (state.full || state.R).issues.filter((i) => i.items.some((it) => it.url === url)) : [];
   const tabs = state.R ? ['details', 'issues', 'serp', 'in', 'out', ...(p?.js ? ['js'] : [])] : ['details'];
   if (!tabs.includes(state.detailTab)) state.detailTab = 'details';
   let body = '';
@@ -1311,6 +1433,7 @@ function detailKv(p) {
   const rows = [
     ['col.status', `${p.status || '—'} ${p.statusText || ''}`],
     ['col.indexability', idxLabel(p)],
+    ...(segDefs().length ? [['col.segment', segLabel(p.segment || NONE)]] : []),
     ['col.type', p.contentType],
     ['col.redirectsTo', p.redirectUrl],
     ['col.title', p.title], ['detail.titleLength', p.title ? `${p.titleLength} · ${p.titlePx} px` : ''],
@@ -1384,13 +1507,14 @@ function exportCsv(tab, rows, fname, title) {
 
 $('#exportJsonBtn').addEventListener('click', () => {
   if (!state.R) return;
-  download(`${hostOf()}_${state.R.meta.finishedAt.slice(0, 10)}.json`, JSON.stringify(state.R), 'application/json');
+  download(`${hostOf()}_${state.R.meta.finishedAt.slice(0, 10)}.json`, JSON.stringify(state.full || state.R), 'application/json');
 });
 $('#exportIssuesBtn')?.addEventListener('click', () => exportAllIssues());
 function exportAllIssues() {
   if (!state.R) return;
-  const tab = { cols: [{ k: 'sev', l: 'col.severity' }, { k: 'cat', l: 'col.category' }, { k: 'issue', l: 'col.issue' }, { k: 'url', l: 'col.url' }, { k: 'detail', l: 'col.detail' }, { k: 'fix', l: 'col.fix' }] };
-  const rows = state.R.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));
+  const seg = segDefs().length ? [{ k: 'segment', l: 'col.segment' }] : [];
+  const tab = { cols: [{ k: 'sev', l: 'col.severity' }, { k: 'cat', l: 'col.category' }, { k: 'issue', l: 'col.issue' }, { k: 'url', l: 'col.url' }, ...seg, { k: 'detail', l: 'col.detail' }, { k: 'fix', l: 'col.fix' }] };
+  const rows = state.R.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, segment: segLabel(segOfUrl(it.url)), detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));
   exportCsv(tab, rows, null, t('tab.issues'));
 }
 
@@ -1444,7 +1568,7 @@ $('#reportForm').addEventListener('submit', async (e) => {
     compare = compareResults(state.R, prev);
   }
   const rt = await getT(opts.lang);
-  const html = buildReport(state.R, { ...saved, compare }, rt);
+  const html = buildReport(state.R, { ...saved, compare: state.segId ? null : compare, segments: segDefs().length ? segmentStats(state.full) : null }, rt);
   $('#reportDialog').close();
   const w = window.open('', '_blank');
   if (!w) {
@@ -1457,12 +1581,28 @@ $('#reportForm').addEventListener('submit', async (e) => {
 });
 
 /* ---------- Chargement ---------- */
-async function loadResult(R, { sync = true } = {}) {
+async function loadResult(R, { sync = true, file = null } = {}) {
   if (!R || !R.pages || !R.summary) throw new Error(t('toast.invalidFile'));
+  // Segments : ceux du crawl, sinon ceux déjà utilisés pour ce site (appliqués sans recrawler).
+  const host = R.meta?.startUrl ? new URL(R.meta.startUrl).hostname : 'crawl';
+  let segChanged = false;
+  if (R.meta.segments?.length) assignSegments(R, R.meta.segments);
+  else {
+    const remembered = store.get('segdefs:' + host, null);
+    if (remembered?.length) {
+      applySegments(R, remembered);
+      segChanged = true;
+    }
+  }
   // Crawl ouvert depuis un fichier : le serveur l'adopte aussi, pour que Corrections et MCP voient le même audit.
-  if (sync) fetch('/api/result', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) }).catch(() => {});
+  if (sync) fetch('/api/result' + (file ? '?file=' + encodeURIComponent(file) : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) }).catch(() => {});
+  else if (segChanged) postSegments(R.meta.segments);
   if (!R.version || R.version < 2) toast(t('toast.oldVersion'), 'info');
+  state.full = R;
   state.R = R;
+  const savedSeg = store.get('seg:' + host, '');
+  state.segId = savedSeg && (savedSeg === NONE || (R.meta.segments || []).some((s) => s.id === savedSeg)) ? savedSeg : '';
+  applyView();
   state.graph = null;
   state.selected = null;
   state.issue = null;
@@ -1491,7 +1631,7 @@ async function loadResult(R, { sync = true } = {}) {
 async function openSaved(file) {
   try {
     const R = await fetch('/api/crawls/' + encodeURIComponent(file)).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
-    await loadResult(R);
+    await loadResult(R, { file });
   } catch (err) {
     toast(t('toast.openFailed') + ' ' + err.message, 'error');
   }
@@ -1765,6 +1905,11 @@ $('#crawlForm').addEventListener('submit', async (e) => {
   } else {
     body.url = $('#urlInput').value.trim();
     if (!body.url) return;
+    // Segments déjà utilisés pour ce site : appliqués dès la fin du crawl (visibles aussi des agents IA).
+    try {
+      const segs = store.get('segdefs:' + new URL(/^https?:\/\//i.test(body.url) ? body.url : 'https://' + body.url).hostname, null);
+      if (segs?.length) options.segments = segs;
+    } catch { /* URL invalide : le serveur répondra */ }
   }
   const res = await fetch('/api/crawl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
@@ -1862,7 +2007,8 @@ function connect() {
     showProgress(d.progress);
   });
   es.addEventListener('reset', () => {
-    Object.assign(state, { R: null, graph: null, live: [], selected: null, tab: 'internal', rateSamples: [], compare: null });
+    Object.assign(state, { R: null, full: null, segId: '', graph: null, map: null, live: [], selected: null, tab: 'internal', rateSamples: [], compare: null });
+    renderSegChrome();
     $('#exportJsonBtn').disabled = true;
     $('#reportBtn').disabled = true;
     setRunning(true);
@@ -1876,6 +2022,18 @@ function connect() {
   // Activité des agents IA (MCP / REST) : le journal se met à jour et un crawl lancé par un agent est annoncé.
   es.addEventListener('agent', (e) => { const d = JSON.parse(e.data); agentListeners.forEach((fn) => fn(d)); if (d.tool && !/status|list|get_|search|summary|plan|geo/.test(d.tool)) toast(t('toast.agentCall', { tool: d.tool.replace(/^arachnide_/, '') }), 'info'); });
   es.addEventListener('reset', (e) => { const d = JSON.parse(e.data || '{}'); if (d.via === 'agent') toast(t('toast.agentCrawl', { url: d.startUrl }), 'info'); });
+  // Segments changés ailleurs (agent IA, autre onglet) sur le crawl ouvert : appliqués ici aussi.
+  es.addEventListener('segments', (e) => {
+    const d = JSON.parse(e.data || '{}');
+    if (!state.full || JSON.stringify(d.segments || []) === JSON.stringify(segDefs())) return;
+    applySegments(state.full, d.segments || []);
+    store.set('segdefs:' + hostKey(), segDefs());
+    state.segStats = null;
+    applyView();
+    renderTabs();
+    render();
+    if (d.via === 'agent') toast(t('seg.saved', { n: segDefs().length }), 'info');
+  });
   es.addEventListener('pages', (e) => { state.live.push(...JSON.parse(e.data)); throttledRender(); });
   es.addEventListener('done', async () => {
     setRunning(false);

@@ -30,11 +30,27 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
 
+## 🧩 Novità della 3.14: segmenti — analizza un sito grande sezione per sezione
+
+Su un sito grande, un punteggio globale nasconde dove sono davvero i problemi. I **segmenti** suddividono l’audit in sezioni con un nome — schede prodotto, categorie, blog, una lingua, pagine senza traffico… — esattamente come i segmenti di Screaming Frog.
+
+- **Regole su qualsiasi campo**: percorso, URL, title, H1, meta description, stato, indicizzabilità, profondità di clic, parole, link in entrata, Link Score, tempo di risposta, sitemap, tipo di dati strutturati, lingua, clic di Search Console e le tue **estrazioni personalizzate**. Operatori di testo, numerici e vero / falso, combinati in E / O.
+- **Vince il primo segmento che corrisponde**: ordina i segmenti, il resto va in *Senza segmento*. Conteggio delle pagine in tempo reale.
+- **Un clic per iniziare**: *Crea dalle directory* crea un segmento per ogni cartella di primo livello.
+- **Applicati dopo la scansione, senza ripeterla**, salvati con la scansione e riutilizzati nelle successive. Import / export JSON.
+- **Un filtro globale** nella barra laterale: tutta l’app segue il segmento — panoramica, punteggio, problemi, piano d’azione, tabelle, CSV e report PDF —, ricalcolato con lo stesso metodo.
+- **Tabella dei segmenti nella panoramica**, ogni problema suddiviso per segmento, colonna *Segmento*, *Colore per segmento* sulla mappa del sito.
+- **CLI**: `--segments segments.json`, `--segment-folders`, `--segment blog`. **Agenti IA**: strumento `arachnide_segments` e parametro `segment`.
+
+<p align="center">
+  <img src="docs/screenshots/segments.png" alt="Segments" width="100%">
+</p>
+
 ## 🤝 Novità della 3.13: collega il tuo agente IA (Claude, ChatGPT…) ad Arachnide
 
 Arachnide diventa gli occhi e le mani del tuo agente SEO / GEO. L’agente legge l’audit che hai aperto, avvia crawl che compaiono in diretta nell’applicazione, esplora le pagine, ottiene il piano d’azione prioritizzato e il nuovo report sulla **prontezza GEO**, e corregge il sito con la tua approvazione.
 
-- **Tre accessi, 24 strumenti**: MCP via stdio (Claude Code, Claude Desktop), **MCP via HTTP** (`/mcp`, per i connettori personalizzati di claude.ai e gli agenti ospitati) e **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` — da importare con un clic come Action di ChatGPT). Gli stessi strumenti ovunque, definiti una sola volta.
+- **Tre accessi, 25 strumenti**: MCP via stdio (Claude Code, Claude Desktop), **MCP via HTTP** (`/mcp`, per i connettori personalizzati di claude.ai e gli agenti ospitati) e **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` — da importare con un clic come Action di ChatGPT). Gli stessi strumenti ovunque, definiti una sola volta.
 - **Token di accesso** creato al primo avvio, visibile e rinnovabile in *Impostazioni → Agenti IA*, con snippet pronti da incollare (configurazione di Claude Desktop, impostazioni dell’Action di ChatGPT, richiesta di prova), un campo per l’URL pubblico per i tunnel (cloudflared, ngrok, Tailscale) e il registro delle ultime chiamate degli agenti.
 - **Nuovi strumenti**: `arachnide_action_plan` (il piano ordinato dell’app, con i quick win segnalati), `arachnide_search_pages` (filtrare e ordinare le pagine per Link Score, profondità, stato, cartella, problema), `arachnide_geo_readiness` (accesso dei crawler IA, llms.txt, dati strutturati, profondità dei contenuti → punteggio 0-100 e raccomandazioni), `arachnide_start_crawl` + `arachnide_crawl_status` (crawl in background, visibile in diretta nell’app). `crawl_id: "current"` indica sempre l’audit aperto nell’app.
 - Guida e istruzioni di sistema suggerite per un agente SEO / GEO: [docs/AGENTS.md](docs/AGENTS.md).
@@ -326,6 +342,7 @@ node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang it
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

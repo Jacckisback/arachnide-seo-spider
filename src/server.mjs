@@ -13,6 +13,7 @@ import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, star
 import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
 import { handleFixRoutes } from './fix/routes.mjs';
 import { createAgentGateway } from './agent/http.mjs';
+import { applySegments } from '../public/shared/segments.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -113,6 +114,12 @@ const gateway = createAgentGateway({
       if (!j) return null;
       return { id, url: j.url, state: j.state, started_at: j.startedAt, finished_at: j.finishedAt, progress: j.crawler?.progress?.() || null, crawl_id: j.file ? j.file.replace(/\.json$/, '') : (j.state === 'done' ? 'current' : undefined), result: j.result, error: j.error };
     },
+    // Un agent a changé les segments du crawl ouvert : on les enregistre avec le crawl et l'interface les reprend.
+    segmentsChanged(R) {
+      if (R !== lastResult) return null;
+      broadcast('segments', { segments: R.meta.segments || [], via: 'agent' });
+      return lastFile ? saveResult(R).catch((e) => console.error('Sauvegarde des segments impossible :', e.message)) : null;
+    },
     adopt(R, file) {
       if (crawler && crawler.phase !== 'done') return;
       lastResult = R;
@@ -186,8 +193,20 @@ const server = http.createServer(async (req, res) => {
       const R = await readBody(req);
       if (!R.pages || !R.summary || !R.meta) return send(res, 400, { error: 'Invalid crawl', key: 'toast.invalidFile' });
       lastResult = R;
-      lastFile = null;
+      // Crawl rouvert depuis l'historique : on garde son fichier, pour y enregistrer les segments.
+      const fromFile = safeName(url.searchParams.get('file') || '');
+      lastFile = fromFile && (await fs.stat(path.join(CRAWLS, fromFile)).then(() => true, () => false)) ? fromFile : null;
       return send(res, 200, { ok: true });
+    }
+    // Segments du crawl ouvert : appliqués sans recrawler, enregistrés avec le crawl (visibles des agents IA / MCP).
+    if (p === '/api/segments' && req.method === 'GET') return send(res, 200, { segments: lastResult?.meta?.segments || [], stats: lastResult?.summary?.segments || [] });
+    if (p === '/api/segments' && req.method === 'POST') {
+      if (!lastResult) return send(res, 404, { error: 'No crawl loaded', key: 'toast.noCrawl' });
+      const body = await readBody(req);
+      const { segments, problems } = applySegments(lastResult, body.segments || []);
+      if (lastFile) await saveResult(lastResult).catch((e) => console.error('Sauvegarde des segments impossible :', e.message));
+      broadcast('segments', { segments });
+      return send(res, 200, { segments, problems, stats: lastResult.summary.segments || [] });
     }
     if (p === '/api/result') return lastResult ? send(res, 200, lastResult) : send(res, 404, { error: 'Aucun résultat' });
     if (p === '/api/crawls') return send(res, 200, await listCrawls());

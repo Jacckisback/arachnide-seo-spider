@@ -1,0 +1,9 @@
+{
+  "app": "Arachnide SEO Spider",
+  "segments": [
+    { "name": "Product pages", "color": "#2563eb", "match": "all", "rules": [{ "field": "path", "op": "startsWith", "value": "/product/" }] },
+    { "name": "Categories", "color": "#d97706", "match": "any", "rules": [{ "field": "path", "op": "startsWith", "value": "/category/" }, { "field": "path", "op": "regex", "value": "^/c/[a-z-]+/?$" }] },
+    { "name": "Blog", "color": "#059669", "match": "all", "rules": [{ "field": "path", "op": "startsWith", "value": "/blog/" }] },
+    { "name": "Thin indexable pages", "color": "#db2777", "match": "all", "rules": [{ "field": "words", "op": "lt", "value": 200 }, { "field": "indexable", "op": "isTrue" }] }
+  ]
+}

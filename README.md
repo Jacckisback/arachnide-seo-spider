@@ -30,11 +30,28 @@ There is no account, no cloud and no page limit, and your data stays on your mac
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
 
+## 🧩 New in 3.14: segments — audit a big site section by section
+
+On a large site, one global score hides where the problems really are. **Segments** split the audit into named sections — product pages, categories, blog, a language, pages without traffic… — exactly like Screaming Frog segments.
+
+- **Rules on any field**: path, URL, title, H1, meta description, status, indexability, click depth, word count, inlinks, Link Score, response time, sitemap, structured data type, language, Search Console clicks, and your **custom extractions** (`extract:Price`…). Text operators (contains, starts with, regex…), numbers (>, ≤…), true/false. Combine rules with AND / OR.
+- **First match wins**, like Screaming Frog: order your segments, the rest goes to *No segment*. Live page counts while you edit.
+- **One click to start**: *Create from directories* builds one segment per top-level folder (and goes one level deeper when a single folder holds the whole site, e.g. `/fr/`).
+- **Applied after the crawl, no recrawl**: create, edit or reorder segments at any time. They are saved with the crawl and reused for the next crawls of the site. Import / export as JSON to share them across a team.
+- **A global filter** in the sidebar: pick a segment and *every* page follows — dashboard, health score and pillars, SEO issues, action plan, all the tables, CSV exports and the PDF report — recomputed for that section with the exact same scoring method.
+- **A segments table on the dashboard**: pages, health score, errors, warnings, indexability, average depth, words, Link Score, response time and main issues for each section. Click a row to filter the whole audit.
+- **Each issue split by segment**, a *Segment* column in the tables and CSV, *Colour by segment* on the site map (the segment you filter on is highlighted, the rest stays as context).
+- **CLI**: `--segments segments.json`, `--segment-folders`, `--segment blog`. **AI agents**: new `arachnide_segments` tool (get / suggest / set) and a `segment` parameter on summary, issues, action plan, page search and GEO readiness.
+
+<p align="center">
+  <img src="docs/screenshots/segments.png" alt="Segments: health score, errors and main issues per site section" width="100%">
+</p>
+
 ## 🤝 New in 3.13: plug your own AI agent (Claude, ChatGPT…) into Arachnide
 
 Arachnide becomes the eyes and hands of your SEO / GEO agent. The agent reads the audit you have open, starts crawls that appear live in the app, explores pages, gets the prioritised action plan and the new **GEO readiness** report, and fixes the site with your approval.
 
-- **Three doors, 24 tools**: MCP over stdio (Claude Code, Claude Desktop), **MCP over HTTP** (`/mcp`, for claude.ai custom connectors and hosted agents) and **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` — import it as a ChatGPT Action in one click). Same tools everywhere, defined once.
+- **Three doors, 25 tools**: MCP over stdio (Claude Code, Claude Desktop), **MCP over HTTP** (`/mcp`, for claude.ai custom connectors and hosted agents) and **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` — import it as a ChatGPT Action in one click). Same tools everywhere, defined once.
 - **Access token** created at first start, shown and renewable in *Settings → AI agents*, with ready-to-paste snippets (Claude Desktop config, ChatGPT Action settings, test request), a public-URL field for tunnels (cloudflared, ngrok, Tailscale) and the log of the latest agent calls.
 - **New tools**: `arachnide_action_plan` (the app's ordered plan, quick wins flagged), `arachnide_search_pages` (filter and sort pages by Link Score, depth, status, folder, issue), `arachnide_geo_readiness` (AI crawlers access, llms.txt, structured data, content depth → 0-100 score and recommendations), `arachnide_start_crawl` + `arachnide_crawl_status` (background crawl, visible live in the app). `crawl_id: "current"` always means the audit open in the app.
 - Guide and suggested system prompt for an SEO / GEO agent: [docs/AGENTS.md](docs/AGENTS.md).
@@ -338,6 +355,7 @@ node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang en
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

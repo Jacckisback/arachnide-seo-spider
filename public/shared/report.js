@@ -52,6 +52,7 @@ export function buildReport(R, opts, t) {
       <p class="kicker">${esc(t('report.kicker'))}</p>
       <h1>${esc(title)}</h1>
       <p class="site">${esc(site)}</p>
+      ${R.meta.segment ? `<p class="seg-scope"><i style="background:${esc(R.meta.segment.color || '#94a3b8')}"></i>${esc(t('report.segmentScope', { name: R.meta.segment.name || t('seg.none'), n: R.meta.segment.pages, total: t.num(R.meta.segment.total) }))}</p>` : ''}
       <div class="cover-score">${gaugeSvg(S.score, S.grade, color)}<div><b>${esc(t('report.healthScore'))}</b><span>${esc(t('grade.' + S.grade))}</span></div></div>
     </div>
     <dl class="cover-meta">
@@ -100,6 +101,14 @@ export function buildReport(R, opts, t) {
   </section>` : '';
 
   let sec = cmp ? 3 : 2;
+  const segRows = opts.segments || [];
+  const segments = segRows.length ? `<section class="page">
+    <h2><span class="n">${String(sec++).padStart(2, '0')}</span>${esc(t('report.segments'))}</h2>
+    <p>${esc(t('report.segmentsIntro'))}</p>
+    <table class="segs"><thead><tr><th>${esc(t('seg.col.segment'))}</th><th class="r">${esc(t('seg.col.pages'))}</th><th class="r">${esc(t('seg.col.score'))}</th><th class="r">${esc(t('seg.col.errors'))}</th><th class="r">${esc(t('seg.col.warnings'))}</th><th class="r">${esc(t('seg.col.indexable'))}</th><th class="r">${esc(t('seg.col.depth'))}</th><th>${esc(t('seg.col.top'))}</th></tr></thead><tbody>
+    ${segRows.map((g) => `<tr><td><i class="dot" style="background:${esc(g.color)}"></i><b>${esc(g.id === '__none' ? t('seg.none') : g.name)}</b></td><td class="r">${t.num(g.pages)}</td><td class="r">${g.score == null ? '—' : `<b style="color:${scoreCol(g.score)}">${g.score}</b>`}</td><td class="r">${t.num(g.errors)}</td><td class="r">${t.num(g.warnings)}</td><td class="r">${g.indexableRate == null ? '—' : g.indexableRate + ' %'}</td><td class="r">${g.avgDepth == null ? '—' : t.num(g.avgDepth)}</td><td><small>${g.topIssues.map((i) => `${esc(t('issue.' + i.id + '.label', i.params))} (${t.num(i.count)})`).join(' · ') || '—'}</small></td></tr>`).join('')}
+    </tbody></table>
+  </section>` : '';
   const planRows = (sev) => top.filter((i) => i.severity === sev);
   const plan = `<section class="page">
     <h2><span class="n">${String(sec++).padStart(2, '0')}</span>${esc(t('report.actionPlan'))}</h2>
@@ -172,6 +181,10 @@ export function buildReport(R, opts, t) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} — ${esc(host || site)}</title>
 <style>
+.seg-scope { display: inline-flex; align-items: center; gap: 8px; margin: 6px 0 0; font-weight: 600; }
+.seg-scope i, table.segs .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+table.segs td { vertical-align: top; }
+table.segs td:first-child { white-space: nowrap; }
 :root { --brand: ${color}; }
 * { box-sizing: border-box; }
 body { margin: 0; background: #e9ecf0; color: #141821; font: 13.5px/1.55 Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -277,7 +290,7 @@ table.mini td { padding: 5px 6px; }
 </head>
 <body>
 <div class="toolbar"><button class="p" onclick="window.print()">${esc(t('report.print'))}</button><button id="dl">${esc(t('report.downloadHtml'))}</button></div>
-${cover}${summary}${evolution}${plan}${details}${tech}${method}
+${cover}${summary}${evolution}${segments}${plan}${details}${tech}${method}
 <script>
 document.getElementById('dl').onclick = function () {
   var doc = document.documentElement.cloneNode(true);

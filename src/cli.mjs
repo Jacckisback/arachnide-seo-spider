@@ -8,6 +8,7 @@ import { getT, detailText, LANGS } from '../public/shared/i18n.js';
 import { buildReport } from '../public/shared/report.js';
 import { compareResults } from '../public/shared/compare.js';
 import { toCrawlerOptions } from './options.mjs';
+import { applySegments, suggestFromFolders, segmentStats, sliceResult, NONE } from '../public/shared/segments.js';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes('--' + name);
@@ -16,7 +17,7 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'alert-email', 'alert-score-drop']);
+const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -63,6 +64,10 @@ Usage : node src/cli.mjs <url> [options]
   --exclude REGEX     Skip matching URLs (repeatable)
   --stay-in-folder    Do not crawl outside the start URL's folder (https://x.com/blog/ → /blog/… only)
   --search TEXT       Custom search in the source code (/regex/ supported)
+  --segments FILE     Segments (JSON exported from the app, or [{ "name", "match", "rules": [{ "field", "op", "value" }] }]):
+                      score, errors and averages per site section, a segment column in the CSV, a section in the report
+  --segment-folders   One segment per top-level directory (automatic)
+  --segment ID        Report and CSV on this segment only (e.g. --segment blog)
   --lang CODE         en | fr | de | es | it | pt (labels, CSV, report)
   --csv               Also export pages.csv and issues.csv
   --report            Also generate a professional HTML audit report (print to PDF)
@@ -116,6 +121,15 @@ if (flag('list')) {
   opts.urls = (await fs.readFile(val('list'), 'utf8')).split(/\s+/).filter((x) => /^https?:\/\//i.test(x));
 }
 
+if (val('segments')) {
+  try {
+    opts.segments = toCrawlerOptions({ segments: JSON.parse(await fs.readFile(val('segments'), 'utf8')) }).segments;
+  } catch (e) {
+    console.error(`--segments: ${e.message}`);
+    process.exit(1);
+  }
+}
+
 const crawler = new Crawler(url || '', opts);
 const tty = process.stdout.isTTY;
 crawler.on('status', (s) => console.log(`→ ${t('phase.' + s.phase)}`));
@@ -128,8 +142,14 @@ process.on('SIGINT', () => {
   crawler.stop();
 });
 
-const r = await crawler.start();
+const full = await crawler.start();
 if (tty) process.stdout.write('\n');
+if (flag('segment-folders') && !full.meta.segments?.length) applySegments(full, suggestFromFolders(full));
+const segs = full.meta.segments || [];
+// --segment : le résumé, les CSV et le rapport portent sur ce segment (le JSON garde le crawl complet).
+const segId = val('segment', '');
+if (segId && segId !== NONE && !segs.some((s) => s.id === segId)) console.warn(`⚠ --segment ${segId}: ${segs.map((s) => s.id).join(', ') || '—'}`);
+const r = segId && (segId === NONE || segs.some((s) => s.id === segId)) ? sliceResult(full, segId) : full;
 
 const S = r.summary;
 const icon = { error: '✖', warning: '▲', notice: '•' };
@@ -139,11 +159,17 @@ console.log(`${t('dash.urls')} : ${S.totalUrls} · ${t('dash.html')} : ${S.htmlP
 console.log(`${t('dash.responseTime')} : ${S.avgResponseTime} ms · ${t('dash.words')} : ${S.avgWords}`);
 console.log(`\n${t('tab.issues')} (${S.errors} ${t('sev.errors')}, ${S.warnings} ${t('sev.warnings')}, ${S.notices} ${t('sev.notices')}) :`);
 for (const i of r.issues) console.log(`  ${icon[i.severity]} ${String(i.count).padStart(5)}  ${t('issue.' + i.id + '.label', i.params)}`);
+const segRows = segs.length ? segmentStats(full) : [];
+if (segRows.length) {
+  console.log(`\n${t('seg.cardTitle')} :`);
+  const w = Math.max(...segRows.map((g) => (g.id === NONE ? t('seg.none') : g.name).length));
+  for (const g of segRows) console.log(`  ${(g.id === NONE ? t('seg.none') : g.name).padEnd(w)}  ${String(g.pages).padStart(6)} ${t('seg.col.pages').toLowerCase()} · ${g.score ?? '—'}/100 · ${icon.error} ${g.errors} · ${icon.warning} ${g.warnings}`);
+}
 
 const outDir = path.resolve(val('out', path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'crawls')));
 await fs.mkdir(outDir, { recursive: true });
 const base = `${new URL(r.meta.startUrl).hostname}_${r.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '')}`;
-await fs.writeFile(path.join(outDir, base + '.json'), JSON.stringify(r));
+await fs.writeFile(path.join(outDir, base + '.json'), JSON.stringify(full));
 console.log(`\n${t('cli.saved')} ${path.join(outDir, base + '.json')}`);
 
 // Alerte e-mail (pour une tâche cron) : comparaison avec le crawl précédent du même site dans le dossier de sortie.
@@ -168,11 +194,13 @@ if (flag('csv')) {
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const toCsv = (rows, cols) => '﻿' + [cols.map((c) => esc(c[1])).join(';'), ...rows.map((row) => cols.map((c) => esc(row[c[0]])).join(';'))].join('\n');
-  const pageCols = [['url', 'URL'], ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')]];
-  const pages = r.pages.map((p) => ({ ...p, indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' }));
+  const segName = (id) => (!id ? '' : id === NONE ? t('seg.none') : segs.find((s) => s.id === id)?.name || id);
+  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')]];
+  const pages = r.pages.map((p) => ({ ...p, segmentName: segName(p.segment), indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' }));
   await fs.writeFile(path.join(outDir, base + '_pages.csv'), toCsv(pages, pageCols));
-  const issueRows = r.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));
-  await fs.writeFile(path.join(outDir, base + '_issues.csv'), toCsv(issueRows, [['sev', t('col.severity')], ['cat', t('col.category')], ['issue', t('col.issue')], ['url', 'URL'], ['detail', t('col.detail')], ['fix', t('col.fix')]]));
+  const segOfUrl = new Map(full.pages.map((p) => [p.url, p.segment]));
+  const issueRows = r.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, segment: segName(segOfUrl.get(it.url)), detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));
+  await fs.writeFile(path.join(outDir, base + '_issues.csv'), toCsv(issueRows, [['sev', t('col.severity')], ['cat', t('col.category')], ['issue', t('col.issue')], ['url', 'URL'], ...(segs.length ? [['segment', t('col.segment')]] : []), ['detail', t('col.detail')], ['fix', t('col.fix')]]));
   console.log(`CSV : ${base}_pages.csv, ${base}_issues.csv`);
 }
 
@@ -188,7 +216,8 @@ if (flag('report')) {
     website: val('website', ''),
     color: val('color', '#5b8c1e'),
     maxUrls: 10,
-    compare,
+    compare: segId ? null : compare,
+    segments: segRows.length ? segRows : null,
   }, t);
   const file = path.join(outDir, `${base}_report_${t.lang}.html`);
   await fs.writeFile(file, html);

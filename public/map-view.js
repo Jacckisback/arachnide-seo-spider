@@ -159,7 +159,7 @@ export function makeScene(M, o, key, t) {
 
 // ---------- Filtres (corpus complet) ----------
 // dir : dossier à n'importe quel niveau (« /en/blog/ ») ; urlInc / urlExc : motifs d'URL, un par ligne.
-export const DEFAULT_FILTERS = { issues: '', depthMin: null, dir: '', urlInc: '', urlExc: '', status: '', index: '', lowInlinks: false, inlinksMax: 1, lsMin: null, lsMax: null };
+export const DEFAULT_FILTERS = { segment: '', issues: '', depthMin: null, dir: '', urlInc: '', urlExc: '', status: '', index: '', lowInlinks: false, inlinksMax: 1, lsMin: null, lsMax: null };
 export const activeFilters = (f) => Object.entries(f).filter(([k, v]) => k !== 'inlinksMax' && k !== '_mode' && v !== '' && v !== null && v !== false && v !== undefined);
 
 // Motifs d'URL, un par ligne : texte contenu dans l'URL (« /en/ »), joker (« /en/*/page-* ») ou expression régulière
@@ -204,6 +204,7 @@ export function matchPages(M, f) {
     if (f.issues && f.issues !== 'any' && !(M.issues.get(p.url) || []).some((i) => i.severity === f.issues)) continue;
     if (f.depthMin != null && !(p.depth != null && p.depth >= f.depthMin)) continue;
     if (f.dir && !inFolder(p.url, f.dir)) continue;
+    if (f.segment && (p.segment || '__none') !== f.segment) continue;
     if (inc.length && !inc.some((re) => testUrl(re, p.url))) continue;
     if (exc.length && exc.some((re) => testUrl(re, p.url))) continue;
     if (f.status) {
@@ -311,6 +312,8 @@ export function legendItems(o, M, t, dirs) {
       return [[P.status.ok, '2xx'], [P.status.redirect, '3xx'], [P.status.client, '4xx'], [P.status.server, '5xx'], [P.status.none, t('map.noResponse')]];
     case 'index':
       return [[P.index.yes, t('idx.indexable')], [P.index.no, t('idx.nonIndexable')], [P.index.unknown, t('map.unknown')]];
+    case 'segment':
+      return o.segLegend || [];
     case 'dir':
       return dirs.slice(0, P.dir.length).map((d, i) => [P.dir[i], d]).concat(dirs.length > P.dir.length ? [[P.unknown, t('map.otherDirs')]] : []);
     default:

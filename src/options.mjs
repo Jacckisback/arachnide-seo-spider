@@ -1,5 +1,6 @@
 // Conversion des options envoyées par l'interface (formulaire) en options du crawler, avec validation.
 import { USER_AGENTS } from './crawler.mjs';
+import { normalizeSegments } from '../public/shared/segments.js';
 
 const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec', 'psiMax', 'gscDays'];
 const BOOLS = ['crawlSubdomains', 'stayInFolder', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render'];
@@ -44,6 +45,8 @@ export function toCrawlerOptions(o = {}) {
   for (const k of ['include', 'exclude']) for (const line of String(opts[k] || '').split(/\r?\n/)) if (line.trim()) checkRegex(line.trim(), k);
   for (const l of opts.pathLimits) checkRegex(l.pattern, 'pathLimits');
   for (const e of opts.extractors) if (e.type === 'regex') checkRegex(e.selector, e.name);
+  // Segments (vue par section du site) : appliqués à la fin du crawl ; voir public/shared/segments.js.
+  if (o.segments) opts.segments = normalizeSegments(o.segments).segments;
   opts.userAgent = USER_AGENTS[o.userAgent] || (o.customUserAgent ? String(o.customUserAgent) : USER_AGENTS.arachnide);
   opts.concurrency = Math.min(Math.max(opts.concurrency || 5, 1), 30);
   // Valeurs absurdes (négatives, infinies) ramenées à des bornes sûres plutôt que de bloquer ou de vider le crawl.

@@ -79,6 +79,8 @@ export function colorOf(n, style) {
       return p?.indexable == null ? P.index.unknown : p.indexable ? P.index.yes : P.index.no;
     case 'dir':
       return style.dirColor?.(n) || P.unknown;
+    case 'segment':
+      return style.segColor?.(n) || P.unknown;
     default:
       return n.depth == null ? P.unknown : P.depth[Math.min(P.depth.length - 1, n.depth)];
   }

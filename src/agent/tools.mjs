@@ -17,6 +17,7 @@ import { describeConnectors, createConnector, CONNECTORS, FIELDS } from '../conn
 import { readConfig, writeConfig, getSite, publicSite, resolveSecrets, SECRET_KEY, CONFIG_FILE } from '../sites.mjs';
 import { getT, detailText } from '../../public/shared/i18n.js';
 import { compareResults } from '../../public/shared/compare.js';
+import { applySegments, normalizeSegments, segmentStats, sliceResult, suggestFromFolders, NONE, FIELDS as SEG_FIELDS, OPS as SEG_OPS } from '../../public/shared/segments.js';
 
 export const RO = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 const LOCAL = { ...RO, openWorldHint: false };
@@ -60,15 +61,26 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   const isQuickWin = (i) => i.effort === 'low' && i.impact !== 'low' && i.severity !== 'notice';
 
   // « current » = le crawl affiché dans l'interface (ou en cours de consultation par l'agent) ; sinon le plus récent.
-  async function resolveCrawl(id) {
-    if (id && id !== 'current' && id !== 'latest') return { id: crawlId(id), R: await loadCrawl(id.endsWith('.json') ? id : id + '.json') };
+  async function loadRef(id) {
+    if (id && id !== 'current' && id !== 'latest') {
+      const file = id.endsWith('.json') ? id : id + '.json';
+      return { id: crawlId(id), R: await loadCrawl(file), file };
+    }
     if (id !== 'latest') {
       const cur = ctx.currentResult();
-      if (cur) return { id: 'current', R: cur };
+      if (cur) return { id: 'current', R: cur, current: true };
     }
     const [latest] = await listCrawls();
     if (!latest) throw err('No crawl yet: run arachnide_crawl (or arachnide_start_crawl) first.', 'not_found');
-    return { id: crawlId(latest.file), R: await loadCrawl(latest.file) };
+    return { id: crawlId(latest.file), R: await loadCrawl(latest.file), file: latest.file };
+  }
+  // `segment` : l'id d'un segment du crawl (arachnide_segments) ; le résultat est le crawl découpé sur ce segment.
+  async function resolveCrawl(id, segment) {
+    const ref = await loadRef(id);
+    if (!segment) return ref;
+    const segs = ref.R.meta.segments || [];
+    if (segment !== NONE && !segs.some((x) => x.id === segment)) throw err(`Segment "${segment}" not found in ${ref.id}.`, 'not_found', segs.length ? `Known segments: ${segs.map((x) => x.id).join(', ')}, ${NONE}.` : 'This crawl has no segments: define them with arachnide_segments (action "set" or "suggest").');
+    return { ...ref, R: sliceResult(ref.R, segment) };
   }
 
   const summaryOf = (id, R) => ({
@@ -93,12 +105,25 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     search_console: R.meta.gsc || undefined,
     pagespeed: R.meta.psi ? { tested: R.meta.psi.tested, strategy: R.meta.psi.strategy, origin_core_web_vitals: R.meta.psi.origin } : undefined,
     crawl_warnings: R.meta.warnings?.length ? R.meta.warnings : undefined,
+    segment: R.meta.segment || undefined,
+    segments: !R.meta.segment && R.summary.segments?.length ? R.summary.segments.map((g) => ({ id: g.id, name: g.id === NONE ? '(no segment)' : g.name, pages: g.pages, score: g.score, errors: g.errors, warnings: g.warnings })) : undefined,
   });
 
+  const ruleSchema = z.object({
+    field: z.string().describe(`One of: ${Object.keys(SEG_FIELDS).join(', ')}, or "extract:<extractor name>"`),
+    op: z.string().describe(`text: ${SEG_OPS.text.join('|')}; number: ${SEG_OPS.number.join('|')}; bool: ${SEG_OPS.bool.join('|')}; enum: ${SEG_OPS.enum.join('|')}`),
+    value: z.union([z.string(), z.number()]).optional(),
+  });
+  const segmentSchema = z.object({
+    name: z.string().min(1).max(60),
+    color: z.string().optional().describe('#rrggbb'),
+    match: z.enum(['all', 'any']).default('all').describe('all = every rule must match (AND), any = at least one (OR)'),
+    rules: z.array(ruleSchema).min(1).max(20),
+  });
   const crawlOptions = (a) => toCrawlerOptions({
     maxPages: a.max_pages, maxDepth: a.max_depth, render: a.render, checkImages: a.check_images, checkExternal: a.check_external, userAgent: a.user_agent, robotsMode: a.robots,
     include: a.include || '', exclude: a.exclude || '', stayInFolder: !!a.stay_in_folder, concurrency: a.concurrency, psiMax: a.psi_pages, psiStrategy: a.psi_strategy,
-    gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv || '',
+    gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv || '', segments: a.segments,
   });
   const crawlShape = {
     url: z.string().url().describe('Start URL (usually the home page)'),
@@ -118,6 +143,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     gsc_key_file: z.string().optional().describe('Path (on the Arachnide machine) of a Google service-account JSON key with access to the Search Console property'),
     gsc_property: z.string().optional().describe('Search Console property, e.g. sc-domain:example.com (auto-detected if omitted)'),
     gsc_csv: z.string().optional().describe('Content of a Search Console "Pages" CSV export, instead of the API'),
+    segments: z.array(segmentSchema).optional().describe('Segments to apply to the result (site sections such as product pages, categories, blog). Can also be set later with arachnide_segments.'),
   };
 
   const changeSchema = z.object({
@@ -127,6 +153,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     target: z.string().optional().describe('image_alt only: src of the image'),
     reason: z.string().optional().describe('Why (shown in the journal)'),
   });
+  const segRef = z.string().optional().describe('Only this segment (id from arachnide_segments, "__none" = pages without a segment): scores, issues and pages are recomputed for that site section');
   const crawlRef = z.string().optional().describe('Crawl id from arachnide_list_crawls; "current" (default) = the crawl open in the Arachnide app, else the latest saved one');
 
   const tools = [];
@@ -206,21 +233,47 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   def('arachnide_get_summary', {
     title: 'Crawl summary',
     description: 'Health score, grade, category and pillar scores, and the 15 highest-priority issues of a crawl. Start here after a crawl.',
-    shape: { crawl_id: crawlRef },
+    shape: { crawl_id: crawlRef, segment: segRef },
     annotations: LOCAL,
-    handler: async ({ crawl_id }) => {
-      const { id, R } = await resolveCrawl(crawl_id);
+    handler: async ({ crawl_id, segment }) => {
+      const { id, R } = await resolveCrawl(crawl_id, segment);
       return summaryOf(id, R);
+    },
+  });
+
+  def('arachnide_segments', {
+    title: 'Segments (site sections)',
+    description: 'Split a crawl into named site sections (product pages, categories, blog…), like Screaming Frog segments, without recrawling. A page belongs to the FIRST segment whose rules it matches (order matters). action "get" returns the segments with health score, errors, warnings, indexability and averages per segment; "suggest" proposes one segment per top-level directory (not saved); "set" saves segments on the crawl (replaces them; [] removes them) and returns the new stats. Then pass `segment` to arachnide_get_summary, arachnide_list_issues, arachnide_get_issue, arachnide_action_plan, arachnide_search_pages or arachnide_geo_readiness to work on one section.',
+    shape: { crawl_id: crawlRef, action: z.enum(['get', 'suggest', 'set']).default('get'), segments: z.array(segmentSchema).optional().describe('For action "set": the full ordered list') },
+    annotations: { ...LOCAL, readOnlyHint: false, idempotentHint: true, destructiveHint: false },
+    handler: async ({ crawl_id, action, segments }) => {
+      const ref = await loadRef(crawl_id);
+      const { R } = ref;
+      const out = (list) => ({ crawl_id: ref.id, segments: list, stats: list.length ? segmentStats(R, list).map(({ pillars, ...g }) => ({ ...g, name: g.id === NONE ? '(no segment)' : g.name, top_issues: g.topIssues.map((i) => ({ id: i.id, severity: i.severity, urls: i.count, label: issueLabel(i) })), topIssues: undefined })) : [] });
+      if (action === 'suggest') {
+        const sug = suggestFromFolders(R);
+        const copy = { ...R, pages: R.pages.map((p) => ({ ...p })), meta: { ...R.meta } };
+        applySegments(copy, sug);
+        return { crawl_id: ref.id, segments: sug, stats: segmentStats(copy, sug).map(({ pillars, topIssues, ...g }) => ({ ...g, name: g.id === NONE ? '(no segment)' : g.name })), saved: false, hint: 'Call arachnide_segments with action "set" and these segments (edit names or rules first if needed) to save them.' };
+      }
+      if (action === 'set') {
+        if (!segments) throw err('action "set" needs `segments` (an empty array removes them).', 'invalid');
+        const { segments: clean, problems } = applySegments(R, segments);
+        if (ref.file) await saveResult(R);
+        if (ref.current) await ctx.segmentsChanged?.(R);
+        return { ...out(clean), saved: true, problems: problems.length ? problems : undefined };
+      }
+      return out(R.meta.segments || []);
     },
   });
 
   def('arachnide_list_issues', {
     title: 'List SEO issues',
     description: 'All issues of a crawl sorted by recommended priority (severity first, then impact × URLs ÷ effort), each with how to fix it.',
-    shape: { crawl_id: crawlRef, severity: z.enum(['error', 'warning', 'notice']).optional(), category: z.string().optional().describe('e.g. titles, meta, images, links, redirects, canonicals, content, schema, ai, performance, security') },
+    shape: { crawl_id: crawlRef, segment: segRef, severity: z.enum(['error', 'warning', 'notice']).optional(), category: z.string().optional().describe('e.g. titles, meta, images, links, redirects, canonicals, content, schema, ai, performance, security') },
     annotations: LOCAL,
-    handler: async ({ crawl_id, severity, category }) => {
-      const { id, R } = await resolveCrawl(crawl_id);
+    handler: async ({ crawl_id, segment, severity, category }) => {
+      const { id, R } = await resolveCrawl(crawl_id, segment);
       return { crawl_id: id, issues: R.issues.filter((i) => (!severity || i.severity === severity) && (!category || i.category === category)).map((i) => ({ id: i.id, severity: i.severity, category: i.category, impact: i.impact, effort: i.effort, urls: i.count, scope: i.scope, label: issueLabel(i), fix: issueFix(i) })) };
     },
   });
@@ -228,10 +281,10 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   def('arachnide_get_issue', {
     title: 'URLs affected by an issue',
     description: 'Explanation, fix and affected URLs (paginated) for one issue id from arachnide_list_issues.',
-    shape: { crawl_id: crawlRef, issue_id: z.string(), limit: z.number().int().min(1).max(500).default(50), offset: z.number().int().min(0).default(0) },
+    shape: { crawl_id: crawlRef, segment: segRef, issue_id: z.string(), limit: z.number().int().min(1).max(500).default(50), offset: z.number().int().min(0).default(0) },
     annotations: LOCAL,
-    handler: async ({ crawl_id, issue_id, limit, offset }) => {
-      const { id, R } = await resolveCrawl(crawl_id);
+    handler: async ({ crawl_id, segment, issue_id, limit, offset }) => {
+      const { id, R } = await resolveCrawl(crawl_id, segment);
       const i = R.issues.find((x) => x.id === issue_id);
       if (!i) throw err(`Issue "${issue_id}" not found in ${id}. Use arachnide_list_issues.`, 'not_found');
       return { crawl_id: id, id: i.id, severity: i.severity, category: i.category, label: issueLabel(i), why: t('issue.' + i.id + '.desc', i.params), fix: issueFix(i), total: i.count, offset, has_more: offset + limit < i.count, items: i.items.slice(offset, offset + limit).map((it) => ({ url: it.url, detail: detailText(it.detail, t) })) };
@@ -241,10 +294,10 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   def('arachnide_action_plan', {
     title: 'Prioritised action plan',
     description: 'The crawl\'s issues turned into an ordered action plan (same ranking as the Arachnide "Action plan" page): rank, action title, severity, impact, effort, URLs, quick-win flag and how to fix. Use it to tell the user what to do first.',
-    shape: { crawl_id: crawlRef, limit: z.number().int().min(1).max(200).default(25), quick_wins_only: z.boolean().default(false) },
+    shape: { crawl_id: crawlRef, segment: segRef, limit: z.number().int().min(1).max(200).default(25), quick_wins_only: z.boolean().default(false) },
     annotations: LOCAL,
-    handler: async ({ crawl_id, limit, quick_wins_only }) => {
-      const { id, R } = await resolveCrawl(crawl_id);
+    handler: async ({ crawl_id, segment, limit, quick_wins_only }) => {
+      const { id, R } = await resolveCrawl(crawl_id, segment);
       const all = R.issues.map((i, k) => ({ rank: k + 1, id: i.id, action: actionTitle(i), issue: issueLabel(i), severity: i.severity, category: i.category, impact: i.impact, effort: i.effort, urls: uniqueUrls(i) ?? 'site', quick_win: isQuickWin(i), fix: issueFix(i) }));
       const rows = quick_wins_only ? all.filter((a) => a.quick_win) : all;
       return { crawl_id: id, total_actions: all.length, quick_wins: all.filter((a) => a.quick_win).length, start_here: all[0] || null, actions: rows.slice(0, limit) };
@@ -253,9 +306,10 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
 
   def('arachnide_search_pages', {
     title: 'Search and filter crawled pages',
-    description: 'Find pages in a crawl by text (URL or title), HTTP status, indexability, click depth, folder, or issue, sorted by Link Score (internal PageRank), depth, inlinks or words. Returns compact rows; use arachnide_get_page for everything about one URL.',
+    description: 'Find pages in a crawl by text (URL or title), segment, HTTP status, indexability, click depth, folder, or issue, sorted by Link Score (internal PageRank), depth, inlinks or words. Returns compact rows; use arachnide_get_page for everything about one URL.',
     shape: {
       crawl_id: crawlRef,
+      segment: segRef,
       query: z.string().optional().describe('Text contained in the URL or title'),
       folder: z.string().optional().describe('Path prefix, e.g. /blog/'),
       status: z.enum(['ok', 'redirect', 'client_error', 'server_error', 'no_response']).optional(),
@@ -269,7 +323,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     },
     annotations: LOCAL,
     handler: async (a) => {
-      const { id, R } = await resolveCrawl(a.crawl_id);
+      const { id, R } = await resolveCrawl(a.crawl_id, a.segment);
       const affected = a.issue_id ? new Set((R.issues.find((i) => i.id === a.issue_id)?.items || []).map((x) => x.url)) : null;
       const bucket = (p) => (!p.status ? 'no_response' : p.status >= 500 ? 'server_error' : p.status >= 400 ? 'client_error' : p.status >= 300 ? 'redirect' : 'ok');
       const q = a.query?.toLowerCase();
@@ -288,7 +342,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
       rows.sort(by[a.sort]);
       const issuesOf = new Map();
       for (const i of R.issues) for (const it of i.items) issuesOf.set(it.url, (issuesOf.get(it.url) || 0) + 1);
-      return { crawl_id: id, total: rows.length, offset: a.offset, has_more: a.offset + a.limit < rows.length, pages: rows.slice(a.offset, a.offset + a.limit).map((p) => ({ url: p.url, status: p.status, indexable: p.indexable, depth: p.depth, title: p.title, link_score: p.linkScore, inlinks: p.uniqueInlinks, words: p.wordCount, issues: issuesOf.get(p.url) || 0 })) };
+      return { crawl_id: id, total: rows.length, offset: a.offset, has_more: a.offset + a.limit < rows.length, pages: rows.slice(a.offset, a.offset + a.limit).map((p) => ({ url: p.url, status: p.status, indexable: p.indexable, depth: p.depth, title: p.title, link_score: p.linkScore, inlinks: p.uniqueInlinks, words: p.wordCount, segment: p.segment, issues: issuesOf.get(p.url) || 0 })) };
     },
   });
 
@@ -309,10 +363,10 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   def('arachnide_geo_readiness', {
     title: 'GEO readiness (visibility in AI answers)',
     description: 'Generative Engine Optimisation report from a crawl: can AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended…) read the site, is there an llms.txt, how much of the site carries structured data (and which types), content depth, duplicates, headings and metadata hygiene — with a 0-100 readiness score and ordered recommendations.',
-    shape: { crawl_id: crawlRef },
+    shape: { crawl_id: crawlRef, segment: segRef },
     annotations: LOCAL,
-    handler: async ({ crawl_id }) => {
-      const { id, R } = await resolveCrawl(crawl_id);
+    handler: async ({ crawl_id, segment }) => {
+      const { id, R } = await resolveCrawl(crawl_id, segment);
       return { crawl_id: id, ...geoReadiness(R, { issueLabel }) };
     },
   });
