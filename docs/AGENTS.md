@@ -72,6 +72,8 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 
 Every reading tool (`arachnide_get_summary`, `arachnide_list_issues`, `arachnide_get_issue`, `arachnide_action_plan`, `arachnide_search_pages`, `arachnide_geo_readiness`) accepts `segment`: the scores, issues and pages are recomputed for that section of the site.
 
+Google Analytics 4: pass `ga4_key_file` (and `ga4_property`) or `ga4_csv` to `arachnide_crawl` / `arachnide_start_crawl` to add sessions per page and find orphan pages that get traffic (`ga4-orphan`); `arachnide_search_pages` can sort by `sessions`.
+
 `GET /api/agent/tools` returns the same list with the JSON Schema of each input.
 
 ## Suggested instructions for an SEO / GEO agent

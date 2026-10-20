@@ -46,6 +46,7 @@ export function cardHtml(stats, active, X) {
   const gradeCls = (g) => (!g ? '' : /^[AB]/.test(g) ? 'solid' : /^C/.test(g) ? 'fair' : 'weak');
   const cell = (v, unit = '') => (v == null ? '<span class="muted">—</span>' : num(v) + unit);
   const max = Math.max(1, ...stats.map((s) => s.pages));
+  const hasGa4 = stats.some((s) => s.sessions != null);
   const rows = stats
     .map((s) => `<tr class="${active === s.id ? 'sel' : ''}" data-seg="${esc(s.id)}" tabindex="0" title="${esc(t('seg.rowHint'))}">
       <th scope="row"><span class="seg-name"><span class="seg-dot" style="--c:${esc(s.color)}"></span>${esc(segName(s, t))}</span>
@@ -59,6 +60,7 @@ export function cardHtml(stats, active, X) {
       <td class="num">${cell(s.avgWords)}</td>
       <td class="num">${cell(s.avgLinkScore)}</td>
       <td class="num">${s.avgResponseTime == null ? '<span class="muted">—</span>' : num(s.avgResponseTime) + ' ms'}</td>
+      ${hasGa4 ? `<td class="num">${cell(s.sessions)}</td>` : ''}
       <td class="seg-top">${s.topIssues.length ? s.topIssues.map((i) => `<button class="seg-issue ${i.severity}" type="button" data-seg-issue="${esc(i.id)}" data-seg-of="${esc(s.id)}" title="${esc(t('issue.' + i.id + '.label', i.params))}">${esc(t('issue.' + i.id + '.label', i.params))} <b>${num(i.count)}</b></button>`).join('') : `<span class="muted">${icon('check')} ${esc(t('seg.noIssue'))}</span>`}</td>
     </tr>`)
     .join('');
@@ -66,7 +68,7 @@ export function cardHtml(stats, active, X) {
     <div class="card-head"><div><h2 id="hSeg">${icon('layers')} ${esc(t('seg.cardTitle'))}</h2><p class="sub">${esc(t('seg.cardSub'))}</p></div>
       <button class="btn small ghost" id="segManage2" type="button">${icon('settings')} ${esc(t('seg.manage'))}</button></div>
     <div class="seg-table-wrap"><table class="seg-table">
-      <thead><tr><th scope="col">${esc(t('seg.col.segment'))}</th><th scope="col" class="num">${esc(t('seg.col.pages'))}</th><th scope="col" class="num">${esc(t('seg.col.score'))}</th><th scope="col" class="num">${esc(t('seg.col.errors'))}</th><th scope="col" class="num">${esc(t('seg.col.warnings'))}</th><th scope="col" class="num">${esc(t('seg.col.indexable'))}</th><th scope="col" class="num">${esc(t('seg.col.depth'))}</th><th scope="col" class="num">${esc(t('seg.col.words'))}</th><th scope="col" class="num">Link Score</th><th scope="col" class="num">${esc(t('seg.col.response'))}</th><th scope="col">${esc(t('seg.col.top'))}</th></tr></thead>
+      <thead><tr><th scope="col">${esc(t('seg.col.segment'))}</th><th scope="col" class="num">${esc(t('seg.col.pages'))}</th><th scope="col" class="num">${esc(t('seg.col.score'))}</th><th scope="col" class="num">${esc(t('seg.col.errors'))}</th><th scope="col" class="num">${esc(t('seg.col.warnings'))}</th><th scope="col" class="num">${esc(t('seg.col.indexable'))}</th><th scope="col" class="num">${esc(t('seg.col.depth'))}</th><th scope="col" class="num">${esc(t('seg.col.words'))}</th><th scope="col" class="num">Link Score</th><th scope="col" class="num">${esc(t('seg.col.response'))}</th>${hasGa4 ? `<th scope="col" class="num">${esc(t('col.sessions'))}</th>` : ''}<th scope="col">${esc(t('seg.col.top'))}</th></tr></thead>
       <tbody>${rows}</tbody></table></div>
   </section>`;
 }
@@ -82,11 +84,11 @@ export function breakdownHtml(rows, X) {
 }
 
 // ---------- Gestionnaire ----------
-const FIELD_ORDER = ['path', 'url', 'title', 'h1', 'metaDescription', 'contentType', 'indexability', 'indexable', 'status', 'depth', 'words', 'inlinks', 'linkScore', 'responseTime', 'inSitemap', 'isHtml', 'schemaType', 'lang', 'canonical', 'gscClicks'];
+const FIELD_ORDER = ['path', 'url', 'title', 'h1', 'metaDescription', 'contentType', 'indexability', 'indexable', 'status', 'depth', 'words', 'inlinks', 'linkScore', 'responseTime', 'inSitemap', 'isHtml', 'schemaType', 'lang', 'canonical', 'gscClicks', 'ga4Sessions'];
 
 function fieldOptions(R, t, cur) {
   const ex = (R.meta?.options?.extractors || []).map((e) => 'extract:' + e.name);
-  const list = [...FIELD_ORDER.filter((f) => f !== 'gscClicks' || R.meta?.gsc), ...ex];
+  const list = [...FIELD_ORDER.filter((f) => (f !== 'gscClicks' || R.meta?.gsc) && (f !== 'ga4Sessions' || R.meta?.ga4)), ...ex];
   return list.map((f) => `<option value="${f}" ${f === cur ? 'selected' : ''}>${f.startsWith('extract:') ? t('seg.field.extract', { name: f.slice(8) }) : t('seg.field.' + f)}</option>`).join('');
 }
 

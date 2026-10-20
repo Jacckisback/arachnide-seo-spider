@@ -103,6 +103,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     top_issues: R.issues.slice(0, 15).map((i) => ({ id: i.id, severity: i.severity, category: i.category, urls: i.count, label: issueLabel(i) })),
     skipped: R.meta.skipped,
     search_console: R.meta.gsc || undefined,
+    google_analytics: R.meta.ga4 || undefined,
     pagespeed: R.meta.psi ? { tested: R.meta.psi.tested, strategy: R.meta.psi.strategy, origin_core_web_vitals: R.meta.psi.origin } : undefined,
     crawl_warnings: R.meta.warnings?.length ? R.meta.warnings : undefined,
     segment: R.meta.segment || undefined,
@@ -123,7 +124,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   const crawlOptions = (a) => toCrawlerOptions({
     maxPages: a.max_pages, maxDepth: a.max_depth, render: a.render, checkImages: a.check_images, checkExternal: a.check_external, userAgent: a.user_agent, robotsMode: a.robots,
     include: a.include || '', exclude: a.exclude || '', stayInFolder: !!a.stay_in_folder, concurrency: a.concurrency, psiMax: a.psi_pages, psiStrategy: a.psi_strategy,
-    gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv || '', segments: a.segments,
+    gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv || '', ga4KeyFile: a.ga4_key_file || '', ga4Property: a.ga4_property || '', ga4Csv: a.ga4_csv || '', segments: a.segments,
   });
   const crawlShape = {
     url: z.string().url().describe('Start URL (usually the home page)'),
@@ -143,6 +144,9 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     gsc_key_file: z.string().optional().describe('Path (on the Arachnide machine) of a Google service-account JSON key with access to the Search Console property'),
     gsc_property: z.string().optional().describe('Search Console property, e.g. sc-domain:example.com (auto-detected if omitted)'),
     gsc_csv: z.string().optional().describe('Content of a Search Console "Pages" CSV export, instead of the API'),
+    ga4_key_file: z.string().optional().describe('Path (on the Arachnide machine) of a Google service-account JSON key with Viewer access to the Google Analytics 4 property: adds sessions per page and finds orphan pages that get traffic'),
+    ga4_property: z.string().optional().describe('GA4 property ID, e.g. 123456789 (auto-detected from the domain if omitted)'),
+    ga4_csv: z.string().optional().describe('Content of a GA4 "Pages and screens" or "Landing page" CSV export, instead of the API'),
     segments: z.array(segmentSchema).optional().describe('Segments to apply to the result (site sections such as product pages, categories, blog). Can also be set later with arachnide_segments.'),
   };
 
@@ -317,7 +321,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
       depth_min: z.number().int().min(0).optional(),
       depth_max: z.number().int().min(0).optional(),
       issue_id: z.string().optional().describe('Only pages affected by this issue'),
-      sort: z.enum(['link_score', 'depth', 'inlinks', 'words', 'url']).default('link_score'),
+      sort: z.enum(['link_score', 'depth', 'inlinks', 'words', 'url', 'sessions']).default('link_score').describe('"sessions" needs Google Analytics 4 data in the crawl'),
       limit: z.number().int().min(1).max(500).default(50),
       offset: z.number().int().min(0).default(0),
     },
@@ -338,11 +342,11 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
         if (affected && !affected.has(p.url)) return false;
         return true;
       });
-      const by = { link_score: (x, y) => (y.linkScore || 0) - (x.linkScore || 0), depth: (x, y) => (x.depth ?? 99) - (y.depth ?? 99), inlinks: (x, y) => (y.uniqueInlinks || 0) - (x.uniqueInlinks || 0), words: (x, y) => (y.wordCount || 0) - (x.wordCount || 0), url: (x, y) => x.url.localeCompare(y.url) };
+      const by = { link_score: (x, y) => (y.linkScore || 0) - (x.linkScore || 0), depth: (x, y) => (x.depth ?? 99) - (y.depth ?? 99), inlinks: (x, y) => (y.uniqueInlinks || 0) - (x.uniqueInlinks || 0), words: (x, y) => (y.wordCount || 0) - (x.wordCount || 0), sessions: (x, y) => (y.ga4?.sessions || 0) - (x.ga4?.sessions || 0), url: (x, y) => x.url.localeCompare(y.url) };
       rows.sort(by[a.sort]);
       const issuesOf = new Map();
       for (const i of R.issues) for (const it of i.items) issuesOf.set(it.url, (issuesOf.get(it.url) || 0) + 1);
-      return { crawl_id: id, total: rows.length, offset: a.offset, has_more: a.offset + a.limit < rows.length, pages: rows.slice(a.offset, a.offset + a.limit).map((p) => ({ url: p.url, status: p.status, indexable: p.indexable, depth: p.depth, title: p.title, link_score: p.linkScore, inlinks: p.uniqueInlinks, words: p.wordCount, segment: p.segment, issues: issuesOf.get(p.url) || 0 })) };
+      return { crawl_id: id, total: rows.length, offset: a.offset, has_more: a.offset + a.limit < rows.length, pages: rows.slice(a.offset, a.offset + a.limit).map((p) => ({ url: p.url, status: p.status, indexable: p.indexable, depth: p.depth, title: p.title, link_score: p.linkScore, inlinks: p.uniqueInlinks, words: p.wordCount, sessions: p.ga4?.sessions, segment: p.segment, issues: issuesOf.get(p.url) || 0 })) };
     },
   });
 

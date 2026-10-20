@@ -15,9 +15,14 @@ export const issuePoints = (is, share) => Math.min(SCORE_CAP[is.severity] * IMPA
 // Pages prises en compte dans le score : HTML, redirections et URL sans réponse.
 export const scoredPages = (pages) => pages.filter((p) => p.isHtml || p.status >= 300 || !p.status);
 
+// Problèmes dont les URL sont hors du crawl (pages orphelines vues par Search Console ou GA4) : ce sont bien des
+// pages, comptées comme telles dans la part des pages touchées.
+export const OUTSIDE_CRAWL = new Set(['gsc-orphan', 'ga4-orphan']);
+
 export function issueShare(is, scoredSet, N) {
   if (is.scope === 'site') return 1;
-  return Math.min(1, new Set(is.items.map((it) => it.url).filter((u) => scoredSet.has(u))).size / N);
+  const outside = OUTSIDE_CRAWL.has(is.id);
+  return Math.min(1, new Set(is.items.map((it) => it.url).filter((u) => outside || scoredSet.has(u))).size / N);
 }
 
 // Les quatre piliers et les catégories de contrôles qui les composent.
@@ -54,7 +59,7 @@ export function computePillars(R) {
     let keep = 1;
     for (const is of issues) {
       if (is.severity === 'notice') continue;
-      const scope2 = is.scope || (is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site');
+      const scope2 = is.scope || (OUTSIDE_CRAWL.has(is.id) || is.items.some((it) => pageSet.has(it.url)) ? 'page' : 'site');
       keep *= 1 - issuePoints(is, issueShare({ ...is, scope: scope2 }, scoredSet, N)) / 100;
     }
     const score = Math.max(0, Math.round(100 * keep));

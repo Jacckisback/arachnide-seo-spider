@@ -17,7 +17,7 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
+const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -55,6 +55,10 @@ Usage : node src/cli.mjs <url> [options]
   --gsc-property P    Search Console property (sc-domain:example.com), auto-detected if omitted
   --gsc-days N        Search Console period in days (90)
   --gsc-csv FILE      Import a Search Console "Pages" CSV export instead of the API
+  --ga4-key FILE      Google Analytics 4: service account JSON key file (the Search Console one works if it has access)
+  --ga4-property ID   GA4 property ID (123456789), auto-detected from the domain if omitted
+  --ga4-days N        GA4 period in days (90)
+  --ga4-csv FILE      Import a GA4 "Pages and screens" (or "Landing page") CSV export instead of the API
   --alert-email A,B   Email an alert if the crawl got worse than the previous one (for cron jobs)
   --alert-score-drop N  Alert threshold in score points (5)
   --ignore-robots     Ignore robots.txt (same as --robots ignore)
@@ -115,6 +119,8 @@ if (!USER_AGENTS[val('ua', 'arachnide')] && val('ua')) opts.userAgent = val('ua'
 if (val('psi')) Object.assign(opts, toCrawlerOptions({ psiMax: val('psi'), psiStrategy: val('psi-strategy', 'mobile') }), { psiKey: val('psi-key', process.env.ARACHNIDE_PSI_KEY || '') });
 if (val('gsc-key')) Object.assign(opts, { gscKeyFile: val('gsc-key'), gscProperty: val('gsc-property', ''), gscDays: Number(val('gsc-days', 90)) });
 if (val('gsc-csv')) opts.gscCsv = await fs.readFile(val('gsc-csv'), 'utf8');
+if (val('ga4-key')) Object.assign(opts, { ga4KeyFile: val('ga4-key'), ga4Property: val('ga4-property', ''), ga4Days: Number(val('ga4-days', 90)) });
+if (val('ga4-csv')) opts.ga4Csv = await fs.readFile(val('ga4-csv'), 'utf8');
 if (val('custom-robots')) opts.customRobots = await fs.readFile(val('custom-robots'), 'utf8');
 if (flag('list')) {
   opts.mode = 'list';
@@ -195,8 +201,8 @@ if (flag('csv')) {
   };
   const toCsv = (rows, cols) => '﻿' + [cols.map((c) => esc(c[1])).join(';'), ...rows.map((row) => cols.map((c) => esc(row[c[0]])).join(';'))].join('\n');
   const segName = (id) => (!id ? '' : id === NONE ? t('seg.none') : segs.find((s) => s.id === id)?.name || id);
-  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')]];
-  const pages = r.pages.map((p) => ({ ...p, segmentName: segName(p.segment), indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' }));
+  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')], ...(full.meta.ga4 ? [['ga4Sessions', t('col.sessions')], ['ga4Views', t('col.views')]] : [])];
+  const pages = r.pages.map((p) => ({ ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' }));
   await fs.writeFile(path.join(outDir, base + '_pages.csv'), toCsv(pages, pageCols));
   const segOfUrl = new Map(full.pages.map((p) => [p.url, p.segment]));
   const issueRows = r.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, segment: segName(segOfUrl.get(it.url)), detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));

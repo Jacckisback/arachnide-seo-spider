@@ -30,6 +30,10 @@ There is no account, no cloud and no page limit, and your data stays on your mac
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
 
+## 📊 New in 3.15: Google Analytics 4 — orphan pages that get traffic
+
+Connect **Google Analytics 4** (API with a service account, or a CSV export of *Pages and screens*) to see the sessions of every page and catch what a crawl alone misses: **orphan pages that get visits** (campaign landing pages, old URLs, pages only in the sitemap), **error pages still visited**, non-indexable pages with traffic and pages nobody visits. New *Google Analytics* tab, 4 new checks, *GA4 sessions* in segments, CLI `--ga4-key` / `--ga4-csv` and AI-agent support.
+
 ## 🧩 New in 3.14: segments — audit a big site section by section
 
 On a large site, one global score hides where the problems really are. **Segments** split the audit into named sections — product pages, categories, blog, a language, pages without traffic… — exactly like Screaming Frog segments.
@@ -356,6 +360,7 @@ node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report 
 node src/cli.mjs --list urls.txt --lang de --csv
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
+node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

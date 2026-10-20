@@ -173,6 +173,16 @@
             <div class="gsc-csv"><span data-i18n="cfg.gscCsv">…or import a Search Console CSV export (Performance → Pages)</span>
               <label class="btn small"><input type="file" id="gscCsvFile" accept=".csv,text/csv" hidden><span data-i18n="cfg.gscCsvChoose">Choose a CSV file</span></label>
               <span id="gscCsvName" class="muted"></span><button type="button" class="btn small" id="gscCsvClear" hidden data-i18n="cfg.gscCsvClear">Remove</button></div>
+            <h4 data-i18n="cfg.ga4Title">Google Analytics 4</h4>
+            <p class="cfg-help" data-i18n="cfg.ga4Help"></p>
+            <div class="cfg-grid">
+              <label class="span2"><span data-i18n="opt.ga4KeyFile">Service account key file (path)</span><input name="ga4KeyFile" type="text" autocomplete="off" spellcheck="false" class="mono" placeholder="/Users/me/arachnide-gsc.json"></label>
+              <label><span data-i18n="opt.ga4Property">GA4 property ID (optional)</span><input name="ga4Property" type="text" autocomplete="off" spellcheck="false" placeholder="123456789"></label>
+              <label><span data-i18n="opt.ga4Days">Period (days)</span><input name="ga4Days" type="number" min="1" max="730" value="90"></label>
+            </div>
+            <div class="gsc-csv"><span data-i18n="cfg.ga4Csv">…or import a GA4 CSV export (Engagement → Pages and screens)</span>
+              <label class="btn small"><input type="file" id="ga4CsvFile" accept=".csv,text/csv" hidden><span data-i18n="cfg.gscCsvChoose">Choose a CSV file</span></label>
+              <span id="ga4CsvName" class="muted"></span><button type="button" class="btn small" id="ga4CsvClear" hidden data-i18n="cfg.gscCsvClear">Remove</button></div>
           </section>
           <section data-pane="ai" hidden>
             <!-- Pas d'attribut name : ces champs ne font pas partie des options de crawl. La clé ne revient jamais du serveur. -->

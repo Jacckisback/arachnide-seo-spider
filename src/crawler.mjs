@@ -6,9 +6,9 @@ import { robotsFlags } from '../public/shared/directives.js';
 import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
-import { runPsi, fetchGscPages, parseGscCsv, readGscKey } from './google.mjs';
+import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
 
-export const VERSION = '3.14.0';
+export const VERSION = '3.15.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -101,6 +101,10 @@ export const DEFAULT_OPTIONS = {
   gscProperty: '', // propriété (sc-domain:exemple.fr ou https://www.exemple.fr/) ; détectée si vide
   gscDays: 90,
   gscCsv: '', // contenu d'un export CSV « Pages » de Search Console
+  ga4KeyFile: '', // chemin du fichier JSON du compte de service Google Analytics 4 (peut être celui de Search Console)
+  ga4Property: '', // ID de propriété GA4 (123456789) ; détectée par le domaine si vide
+  ga4Days: 90,
+  ga4Csv: '', // contenu d'un export CSV GA4 « Pages et écrans » ou « Page de destination »
 };
 
 // Robots des moteurs de recherche et des IA dont on vérifie l'accès dans le robots.txt.
@@ -577,6 +581,7 @@ export class Crawler extends EventEmitter {
       if (!this.stopped && this.opts.checkExternal) await this.checkExternals();
       if (!this.stopped && this.opts.checkImages) await this.checkImages();
       if (!this.stopped) await this.loadSearchConsole();
+      if (!this.stopped) await this.loadAnalytics();
       if (!this.stopped && this.opts.psiMax > 0) await this.runPageSpeed();
     } finally {
       clearInterval(progressTimer);
@@ -897,6 +902,23 @@ export class Crawler extends EventEmitter {
       }
     } catch (e) {
       this.warn('warn.gscFailed', { error: e.message });
+    }
+  }
+
+  // Google Analytics 4 : export CSV importé, sinon API Data avec un compte de service.
+  async loadAnalytics() {
+    const o = this.opts;
+    if (!o.ga4Csv && !o.ga4KeyFile) return;
+    this.setPhase('ga4');
+    try {
+      if (o.ga4Csv) {
+        this.ga4 = { source: 'csv', rows: parseGa4Csv(o.ga4Csv) };
+      } else {
+        const r = await fetchGa4Pages({ keyJson: await readGscKey(o.ga4KeyFile), property: o.ga4Property, siteUrl: this.finalStart || this.startUrl, days: o.ga4Days || 90, fetch: o.googleFetch, api: o.ga4Api, admin: o.ga4Admin });
+        this.ga4 = { source: 'api', property: r.property, start: r.start, end: r.end, rows: r.rows };
+      }
+    } catch (e) {
+      this.warn('warn.ga4Failed', { error: e.message });
     }
   }
 
