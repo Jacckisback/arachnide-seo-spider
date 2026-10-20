@@ -12,6 +12,7 @@
   <div class="shell">
   <aside class="sidebar" id="sidebar" aria-label="Navigation">
     <div class="brand"><span class="logo" data-icon="spider"></span><span class="name">Arachnide <small>SEO Spider</small></span><span id="version" class="ver"></span></div>
+    <div id="segBar" class="seg-side" hidden></div>
     <nav id="tabs" class="tabs" aria-label="Sections"></nav>
     <div class="side-foot">
       <button id="historyBtn" class="side-link" type="button" data-icon="history"><span data-i18n="nav.history">History</span></button>
@@ -224,6 +225,7 @@
 
   <main class="layout">
     <section class="content">
+      <div id="segBanner" class="seg-banner" role="status" hidden></div>
       <div id="view" class="view"></div>
       <div id="detail" class="detail" hidden></div>
     </section>
@@ -272,6 +274,12 @@
         <button class="btn primary" value="ok" data-icon="report"><span data-i18n="report.generate">Generate report</span></button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="segDialog" class="wide seg-dialog">
+    <form method="dialog" class="dialog-head"><h2 data-icon="layers"><span data-i18n="seg.dialogTitle">Segments</span></h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
+    <div id="segBody" class="dialog-body"></div>
+    <div class="dialog-foot"><button type="button" class="btn ghost" id="segClearAll" data-i18n="seg.clearAll">Remove all</button><span class="spacer"></span><button type="button" class="btn" id="segCancel" data-i18n="ui.cancel">Cancel</button><button type="button" class="btn primary" id="segApply" data-i18n="seg.apply">Apply</button></div>
   </dialog>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>

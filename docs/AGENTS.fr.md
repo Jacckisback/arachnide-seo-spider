@@ -4,7 +4,7 @@ Arachnide 3.13 est conçu pour être piloté par un agent IA — le vôtre, ou t
 
 Tout tourne sur votre machine (ou votre serveur). Rien n’est envoyé à un tiers, hormis ce que reçoit le modèle de votre propre agent.
 
-## Trois portes, un seul jeu de 24 outils
+## Trois portes, un seul jeu de 25 outils
 
 | Porte | Pour | URL | Authentification |
 |---|---|---|---|
@@ -47,7 +47,7 @@ Dans le créateur de GPT → *Actions* → **Importer depuis une URL** : `https:
 
 Avec l’API Agents / Responses d’OpenAI, pointez un outil MCP hébergé vers `https://<votre-hôte>/mcp` avec l’en-tête bearer, ou enveloppez les points d’entrée REST en fonctions à partir du schéma OpenAPI.
 
-## Les outils (24)
+## Les outils (25)
 
 | Outil | Ce qu’il fait | Écrit ? |
 |---|---|---|
@@ -61,6 +61,7 @@ Avec l’API Agents / Responses d’OpenAI, pointez un outil MCP hébergé vers 
 | `arachnide_search_pages` | Trouver des pages par texte, statut, indexabilité, profondeur, dossier, problème ; tri par Link Score | non |
 | `arachnide_get_page` | Tout sur une URL | non |
 | `arachnide_geo_readiness` | Accès des robots IA, llms.txt, couverture des données structurées, profondeur du contenu, hygiène → score GEO 0-100 + recommandations | non |
+| `arachnide_segments` | Sections du site (fiches produit, catégories, blog…) : score, erreurs et moyennes par segment, proposition d’un segment par répertoire, ou enregistrement des segments (sans recrawler). Passez ensuite `segment` aux outils de lecture | non (enregistre les segments avec le crawl) |
 | `arachnide_fetch_page` | Lire une page en ligne (balises, titres, images, extrait du texte) | non |
 | `arachnide_suggest_fixes` | Champs corrigeables par page, valeurs actuelles et contraintes | non |
 | `arachnide_compare_crawls` | Avant/après entre deux crawls | non |
@@ -68,6 +69,8 @@ Avec l’API Agents / Responses d’OpenAI, pointez un outil MCP hébergé vers 
 | `arachnide_preview_changes` | Simulation d’un lot de modifications | non |
 | `arachnide_apply_changes` | Appliquer les modifications approuvées via le connecteur, journalisées | **oui** |
 | `arachnide_verify_changes` / `arachnide_rollback_changes` / `arachnide_list_changes` | Vérifier sur le site, annuler un lot, lire le journal | l’annulation écrit |
+
+Tous les outils de lecture (`arachnide_get_summary`, `arachnide_list_issues`, `arachnide_get_issue`, `arachnide_action_plan`, `arachnide_search_pages`, `arachnide_geo_readiness`) acceptent `segment` : scores, problèmes et pages sont recalculés pour cette section du site.
 
 `GET /api/agent/tools` renvoie la même liste avec le JSON Schema de chaque entrée.
 

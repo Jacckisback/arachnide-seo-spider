@@ -5,6 +5,7 @@ import { similarity } from './text.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
 import { issuePoints, computePillars } from '../public/shared/pillars.js';
 import { imageFormat } from './parse.mjs';
+import { applySegments } from '../public/shared/segments.js';
 
 export const THRESHOLDS = {
   titleMaxPx: 580,
@@ -689,7 +690,7 @@ export function analyze(crawler) {
   const edges = crawler.links.map((l) => [idx(l.from), idx(l.to), l.anchor, (l.nofollow ? 1 : 0) | (l.internal ? 2 : 0) | (l.imageLink ? 4 : 0), POS[l.pos] ?? 0]);
   for (const p of pages) delete p.simhash;
 
-  return {
+  const result = {
     version: 2,
     meta: {
       app: 'Arachnide SEO Spider',
@@ -748,4 +749,8 @@ export function analyze(crawler) {
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
     links: { urls, edges },
   };
+  // Segments définis avant le crawl (CLI --segments, agent, crawl planifié) : appliqués au résultat enregistré.
+  // Ils restent modifiables ensuite dans l'interface, sans recrawler.
+  if (crawler.opts.segments?.length) applySegments(result, crawler.opts.segments);
+  return result;
 }

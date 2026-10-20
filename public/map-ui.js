@@ -31,7 +31,7 @@ export function toolbarHtml(o, filterCount, X) {
       <label class="searchbox">${icon('search')}<input id="mapSearch" type="search" autocomplete="off" placeholder="${esc(t('map.search'))}" aria-label="${esc(t('map.search'))}" aria-controls="mapResults" aria-expanded="false"></label>
       <ul id="mapResults" class="map-results" role="listbox" hidden></ul>
     </div>
-    ${sel('mapColor', t('map.colorLabel'), COLORS, o.colorBy, 'map.color.')}
+    ${sel('mapColor', t('map.colorLabel'), o.colors || COLORS, o.colorBy, 'map.color.')}
     ${sel('mapSize', t('map.sizeLabel'), SIZES, o.sizeBy, 'map.size.')}
     <button class="btn ghost${filterCount ? ' on' : ''}" id="mapFiltersBtn" aria-expanded="false" aria-controls="mapFilters">${icon('list')} ${esc(t('map.filters'))}${filterCount ? ` <span class="n">${filterCount}</span>` : ''}</button>
     <details class="menu" id="mapExport"><summary class="btn ghost">${icon('download')} ${esc(t('nav.export'))}</summary>
@@ -82,6 +82,7 @@ export function chipsHtml(f, matched, X) {
     if (k === 'lsMin') return `Link Score ≥ ${v}`;
     if (k === 'lsMax') return `Link Score ≤ ${v}`;
     if (k === 'dir') return t('map.f.inFolder', { d: v });
+    if (k === 'segment') return t('seg.chip', { name: X.segLabel ? X.segLabel(v) : v });
     if (k === 'urlInc') return t('map.f.chipInc', { p: v.split('\n').filter((x) => x.trim()).join(', ') });
     if (k === 'urlExc') return t('map.f.chipExc', { p: v.split('\n').filter((x) => x.trim()).join(', ') });
     return String(v);

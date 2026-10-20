@@ -1251,3 +1251,102 @@ button.link.accent { color: var(--accent); font-weight: 600; }
 .ag-log td { padding: 4px 6px; vertical-align: top; }
 .ag-log .nowrap { white-space: nowrap; }
 .ag-log code { font-size: var(--fs-sm); }
+
+/* ---------- Segments (3.14) ----------
+   Filtre global dans la barre latérale, bandeau du segment actif, carte du tableau de bord, répartition d'un
+   problème et gestionnaire. La couleur d'un segment n'est jamais une couleur de texte : pastilles et barres seulement. */
+.seg-side { padding: 10px 10px 0; }
+.seg-bar { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel-2); }
+.seg-bar.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.seg-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: 8px; color: var(--muted); }
+.seg-pick select { flex: 1; min-width: 0; border: 0; background: transparent; padding: 5px 4px; font-weight: 600; color: var(--text); text-overflow: ellipsis; }
+.seg-pick select:focus-visible { outline: none; }
+.seg-bar:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg-bar .btn.icon { min-height: 30px; width: 30px; padding: 0; }
+.seg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c, #94a3b8); flex: none; box-shadow: 0 0 0 2px var(--panel); }
+.seg-empty { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--r-md); background: none; cursor: pointer; text-align: left; color: var(--text); }
+.seg-empty:hover { background: var(--row-hover); border-color: var(--muted); }
+.seg-empty > .ic { color: var(--muted); }
+.seg-empty span { flex: 1; display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.seg-empty small { color: var(--muted); font-size: var(--fs-sm); }
+.seg-banner { display: flex; align-items: center; gap: 10px; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: inset 4px 0 var(--c, var(--accent)); font-size: var(--fs-md); flex-wrap: wrap; }
+.seg-banner .link { display: inline-flex; align-items: center; gap: 4px; }
+.seg-tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.seg-card { margin-top: 16px; }
+.seg-card h2 { display: flex; align-items: center; gap: 8px; }
+.seg-table-wrap { overflow-x: auto; margin: 0 -4px; }
+.seg-table { min-width: 860px; }
+.seg-table th, .seg-table td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.seg-table thead th { font-size: var(--fs-sm); color: var(--muted); font-weight: 600; white-space: nowrap; }
+.seg-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.seg-table tbody tr { cursor: pointer; }
+.seg-table tbody tr:hover td, .seg-table tbody tr:hover th { background: var(--row-hover); }
+.seg-table tbody tr.sel th, .seg-table tbody tr.sel td { background: var(--row-sel); }
+.seg-table tbody tr.sel th { box-shadow: inset 3px 0 var(--accent); }
+.seg-table tbody th { font-weight: 600; min-width: 170px; }
+.seg-name { display: flex; align-items: center; gap: 8px; }
+.seg-share { display: block; height: 4px; margin-top: 6px; border-radius: 4px; background: var(--panel-3); overflow: hidden; }
+.seg-share span { display: block; height: 100%; background: var(--c); border-radius: 4px; }
+.seg-score { display: inline-flex; align-items: baseline; gap: 2px; padding: 2px 8px; border-radius: 99px; font-weight: 700; }
+.seg-score small { font-weight: 500; font-size: var(--fs-xs); opacity: .8; }
+.seg-top { min-width: 260px; }
+.seg-issue { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 99px; border: 0; cursor: pointer; font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg-issue.error { background: var(--err-soft); color: var(--err); }
+.seg-issue.warning { background: var(--warn-soft); color: var(--warn); }
+.seg-issue:hover { filter: brightness(1.08); text-decoration: underline; }
+.seg-promo { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; }
+.seg-promo h2 { margin: 0; font-size: var(--fs-lg); }
+.seg-promo .sub { margin: 4px 0 0; color: var(--muted); }
+.seg-promo-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: var(--r-md); background: var(--accent-soft); color: var(--accent); }
+.seg-promo-ic .ic { width: 22px; height: 22px; }
+.seg-promo-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 760px) { .seg-promo { grid-template-columns: 1fr; } .seg-promo-actions { justify-content: flex-start; } .seg-banner { padding: 8px 14px; } }
+
+.iv-seg { margin: 14px 0 4px; }
+.iv-seg h3 { margin: 0 0 8px; font-size: var(--fs-md); }
+.seg-stack { display: flex; height: 8px; border-radius: 8px; overflow: hidden; gap: 2px; background: var(--panel-3); }
+.seg-stack span { background: var(--c); min-width: 3px; }
+.seg-legend { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.seg-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); cursor: pointer; font-size: var(--fs-sm); }
+.seg-chip:hover { border-color: var(--muted); background: var(--row-hover); }
+.seg-chip small { margin-left: 2px; }
+
+.seg-dialog .dialog-body { max-height: 72vh; }
+.seg-intro { margin: 0 0 12px; }
+.seg-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.seg-toolbar label.btn { cursor: pointer; }
+.seg-list { display: flex; flex-direction: column; gap: 10px; }
+.seg-edit { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px 12px 8px; background: var(--panel-2); }
+.seg-edit-head { display: grid; grid-template-columns: 40px minmax(140px, 1fr) auto auto auto; gap: 8px; align-items: center; }
+.seg-edit-head input[type=color] { width: 40px; height: 34px; padding: 2px; }
+.seg-edit-head input[type=text] { font-weight: 600; }
+.seg-count { font-size: var(--fs-sm); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.seg-tools { display: flex; gap: 2px; }
+.seg-tools .btn.icon { width: 30px; min-height: 30px; padding: 0; }
+.seg-rules { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 6px; }
+.seg-rule { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(130px, 1fr) minmax(160px, 1.6fr) 30px; gap: 6px; align-items: center; }
+.seg-rule .btn.icon { width: 30px; min-height: 30px; padding: 0; }
+.seg-rule input { font-family: var(--mono); font-size: var(--fs-md); }
+.seg-edit > .link { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-md); }
+.seg-order { position: absolute; right: 12px; bottom: 8px; }
+.seg-none-yet { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 26px 10px; border: 1px dashed var(--line); border-radius: var(--r-lg); color: var(--muted); text-align: center; }
+.seg-none-yet .ic { width: 26px; height: 26px; }
+.seg-none-yet p { margin: 0; max-width: 46ch; }
+.seg-rest { margin: 12px 0 0; color: var(--muted); font-size: var(--fs-md); }
+@media (max-width: 760px) {
+  .seg-edit-head { grid-template-columns: 40px 1fr auto; }
+  .seg-edit-head select, .seg-edit-head .seg-count { grid-column: 1 / -1; }
+  .seg-edit-head .seg-tools { grid-column: 3; grid-row: 1; }
+  .seg-toolbar .spacer { display: none; }
+  .seg-rule { grid-template-columns: 1fr 30px; }
+  .seg-rule select, .seg-rule input, .seg-rule .seg-novalue { grid-column: 1; }
+  .seg-rule .btn.icon { grid-column: 2; grid-row: 1; }
+}
+.seg-edit input[type=text], .seg-edit input[type=number], .seg-edit select { background: var(--panel); }
+.seg-banner .link, .seg-edit > .link { color: var(--info); font-weight: 600; }
+.seg-table tbody th { background: transparent; }
+.seg-issue { max-width: 300px; }
+.seg-top { max-width: 340px; }
+.seg-edit-head input[type=text], .seg-edit-head select, .seg-rule select, .seg-rule input { min-width: 0; width: 100%; }
+@media (max-width: 760px) { .seg-edit-head { grid-template-columns: 40px minmax(0, 1fr) auto; } .seg-rule { grid-template-columns: minmax(0, 1fr) 30px; } }

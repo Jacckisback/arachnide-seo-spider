@@ -4,7 +4,7 @@ Arachnide 3.13 is built to be driven by an AI agent — yours, or any assistant 
 
 Everything runs on your machine (or your server). Nothing is sent to a third party except what your agent's own model receives.
 
-## Three doors, one set of 24 tools
+## Three doors, one set of 25 tools
 
 | Door | For | URL | Auth |
 |---|---|---|---|
@@ -47,7 +47,7 @@ In the GPT builder → *Actions* → **Import from URL**: `https://<your-host>/o
 
 With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<your-host>/mcp` with the bearer header, or wrap the REST endpoints as functions from the OpenAPI spec.
 
-## The tools (24)
+## The tools (25)
 
 | Tool | What it does | Writes? |
 |---|---|---|
@@ -61,6 +61,7 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 | `arachnide_search_pages` | Find pages by text, status, indexability, depth, folder, issue; sort by Link Score | no |
 | `arachnide_get_page` | Everything about one URL | no |
 | `arachnide_geo_readiness` | AI crawlers access, llms.txt, structured data coverage, content depth, hygiene → 0-100 GEO score + recommendations | no |
+| `arachnide_segments` | Site sections (product pages, categories, blog…): get the score, errors and averages per segment, suggest one per directory, or set them (no recrawl). Then pass `segment` to the reading tools | no (saves the segments on the crawl) |
 | `arachnide_fetch_page` | Read a live page (tags, headings, images, text excerpt) | no |
 | `arachnide_suggest_fixes` | Fixable fields per page with current values and constraints | no |
 | `arachnide_compare_crawls` | Before/after between two crawls | no |
@@ -68,6 +69,8 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 | `arachnide_preview_changes` | Dry run of a batch of changes | no |
 | `arachnide_apply_changes` | Apply approved changes through the connector, journaled | **yes** |
 | `arachnide_verify_changes` / `arachnide_rollback_changes` / `arachnide_list_changes` | Verify on the live site, undo a batch, read the journal | rollback writes |
+
+Every reading tool (`arachnide_get_summary`, `arachnide_list_issues`, `arachnide_get_issue`, `arachnide_action_plan`, `arachnide_search_pages`, `arachnide_geo_readiness`) accepts `segment`: the scores, issues and pages are recomputed for that section of the site.
 
 `GET /api/agent/tools` returns the same list with the JSON Schema of each input.
 
