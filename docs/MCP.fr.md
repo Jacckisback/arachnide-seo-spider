@@ -1,5 +1,7 @@
 # Arachnide + Claude (MCP) : auditer et corriger le SEO directement sur le site en ligne
 
+> **3.13 :** les mêmes outils sont aussi servis en **HTTP** — MCP Streamable HTTP sur `/mcp` et une porte REST + OpenAPI sur `/api/agent/*` — pour les connecteurs claude.ai, les Actions ChatGPT et vos propres agents. Voir [AGENTS.fr.md](AGENTS.fr.md).
+
 Arachnide 3.0 intègre un **serveur MCP** ([Model Context Protocol](https://modelcontextprotocol.io)). Connectez-le à Claude (Claude Code, Claude Desktop ou tout autre client MCP) et Claude pourra :
 
 1. **détecter** le CMS et les technologies d'un site,

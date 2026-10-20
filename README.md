@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Version 3.12.0">
+  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Version 3.13.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,15 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🤝 New in 3.13: plug your own AI agent (Claude, ChatGPT…) into Arachnide
+
+Arachnide becomes the eyes and hands of your SEO / GEO agent. The agent reads the audit you have open, starts crawls that appear live in the app, explores pages, gets the prioritised action plan and the new **GEO readiness** report, and fixes the site with your approval.
+
+- **Three doors, 24 tools**: MCP over stdio (Claude Code, Claude Desktop), **MCP over HTTP** (`/mcp`, for claude.ai custom connectors and hosted agents) and **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` — import it as a ChatGPT Action in one click). Same tools everywhere, defined once.
+- **Access token** created at first start, shown and renewable in *Settings → AI agents*, with ready-to-paste snippets (Claude Desktop config, ChatGPT Action settings, test request), a public-URL field for tunnels (cloudflared, ngrok, Tailscale) and the log of the latest agent calls.
+- **New tools**: `arachnide_action_plan` (the app's ordered plan, quick wins flagged), `arachnide_search_pages` (filter and sort pages by Link Score, depth, status, folder, issue), `arachnide_geo_readiness` (AI crawlers access, llms.txt, structured data, content depth → 0-100 score and recommendations), `arachnide_start_crawl` + `arachnide_crawl_status` (background crawl, visible live in the app). `crawl_id: "current"` always means the audit open in the app.
+- Guide and suggested system prompt for an SEO / GEO agent: [docs/AGENTS.md](docs/AGENTS.md).
 
 ## 🎨 New in 3.12: a design pass across the whole app
 

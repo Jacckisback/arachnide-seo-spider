@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.12.0-3d5f17" alt="Version 3.12.0">
+  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Version 3.13.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,15 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🤝 Neu in 3.13: Binden Sie Ihren eigenen KI-Agenten (Claude, ChatGPT…) an Arachnide an
+
+Arachnide wird zu den Augen und Händen Ihres SEO-/GEO-Agenten. Der Agent liest das geöffnete Audit, startet Crawls, die live in der App erscheinen, erkundet Seiten, ruft den priorisierten Maßnahmenplan und den neuen Bericht zur **GEO-Readiness** ab und korrigiert die Website mit Ihrer Zustimmung.
+
+- **Drei Zugänge, 24 Tools**: MCP über stdio (Claude Code, Claude Desktop), **MCP über HTTP** (`/mcp`, für benutzerdefinierte Connectors in claude.ai und gehostete Agenten) und **REST + OpenAPI 3.1** (`/api/agent/*`, `/openapi.json` – mit einem Klick als ChatGPT Action importierbar). Überall dieselben Tools, nur einmal definiert.
+- **Zugriffstoken**, beim ersten Start erstellt, in *Einstellungen → KI-Agenten* sichtbar und erneuerbar, mit fertigen Snippets zum Einfügen (Claude-Desktop-Konfiguration, ChatGPT-Action-Einstellungen, Testanfrage), einem Feld für die öffentliche URL bei Tunneln (cloudflared, ngrok, Tailscale) und dem Protokoll der letzten Agentenaufrufe.
+- **Neue Tools**: `arachnide_action_plan` (der geordnete Plan der App, Quick Wins markiert), `arachnide_search_pages` (Seiten nach Link Score, Tiefe, Status, Ordner, Problem filtern und sortieren), `arachnide_geo_readiness` (Zugriff für KI-Crawler, llms.txt, strukturierte Daten, Inhaltstiefe → Score von 0-100 und Empfehlungen), `arachnide_start_crawl` + `arachnide_crawl_status` (Crawl im Hintergrund, live in der App sichtbar). `crawl_id: "current"` bezeichnet immer das in der App geöffnete Audit.
+- Anleitung und empfohlener System-Prompt für einen SEO-/GEO-Agenten: [docs/AGENTS.md](docs/AGENTS.md).
 
 ## 🎨 Neu in 3.12: ein Design-Feinschliff für die gesamte App
 

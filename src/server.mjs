@@ -12,6 +12,7 @@ import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl } from './store.m
 import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, startScheduler } from './schedules.mjs';
 import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
 import { handleFixRoutes } from './fix/routes.mjs';
+import { createAgentGateway } from './agent/http.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -57,15 +58,21 @@ async function readBody(req) {
   return body && typeof body === 'object' && !Array.isArray(body) ? body : {};
 }
 
+// Crawls lancés depuis l'interface ou par un agent : un seul à la fois, visible en direct dans l'interface.
+const jobs = new Map();
 async function startCrawl(body) {
+  return launchCrawl(body.url, toCrawlerOptions(body.options || {}), 'ui');
+}
+function launchCrawl(url, opts, via) {
   if (crawler && crawler.phase !== 'done') throw Object.assign(new Error('A crawl is already running.'), { status: 409, key: 'toast.busy' });
-  const opts = toCrawlerOptions(body.options || {});
-
-  const c = new Crawler(body.url, opts); // lève une erreur si l'URL est invalide
+  const c = new Crawler(url, opts); // lève une erreur si l'URL est invalide
+  const job = { id: 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), url: c.startUrl, via, state: 'running', startedAt: new Date().toISOString(), crawler: c };
+  jobs.set(job.id, job);
+  if (jobs.size > 50) jobs.delete(jobs.keys().next().value);
   crawler = c;
   lastResult = null;
   liveRows = [];
-  broadcast('reset', { startUrl: c.startUrl });
+  broadcast('reset', { startUrl: c.startUrl, via });
   c.on('status', (s) => broadcast('status', s));
   c.on('warning', (w) => broadcast('warning', w));
   c.on('progress', (p) => broadcast('progress', p));
@@ -81,16 +88,39 @@ async function startCrawl(body) {
         // Le résultat reste affiché, mais l'utilisateur doit savoir qu'il n'est pas enregistré (et l'exporter).
         broadcast('warning', { key: 'warn.saveFailed', params: { error: e.code || 'error' } });
       }
+      Object.assign(job, { state: 'done', file: lastFile, result, finishedAt: new Date().toISOString() });
       broadcast('done', { file: lastFile, summary: result.summary });
       console.log(`Crawl terminé : ${result.summary.totalUrls} URLs, score ${result.summary.score}/100 → crawls/${lastFile}`);
     })
     .catch((e) => {
       console.error(e);
+      Object.assign(job, { state: 'failed', error: e.message, finishedAt: new Date().toISOString() });
       broadcast('failed', { message: e.message });
       c.phase = 'done';
     });
-  return { startUrl: c.startUrl };
+  return { startUrl: c.startUrl, job: job.id };
 }
+
+// Passerelle agents IA (MCP HTTP + REST) : elle lit le crawl ouvert et lance des crawls visibles dans l'interface.
+const gateway = createAgentGateway({
+  lang: process.env.ARACHNIDE_LANG || 'en',
+  broadcast,
+  ctx: {
+    currentResult: () => lastResult,
+    startCrawl: async (url, opts) => ({ id: launchCrawl(url, opts, 'agent').job }),
+    jobStatus(id) {
+      const j = jobs.get(id);
+      if (!j) return null;
+      return { id, url: j.url, state: j.state, started_at: j.startedAt, finished_at: j.finishedAt, progress: j.crawler?.progress?.() || null, crawl_id: j.file ? j.file.replace(/\.json$/, '') : (j.state === 'done' ? 'current' : undefined), result: j.result, error: j.error };
+    },
+    adopt(R, file) {
+      if (crawler && crawler.phase !== 'done') return;
+      lastResult = R;
+      lastFile = file || null;
+      broadcast('done', { file: lastFile, summary: R.summary, via: 'agent' });
+    },
+  },
+});
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -107,6 +137,7 @@ const server = http.createServer(async (req, res) => {
       });
       return;
     }
+    if (await gateway.handle(req, res, p, url, { send, readBody })) return;
     if (p === '/api/env') return send(res, 200, { version: VERSION, chrome: findChrome(), node: process.version, platform: process.platform });
     if (p === '/api/state') return send(res, 200, { running: !!crawler && crawler.phase !== 'done', progress: crawler?.progress() || null, hasResult: !!lastResult, file: lastFile });
     if (p === '/api/crawl' && req.method === 'POST') return send(res, 200, await startCrawl(await readBody(req)));

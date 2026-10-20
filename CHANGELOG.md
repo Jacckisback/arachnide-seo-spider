@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.13.0 — 2026-10-19
+
+### New: an agent bridge — drive Arachnide from your own AI agent
+- **One tool registry, three transports** (`src/agent/tools.mjs`): the 24 tools are defined once and served over MCP stdio (`src/mcp.mjs`, unchanged for Claude Code / Claude Desktop), **MCP Streamable HTTP** (`POST /mcp`, stateless JSON responses, for claude.ai custom connectors, remote Claude Desktop servers and hosted agents) and **REST** (`POST /api/agent/<tool>`, JSON in / JSON out, Zod-validated with field-level 400 errors) described by an **OpenAPI 3.1** document (`GET /openapi.json`, with `x-openai-isConsequential` on write tools, importable as a ChatGPT Action).
+- **Access token**: generated at first start in `~/.arachnide/agent.json` (0600), overridable with `ARACHNIDE_AGENT_TOKEN`; accepted as `Authorization: Bearer` or `X-API-Key`; constant-time comparison; 240 requests / min / IP; CORS for browser-based MCP clients; `/api/agent/settings` (token, URLs, log, public URL, enable switch, rotation) answers only to the local interface.
+- **Shared state with the app**: `crawl_id: "current"` = the crawl open in the interface; `arachnide_start_crawl` runs the crawl in the app's engine (live progress in the UI, toast "an AI agent started a crawl"), `arachnide_crawl_status` polls it; a synchronous `arachnide_crawl` adopts its result as the current audit; every agent call is logged (last 50) and pushed to the UI over SSE.
+- **New tools**: `arachnide_action_plan` (ordered plan with quick wins, same ranking as the Action plan page), `arachnide_search_pages` (query / folder / status / indexability / depth / issue filters, sort by Link Score, depth, inlinks, words, paginated compact rows), `arachnide_geo_readiness` (AI crawlers allowed/blocked from robots.txt, llms.txt, structured-data coverage and answer-oriented types, content depth and thin pages, duplicates, titles/descriptions/H1/Open Graph hygiene → 0-100 score by part and ordered recommendations), `arachnide_start_crawl` / `arachnide_crawl_status`. `arachnide_crawl` gains `stay_in_folder`, multi-line `include` / `exclude`, inline `gsc_csv`.
+- **UI**: Settings → **AI agents** pane: enable switch, masked token with show / copy / renew, MCP and OpenAPI URLs, public URL field (tunnels), one-click snippets (Claude Desktop config, ChatGPT Action settings, curl test), link to the guide, live log of the latest agent calls. 6 languages.
+- **Docs**: `docs/AGENTS.md` / `docs/AGENTS.fr.md` — the three doors, setup for Claude Desktop / Claude Code, claude.ai connectors (with cloudflared / ngrok / Tailscale), ChatGPT Actions and OpenAI agents, the tool table, a suggested system prompt for an SEO / GEO agent, the security model and curl examples.
+- **Tests**: `test/agent.test.mjs` — token and settings protection, OpenAPI shape, REST auth (401 / 400 / 404), background crawl started by an agent and shared with the app, new tools, MCP over HTTP with the official client, log, rotation, disable switch, public URL; `geoReadiness` unit test. The stdio MCP end-to-end test still passes on the shared registry.
+
 ## 3.12.0 — 2026-10-18
 
 Design audit of the whole interface (every page, dark and light themes, 1440 px and 390 px), measured with real contrast ratios, then fixed.
