@@ -30,6 +30,10 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
 
+## 🏗️ Nouveau en 3.16 : passage à l’échelle, étape 1 — les gros sites ne plantent plus à la fin
+
+Une revue technique sur un crawl de 200 000 pages a montré que le moteur tient la charge, mais pas quelques lignes de traitement des données : un `Math.min(...)` sur une valeur par URL faisait planter l’analyse au-delà de ~125 000 URL (après des heures de crawl), et plusieurs boucles étaient quadratiques. **Quatorze correctifs** : plus de spread sur des tableaux à la taille du site, index construits une fois (redirections, liens sortants, URL la plus proche d’une 404 en cherchant d’abord dans le dossier parent), exemples donnés à l’IA pris dans le même dossier, tri des tableaux 20× plus rapide (un seul `Intl.Collator`), comptage des dossiers de la carte 5× plus rapide, tâches de crawl terminées réduites à un condensé, et **écritures atomiques** : un arrêt pendant la sauvegarde ne laisse plus jamais un crawl tronqué. Les étapes suivantes compacteront le stockage des liens et écriront le fichier et les données du navigateur en flux.
+
 ## 📊 Nouveau en 3.15 : Google Analytics 4 — les pages orphelines qui font du trafic
 
 Connectez **Google Analytics 4** (API avec un compte de service, ou export CSV « Pages et écrans ») pour voir les sessions de chaque page et attraper ce qu’un crawl seul ne voit pas : les **pages orphelines qui reçoivent des visites** (landing pages de campagne, anciennes URL, pages présentes seulement dans le sitemap), les **pages en erreur encore visitées**, les pages non indexables avec du trafic et celles que personne ne visite. Nouvel onglet *Google Analytics*, 4 nouveaux contrôles, *Sessions GA4* dans les segments, `--ga4-key` / `--ga4-csv` en ligne de commande et prise en charge par les agents IA.

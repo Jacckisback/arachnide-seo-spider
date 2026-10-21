@@ -13,8 +13,22 @@ export const safeName = (n) => (/^[\w.-]+\.json$/.test(n) && n !== '_index.json'
 async function readIndex() {
   try {
     return JSON.parse(await fs.readFile(INDEX, 'utf8'));
-  } catch {
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error(`Index des crawls illisible (${e.code || e.message}) : il sera reconstruit.`);
     return {};
+  }
+}
+
+// Écriture atomique : fichier temporaire puis renommage, pour qu'un arrêt pendant l'écriture ne laisse jamais
+// un crawl tronqué (un JSON de plusieurs centaines de Mo s'écrit en plusieurs secondes).
+export async function writeAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  try {
+    await fs.writeFile(tmp, data);
+    await fs.rename(tmp, file);
+  } catch (e) {
+    await fs.unlink(tmp).catch(() => {});
+    throw e;
   }
 }
 
@@ -43,13 +57,16 @@ export async function listCrawls() {
       try {
         index[f] = summaryOf(JSON.parse(await fs.readFile(path.join(CRAWLS, f), 'utf8')));
         dirty = true;
-      } catch {
-        index[f] = {};
+      } catch (e) {
+        // Fichier tronqué ou corrompu : il reste listé (l'utilisateur peut le supprimer), mais on le dit.
+        console.error(`Crawl illisible, ignoré dans l'historique : crawls/${f} (${e.code || e.message})`);
+        index[f] = { unreadable: true };
+        dirty = true;
       }
     }
     out.push({ file: f, size: st.size, mtime: st.mtime, ...index[f] });
   }
-  if (dirty) await fs.writeFile(INDEX, JSON.stringify(index)).catch(() => {});
+  if (dirty) await writeAtomic(INDEX, JSON.stringify(index)).catch((e) => console.error('Index des crawls non enregistré :', e.message));
   return out.sort((a, b) => String(b.finishedAt || b.mtime).localeCompare(String(a.finishedAt || a.mtime)));
 }
 
@@ -58,10 +75,10 @@ export async function saveResult(result) {
   const host = new URL(result.meta.startUrl).hostname.replace(/[^\w.-]/g, '_').slice(0, 100); // nom de fichier borné
   const stamp = result.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '');
   const file = `${host}_${stamp}.json`;
-  await fs.writeFile(path.join(CRAWLS, file), JSON.stringify(result));
+  await writeAtomic(path.join(CRAWLS, file), JSON.stringify(result));
   const index = await readIndex();
   index[file] = summaryOf(result);
-  await fs.writeFile(INDEX, JSON.stringify(index));
+  await writeAtomic(INDEX, JSON.stringify(index));
   return file;
 }
 

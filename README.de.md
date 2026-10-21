@@ -30,6 +30,10 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
 
+## 🏗️ Neu in 3.16: Skalierung, Schritt 1 — große Sites stürzen am Ende nicht mehr ab
+
+Eine technische Prüfung an einem Crawl mit 200 000 Seiten zeigte: Die Engine skaliert, einige Zeilen der Datenverarbeitung nicht. Ein `Math.min(...)` über einen Wert pro URL ließ die Analyse ab ~125 000 URLs abstürzen (nach Stunden Crawl), und mehrere Schleifen waren quadratisch. **Vierzehn kleine Korrekturen**: kein Spread mehr auf Arrays in Site-Größe, einmal gebaute Indizes (Weiterleitungen, ausgehende Links, nächste URL für 404 mit Suche zuerst im Elternordner), KI-Beispiele aus demselben Ordner, Tabellensortierung 20× schneller (ein `Intl.Collator`), Ordnerzählung der Sitemap 5× schneller, beendete Crawl-Jobs behalten nur eine Zusammenfassung, und **atomares Schreiben**, damit ein Abbruch beim Speichern nie einen abgeschnittenen Crawl hinterlässt. Die nächsten Schritte verdichten die Linkspeicherung und streamen die Datei und die Daten für den Browser.
+
 ## 📊 Neu in 3.15: Google Analytics 4 — verwaiste Seiten mit Traffic
 
 Verbinden Sie **Google Analytics 4** (API mit Dienstkonto oder CSV-Export „Seiten und Bildschirme“), um die Sitzungen jeder Seite zu sehen und zu finden, was ein Crawl allein übersieht: **verwaiste Seiten mit Besuchen**, **Fehlerseiten, die noch besucht werden**, nicht indexierbare Seiten mit Traffic und Seiten ohne Besuche. Neuer Tab *Google Analytics*, 4 neue Prüfungen, *GA4-Sitzungen* in Segmenten, CLI `--ga4-key` / `--ga4-csv` und Unterstützung für KI-Agenten.

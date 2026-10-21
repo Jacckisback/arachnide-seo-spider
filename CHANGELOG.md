@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.16.0 — 2026-10-21
+
+### Scale, step 1: no more crash at 125 000 URLs, no more quadratic loops
+From a technical review of 3.15 on a 200 000-page crawl: the crawl engine itself scales, but a few data-handling lines broke or slowed down between 70 000 and 130 000 pages. This release is the first of several steps (the next ones compact the link storage, stream the saved file and the data sent to the browser). Fourteen small fixes, no new dependency, no architecture change.
+- **Call stack**: `Math.min(...logs)` / `Math.max(...logs)` on one value per URL (Link Score) raised *Maximum call stack size exceeded* beyond ~125 000 URLs — the crawl was lost at the very end, after hours. Replaced by one loop over a `Float64Array`. Same fix for `fixes.push(...deterministicFixes())` (an issue touching 125 000+ URLs, e.g. missing canonicals), `toFetch.push(...pages)` (very long sitemap indexes) and `Math.max(200, ...nodes)` in the 3D view (the *isolate* branch has no node cap).
+- **Quadratic loops removed**: duplicate check in the fix jobs (`jobs.some()` → `Set`: 4.4 s at 40 000 items before, ~110 s extrapolated at 200 000); example values given to the AI (`siblingValues()` scanned every page for every job and always returned the first 30 pages of the crawl → computed once per fix kind, **pages of the same folder first**); links to redirects (`indexOf` + full edge scan per URL → URL→index `Map` and outgoing-link index built once); redirections (`find()` per link → `Map`); closest URL for 404s (path words of every candidate recomputed for every 404 → `prepareCandidates()` once, **parent folder searched first**, full search only when needed; same results).
+- **Interface**: table sort used `localeCompare(y, locale, { numeric: true })`, which builds a comparator at every comparison (measured 24 s per sort on 200 000 rows) → one `Intl.Collator` per language (1.1 s). Folder list of the site map crossed every page with every folder (717 ms at 80 000 pages, at every render) → prefix counting in one pass (144 ms).
+- **Memory**: a finished crawl job (interface or agent, up to 50 kept) no longer holds its crawler nor its full result, only a digest (meta, summary, top issues); the full crawl lives once, in the open result. Same in the stdio MCP server.
+- **Storage**: crawl files and the history index are written to a temporary file then renamed (`writeAtomic`): a stop during a multi-second write of a large JSON can no longer leave a truncated crawl. An unreadable crawl file is reported in the console (`Crawl illisible…`) and marked in the history instead of silently becoming `{}`; an unreadable index is reported and rebuilt.
+- **Tests**: `test/scale.test.mjs` — Link Score and deterministic fixes on 140 000 URLs (fails on 3.15 with the call-stack error), prepared candidates vs full search, link/redirect indexes, atomic write, folder counts vs the old cross product.
+
 ## 3.15.0 — 2026-10-20
 
 ### New: Google Analytics 4 — orphan pages that get traffic

@@ -225,6 +225,7 @@ export function matchPages(M, f) {
 export function folderOptions(M) {
   const c = new Map();
   for (const f of M.folders) c.set(f, 0);
+  // Chaque page incrémente ses propres préfixes (O(pages × profondeur)), au lieu d'être croisée avec chaque dossier.
   for (const p of M.pages) {
     let path;
     try {
@@ -232,7 +233,11 @@ export function folderOptions(M) {
     } catch {
       continue;
     }
-    for (const f of M.folders) if (path.startsWith(f) || path + '/' === f) c.set(f, c.get(f) + 1);
+    let cur = '/';
+    for (const seg of path.split('/').filter(Boolean)) {
+      cur += seg + '/';
+      if (c.has(cur)) c.set(cur, c.get(cur) + 1);
+    }
   }
   return [...c.entries()].filter(([, n]) => n >= 2).sort((a, b) => a[0].localeCompare(b[0])).slice(0, 400);
 }

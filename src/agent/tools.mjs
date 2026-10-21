@@ -26,6 +26,10 @@ const err = (message, code = 'invalid', hint) => Object.assign(new Error(message
 export const crawlId = (file) => file.replace(/\.json$/, '');
 
 // Contexte autonome (stdio, tests) : pas d'interface, les crawls tournent dans ce processus.
+// Ce qu'une tâche de crawl terminée retient de son résultat : de quoi le résumer (meta, summary, principaux
+// problèmes sans leurs URL), jamais les pages ni les liens. Le crawl entier ne vit qu'une fois en mémoire.
+export const digestOf = (R) => ({ meta: R.meta, summary: R.summary, issues: R.issues.slice(0, 15).map(({ items, ...i }) => i) });
+
 export function standaloneContext() {
   const jobs = new Map();
   return {
@@ -36,8 +40,8 @@ export function standaloneContext() {
       const job = { id, url: c.startUrl, state: 'running', startedAt: new Date().toISOString(), crawler: c };
       jobs.set(id, job);
       c.start()
-        .then(async (R) => Object.assign(job, { state: 'done', file: await saveResult(R), result: R, finishedAt: new Date().toISOString() }))
-        .catch((e) => Object.assign(job, { state: 'failed', error: e.message, finishedAt: new Date().toISOString() }));
+        .then(async (R) => Object.assign(job, { state: 'done', file: await saveResult(R), result: digestOf(R), crawler: null, finishedAt: new Date().toISOString() }))
+        .catch((e) => Object.assign(job, { state: 'failed', error: e.message, crawler: null, finishedAt: new Date().toISOString() }));
       return { id };
     },
     jobStatus(id) {

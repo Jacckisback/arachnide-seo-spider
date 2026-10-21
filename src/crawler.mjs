@@ -8,7 +8,7 @@ import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
 
-export const VERSION = '3.15.0';
+export const VERSION = '3.16.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -494,7 +494,7 @@ export class Crawler extends EventEmitter {
         // Sitemaps d'images, de vidéos ou d'actualités : ils ne listent pas de pages, inutile d'épuiser le quota.
         const pages = locs.filter((l) => !/(^|[/_-])(image|video|news)[-_]?sitemap|sitemap[-_](image|video|news)/i.test(l));
         // Index : les sitemaps de pages passent avant les sitemaps imbriqués suivants (parcours en largeur).
-        toFetch.push(...pages);
+        for (const p of pages) toFetch.push(p); // pas de spread : un index de sitemaps peut lister des centaines de milliers d'entrées
         this.sitemapFiles.push({ url: sm, type: 'index', count: locs.length });
       } else {
         let n = 0;

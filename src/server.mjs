@@ -13,6 +13,7 @@ import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, star
 import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
 import { handleFixRoutes } from './fix/routes.mjs';
 import { createAgentGateway } from './agent/http.mjs';
+import { digestOf } from './agent/tools.mjs';
 import { applySegments } from '../public/shared/segments.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -89,13 +90,14 @@ function launchCrawl(url, opts, via) {
         // Le résultat reste affiché, mais l'utilisateur doit savoir qu'il n'est pas enregistré (et l'exporter).
         broadcast('warning', { key: 'warn.saveFailed', params: { error: e.code || 'error' } });
       }
-      Object.assign(job, { state: 'done', file: lastFile, result, finishedAt: new Date().toISOString() });
+      // La tâche ne garde qu'un condensé : le crawl entier (des centaines de Mo sur un gros site) ne vit que dans lastResult.
+      Object.assign(job, { state: 'done', file: lastFile, digest: digestOf(result), crawler: null, finishedAt: new Date().toISOString() });
       broadcast('done', { file: lastFile, summary: result.summary });
       console.log(`Crawl terminé : ${result.summary.totalUrls} URLs, score ${result.summary.score}/100 → crawls/${lastFile}`);
     })
     .catch((e) => {
       console.error(e);
-      Object.assign(job, { state: 'failed', error: e.message, finishedAt: new Date().toISOString() });
+      Object.assign(job, { state: 'failed', error: e.message, crawler: null, finishedAt: new Date().toISOString() });
       broadcast('failed', { message: e.message });
       c.phase = 'done';
     });
@@ -112,7 +114,7 @@ const gateway = createAgentGateway({
     jobStatus(id) {
       const j = jobs.get(id);
       if (!j) return null;
-      return { id, url: j.url, state: j.state, started_at: j.startedAt, finished_at: j.finishedAt, progress: j.crawler?.progress?.() || null, crawl_id: j.file ? j.file.replace(/\.json$/, '') : (j.state === 'done' ? 'current' : undefined), result: j.result, error: j.error };
+      return { id, url: j.url, state: j.state, started_at: j.startedAt, finished_at: j.finishedAt, progress: j.crawler?.progress?.() || null, crawl_id: j.file ? j.file.replace(/\.json$/, '') : (j.state === 'done' ? 'current' : undefined), result: j.digest, error: j.error };
     },
     // Un agent a changé les segments du crawl ouvert : on les enregistre avec le crawl et l'interface les reprend.
     segmentsChanged(R) {

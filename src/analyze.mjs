@@ -82,9 +82,16 @@ function pageRank(nodes, adj, iterations = 30, d = 0.85) {
     for (let i = 0; i < N; i++) next[i] += (d * dangling) / N;
     pr = next;
   }
-  const logs = [...pr].map((x) => Math.log(x));
-  const min = Math.min(...logs);
-  const max = Math.max(...logs);
+  // Pas de spread : Math.min(...logs) dépasse la pile d'appels au-delà de ~125 000 URL.
+  const logs = new Float64Array(N);
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < N; i++) {
+    const l = Math.log(pr[i]);
+    logs[i] = l;
+    if (l < min) min = l;
+    if (l > max) max = l;
+  }
   return new Map(nodes.map((u, i) => [u, max > min ? Math.round(((logs[i] - min) / (max - min)) * 100) : 100]));
 }
 

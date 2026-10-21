@@ -30,6 +30,10 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
 
+## 🏗️ Novidades da 3.16: escala, passo 1 — os sites grandes já não falham no fim
+
+Uma revisão técnica num crawl de 200 000 páginas mostrou que o motor escala, mas algumas linhas de tratamento de dados não: um `Math.min(...)` sobre um valor por URL fazia falhar a análise além de ~125 000 URL (após horas de crawl), e vários ciclos eram quadráticos. **Catorze pequenas correções**: sem spread em arrays do tamanho do site, índices construídos uma só vez (redirecionamentos, links de saída, URL mais próximo de um 404 procurando primeiro na pasta mãe), exemplos para a IA tirados da mesma pasta, ordenação das tabelas 20× mais rápida (um só `Intl.Collator`), contagem das pastas do mapa 5× mais rápida, tarefas de crawl terminadas reduzidas a um resumo, e **escritas atómicas** para que uma paragem durante a gravação nunca deixe um crawl truncado. Os próximos passos vão compactar o armazenamento dos links e enviar o ficheiro e os dados do navegador em fluxo.
+
 ## 📊 Novidades da 3.15: Google Analytics 4 — páginas órfãs com tráfego
 
 Ligue o **Google Analytics 4** (API com conta de serviço ou exportação CSV «Páginas e ecrãs») para ver as sessões de cada página e encontrar o que um rastreio sozinho não vê: **páginas órfãs que recebem visitas**, **páginas com erro ainda visitadas**, páginas não indexáveis com tráfego e páginas sem visitas. Novo separador *Google Analytics*, 4 novas verificações, *Sessões GA4* nos segmentos, `--ga4-key` / `--ga4-csv` na CLI e suporte para agentes de IA.
