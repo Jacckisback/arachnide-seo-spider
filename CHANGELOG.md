@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.19.0 — 2026-10-21
+
+### Scale, step 4: an analysis that scales — near duplicates without a cap, linear cannibalization, one pass per segment
+Fourth step of the 200 000-page work. With the compact graph the analysis held in time, but one result was silently wrong and two computations grew with the site.
+- **Near duplicates, every page compared**: only the first 5 000 indexable pages were compared with each other (97 % of a 200 000-page site never were, and nothing said so). The 92 % threshold is a Hamming distance of at most 5 bits on 64, so the search is now exact by **bands**: the 64-bit simhash is cut into 6 bands (11, 11, 10 bits per half); two fingerprints within 5 bits necessarily share a band, so only pages sharing a band are compared, each pair once (`nearPairs()` in `src/text.mjs`, `maxDistFor()` derives the distance from the threshold). Verified against the double loop on 3 000 fingerprints: same pairs, no duplicate. A very templated site can overfill a band: its list is capped at 3 000 entries and the crawl gets a warning (`warn.nearDupBand`) instead of a silent truncation.
+- **Cannibalization in linear time**: the filter "at least two shared keywords with a page of another root" was quadratic per group, and a group can hold 30 % of the indexable pages. It is now an inverted index keyword → pages (`competingPages()`), same result as before (unit-tested). A title expression shared by more than 500 pages is the site template, not competing pages: those groups are dropped and reported (`warn.cannibalTemplate`).
+- **Segments, one pass**: `computeSummary` walked every link for every segment (~1.6 s per segment on 20 million links, up to 50 segments). `linkStatsBySegment()` assigns a segment to each URL index once and counts in a single pass (475 ms for 10 segments on 20 million links, versus ~16 s); `sliceResult` / `computeSummary` take the precomputed counters, with identical results (unit-tested).
+- **Fix rules on the CSR graph**: *links to redirects* read outgoing links from a CSR graph built once on the crawl's columns (no object per link); old tuple files are converted first.
+- **AI sibling values from the same folder**: done in 3.16 (`siblingIndex`), kept.
+- **Measured** (synthetic): 200 000 fingerprints with a quarter of near copies — 5.1 s for 1.6 million pairs (the old double loop handled 5 000 pages in 69 ms and ignored the rest).
+- **Tests**: banded search vs brute force (3 000 fingerprints, planted near copies at 0–6 bits), overflow reporting, threshold ↔ distance; cannibalization parity and a 2 000-page group; segment link counters vs the per-segment path on the fixture site; fix rules on both link formats.
+
 ## 3.18.0 — 2026-10-21
 
 ### Scale, step 3: a crawl written as it goes — NDJSON streams and a resume journal

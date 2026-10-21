@@ -1,7 +1,7 @@
 // Post-traitement : indexabilité, graphe de liens, profondeur, PageRank interne, doublons,
 // redirections et liste des problèmes SEO. Les textes sont des clés de traduction (public/i18n).
 import { titlePixels, descPixels } from './pixel.mjs';
-import { similarity } from './text.mjs';
+import { similarity, nearPairs, maxDistFor } from './text.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
 import { issuePoints, computePillars, issueShare, OUTSIDE_CRAWL } from '../public/shared/pillars.js';
 import { imageFormat } from './parse.mjs';
@@ -68,6 +68,30 @@ function indexability(p) {
 const D = (k, p = {}) => ({ k, p });
 
 // PageRank interne (Link Score 0-100), comme le « Link Score » de Screaming Frog.
+// Plafond d'un groupe de cannibalisation : au-delà, l'expression relève du gabarit du site.
+export const CANNIBAL_MAX = 500;
+
+// Pages d'un groupe (même expression principale `focus`) qui se concurrencent vraiment : au moins un autre mot-clé
+// principal en commun avec une page d'une autre racine. Index inversé mot-clé → pages, au lieu d'une double boucle.
+export function competingPages(arr, focus, root) {
+  const byKw = new Map();
+  arr.forEach((p, i) => {
+    for (const k of new Set(p.keywords || [])) {
+      if (k === focus) continue; // partagé par tout le groupe : compte déjà pour 1
+      if (!byKw.has(k)) byKw.set(k, []);
+      byKw.get(k).push(i);
+    }
+  });
+  const roots = arr.map((p) => root(p.url));
+  return arr.filter((p, i) => {
+    for (const k of new Set(p.keywords || [])) {
+      if (k === focus) continue;
+      for (const j of byKw.get(k) || []) if (j !== i && roots[j] !== roots[i]) return true;
+    }
+    return false;
+  });
+}
+
 export function grade(score) {
   return score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : score >= 20 ? 'E' : 'F';
 }
@@ -258,19 +282,18 @@ export function analyze(crawler) {
   }
 
   // Quasi-doublons (simhash sur le contenu principal)
+  // Toutes les pages sont comparées (recherche exacte par bandes, src/text.mjs), plus de plafond à 5 000 pages.
   const nearDup = [];
-  const cand = indexableHtml.filter((p) => p.simhash && !p.duplicateContent).slice(0, 5000);
-  for (let i = 0; i < cand.length; i++) {
-    for (let j = i + 1; j < cand.length; j++) {
-      const s = similarity(cand[i].simhash, cand[j].simhash);
-      if (s >= T.nearDuplicate) {
-        nearDup.push({ a: cand[i].url, b: cand[j].url, similarity: s });
-        cand[i].nearDuplicates = (cand[i].nearDuplicates || 0) + 1;
-        cand[j].nearDuplicates = (cand[j].nearDuplicates || 0) + 1;
-        if (!cand[i].closestMatch || s > cand[i].closestSimilarity) Object.assign(cand[i], { closestMatch: cand[j].url, closestSimilarity: s });
-        if (!cand[j].closestMatch || s > cand[j].closestSimilarity) Object.assign(cand[j], { closestMatch: cand[i].url, closestSimilarity: s });
-      }
-    }
+  const cand = indexableHtml.filter((p) => p.simhash && !p.duplicateContent);
+  const { pairs, overflow } = nearPairs(cand.map((p) => p.simhash), maxDistFor(T.nearDuplicate));
+  if (overflow) crawler.warn?.('warn.nearDupBand', { n: overflow });
+  for (const [i, j] of pairs) {
+    const s = similarity(cand[i].simhash, cand[j].simhash);
+    nearDup.push({ a: cand[i].url, b: cand[j].url, similarity: s });
+    cand[i].nearDuplicates = (cand[i].nearDuplicates || 0) + 1;
+    cand[j].nearDuplicates = (cand[j].nearDuplicates || 0) + 1;
+    if (!cand[i].closestMatch || s > cand[i].closestSimilarity) Object.assign(cand[i], { closestMatch: cand[j].url, closestSimilarity: s });
+    if (!cand[j].closestMatch || s > cand[j].closestSimilarity) Object.assign(cand[j], { closestMatch: cand[i].url, closestSimilarity: s });
   }
 
   // Cannibalisation potentielle : même expression principale dans le title de plusieurs pages.
@@ -299,8 +322,15 @@ export function analyze(crawler) {
     }
   }
   // Deux pages ne se concurrencent que si leurs sujets se recouvrent : au moins 2 mots-clés principaux communs.
-  const overlap = (a, b) => (a.keywords || []).filter((k) => (b.keywords || []).includes(k)).length;
-  for (const [k, arr] of focusGroups) focusGroups.set(k, arr.filter((p) => arr.some((o) => o !== p && root(o.url) !== root(p.url) && overlap(p, o) >= 2)));
+  // Au-delà de CANNIBAL_MAX pages sur la même expression, c'est un gabarit, pas de la cannibalisation : signalé, pas tronqué en silence.
+  let templated = 0;
+  for (const [k, arr] of focusGroups) {
+    if (arr.length > CANNIBAL_MAX) {
+      templated++;
+      focusGroups.delete(k);
+    } else focusGroups.set(k, competingPages(arr, k, root));
+  }
+  if (templated) crawler.warn?.('warn.cannibalTemplate', { n: templated, max: CANNIBAL_MAX });
   const cannibal = [...focusGroups.entries()].filter(([, arr]) => arr.length > 1);
 
   // Liens cassés / vers redirections / ancres

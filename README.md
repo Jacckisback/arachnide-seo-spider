@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.18.0-3d5f17" alt="Version 3.18.0">
+  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Version 3.19.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,10 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🔬 New in 3.19: scale, step 4 — an analysis that scales
+
+**Every page is now compared for near duplicates**: the old check stopped at the first 5 000 pages without saying so. The search is exact by bands on the 64-bit fingerprint (two pages within 5 bits always share a band), so a 200 000-page site is compared in seconds; a very templated site is reported rather than silently truncated. **Cannibalization** runs in linear time with an inverted index, and expressions shared by more than 500 pages are reported as the site template. **Segments** count their links in a single pass instead of one per segment (475 ms versus ~16 s for 10 segments on 20 million links), and the fix rules read the compact graph.
 
 ## 💾 New in 3.18: scale, step 3 — a crawl written as it goes
 

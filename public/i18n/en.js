@@ -1993,4 +1993,6 @@ export default {
   'seg.field.ga4Sessions': "GA4 sessions",
   'cli.resumed': 'Crawl resumed: {n} pages already done, {queued} in queue',
   'cli.resumeHint': 'Crawl stopped. Resume it with:',
+  'warn.nearDupBand': 'Near-duplicate search: {n} fingerprint group(s) were too large (a very templated site) and were only partly compared. Some near duplicates may be missing.',
+  'warn.cannibalTemplate': 'Cannibalization: {n} title expression(s) shared by more than {max} pages were ignored — at that scale it is the site template, not competing pages.',
 };

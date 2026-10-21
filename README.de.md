@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.18.0-3d5f17" alt="Version 3.18.0">
+  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Version 3.19.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,10 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🔬 Neu in 3.19: Skalierung, Schritt 4 — eine Analyse, die skaliert
+
+**Jede Seite wird jetzt auf Beinahe-Duplikate verglichen**: Die alte Prüfung hielt bei den ersten 5 000 Seiten an, ohne es zu sagen. Die Suche ist exakt per Bändern auf dem 64-Bit-Fingerabdruck (zwei Seiten mit höchstens 5 Bit Abstand teilen immer ein Band), sodass eine Site mit 200 000 Seiten in Sekunden verglichen wird; eine stark templatebasierte Site wird gemeldet statt still gekürzt. **Kannibalisierung** läuft in linearer Zeit mit einem invertierten Index, und Ausdrücke, die mehr als 500 Seiten teilen, werden als Site-Template gemeldet. **Segmente** zählen ihre Links in einem Durchlauf statt einem pro Segment (475 ms statt ~16 s für 10 Segmente bei 20 Millionen Links), und die Korrekturregeln lesen den kompakten Graphen.
 
 ## 💾 Neu in 3.18: Skalierung, Schritt 3 — ein Crawl, der laufend geschrieben wird
 

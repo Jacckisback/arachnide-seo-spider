@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.18.0-3d5f17" alt="Versão 3.18.0">
+  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Versão 3.19.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,10 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🔬 Novidades da 3.19: escala, passo 4 — uma análise que escala
+
+**Todas as páginas são agora comparadas para quase duplicados**: a antiga verificação parava nas primeiras 5 000 páginas sem o dizer. A pesquisa é exata por bandas sobre a impressão de 64 bits (duas páginas a 5 bits de distância partilham sempre uma banda), pelo que um site de 200 000 páginas é comparado em segundos; um site muito baseado em modelo é assinalado em vez de truncado em silêncio. A **canibalização** calcula-se em tempo linear com um índice invertido, e as expressões partilhadas por mais de 500 páginas são assinaladas como modelo do site. Os **segmentos** contam os seus links numa única passagem em vez de uma por segmento (475 ms contra ~16 s para 10 segmentos em 20 milhões de links), e as regras de correção leem o grafo compacto.
 
 ## 💾 Novidades da 3.18: escala, passo 3 — um crawl escrito à medida
 

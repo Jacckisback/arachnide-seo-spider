@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.18.0-3d5f17" alt="Version 3.18.0">
+  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Version 3.19.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,10 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🔬 Nouveau en 3.19 : passage à l’échelle, étape 4 — une analyse qui passe à l’échelle
+
+**Toutes les pages sont désormais comparées pour les quasi-doublons** : l’ancien contrôle s’arrêtait aux 5 000 premières pages sans le dire. La recherche est exacte par bandes sur l’empreinte de 64 bits (deux pages à 5 bits d’écart partagent toujours une bande) : un site de 200 000 pages est comparé en quelques secondes, et un site très gabarité est signalé plutôt que tronqué en silence. La **cannibalisation** se calcule en temps linéaire avec un index inversé, et les expressions partagées par plus de 500 pages sont signalées comme gabarit du site. Les **segments** comptent leurs liens en un seul passage au lieu d’un par segment (475 ms contre ~16 s pour 10 segments sur 20 millions de liens), et les règles de correction lisent le graphe compact.
 
 ## 💾 Nouveau en 3.18 : passage à l’échelle, étape 3 — un crawl écrit au fil de l’eau
 

@@ -1993,4 +1993,6 @@ export default {
   'seg.field.ga4Sessions': "Sessions GA4",
   'cli.resumed': 'Crawl repris : {n} pages déjà faites, {queued} en file',
   'cli.resumeHint': 'Crawl arrêté. Reprenez-le avec :',
+  'warn.nearDupBand': 'Quasi-doublons : {n} groupe(s) d’empreintes trop grand(s) (site très gabarité) n’ont été comparés qu’en partie. Des quasi-doublons peuvent manquer.',
+  'warn.cannibalTemplate': 'Cannibalisation : {n} expression(s) de titre partagée(s) par plus de {max} pages ont été ignorées — à cette échelle, c’est le gabarit du site, pas des pages concurrentes.',
 };

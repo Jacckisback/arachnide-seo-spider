@@ -1993,4 +1993,6 @@ export default {
   'seg.field.ga4Sessions': "Sessões GA4",
   'cli.resumed': 'Crawl retomado: {n} páginas já feitas, {queued} em fila',
   'cli.resumeHint': 'Crawl parado. Retome-o com:',
+  'warn.nearDupBand': 'Quase duplicados: {n} grupo(s) de impressões demasiado grande(s) (site muito baseado em modelo) só foram comparados em parte. Podem faltar quase duplicados.',
+  'warn.cannibalTemplate': 'Canibalização: {n} expressão(ões) de título partilhada(s) por mais de {max} páginas foram ignoradas — a essa escala é o modelo do site, não páginas concorrentes.',
 };

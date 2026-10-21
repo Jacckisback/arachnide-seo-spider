@@ -13,7 +13,7 @@ import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
 import { Interner, LinkStore, FLAG } from './graph.mjs';
 
-export const VERSION = '3.18.0';
+export const VERSION = '3.19.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);

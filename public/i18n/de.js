@@ -1993,4 +1993,6 @@ export default {
   'seg.field.ga4Sessions': "GA4-Sitzungen",
   'cli.resumed': 'Crawl fortgesetzt: {n} Seiten bereits erledigt, {queued} in der Warteschlange',
   'cli.resumeHint': 'Crawl gestoppt. Fortsetzen mit:',
+  'warn.nearDupBand': 'Beinahe-Duplikate: {n} zu große Fingerabdruck-Gruppe(n) (stark templatebasierte Site) wurden nur teilweise verglichen. Einige Beinahe-Duplikate können fehlen.',
+  'warn.cannibalTemplate': 'Kannibalisierung: {n} Titelausdruck/-ausdrücke, die von mehr als {max} Seiten geteilt werden, wurden ignoriert — in dieser Größenordnung ist es das Template der Site, nicht konkurrierende Seiten.',
 };

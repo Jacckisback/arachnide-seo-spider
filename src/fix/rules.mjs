@@ -1,6 +1,8 @@
 // Règles déterministes : corrections calculées sans IA à partir du résultat du crawl.
 import { makeFix } from './schema.mjs';
-import { forEachLink, linkUrls } from '../../public/shared/links.js';
+import { linkUrls } from '../../public/shared/links.js';
+import { fromTuples } from '../../public/shared/ndjson.js';
+import { csr } from '../graph.mjs';
 
 const segs = (u) => {
   try {
@@ -74,15 +76,12 @@ function finalOf(redirects, url) {
   return r && !r.loop ? { url: r.finalUrl, status: r.finalStatus } : null;
 }
 
-// Liens sortants par page (indices dans R.links.urls), construits une fois : parcourir toutes les arêtes pour
-// chaque page coûtait O(pages × liens).
-function outlinkIndex(R) {
-  const out = new Map();
-  forEachLink(R, (f, to) => {
-    if (!out.has(f)) out.set(f, []);
-    out.get(f).push(to);
-  });
-  return out;
+// Liens sortants par page : graphe CSR construit une fois sur les colonnes du crawl (aucun objet par lien), au lieu de
+// parcourir toutes les arêtes pour chaque page. Les anciens fichiers (tuples) sont convertis en colonnes d'abord.
+function outlinkGraph(R) {
+  if (!R.links) return { off: new Int32Array(1), adj: new Int32Array(0) };
+  const L = R.links.edges ? fromTuples(R.links) : R.links;
+  return csr(L.urls.length, [{ src: L.from, dst: L.to, m: L.from.length }]);
 }
 
 export function deterministicFixes(R, issue) {
@@ -121,10 +120,11 @@ export function deterministicFixes(R, issue) {
       // Un Fix par lien : href qui redirige → URL finale (200).
       const idx = linkUrls(R);
       urlIndex ||= new Map(idx.map((u, i) => [u, i]));
-      outlinks ||= outlinkIndex(R);
+      outlinks ||= outlinkGraph(R);
       const seen = new Set();
-      for (const toI of outlinks.get(urlIndex.get(url)) || []) {
-        const to = idx[toI];
+      const u = urlIndex.get(url);
+      for (let j = u === undefined ? 0 : outlinks.off[u]; u !== undefined && j < outlinks.off[u + 1]; j++) {
+        const to = idx[outlinks.adj[j]];
         if (seen.has(to)) continue;
         const fin = finalOf(redirects, to);
         if (!fin || fin.status !== 200 || fin.url === to) continue;

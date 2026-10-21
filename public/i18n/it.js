@@ -1993,4 +1993,6 @@ export default {
   'seg.field.ga4Sessions': "Sessioni GA4",
   'cli.resumed': 'Crawl ripreso: {n} pagine già fatte, {queued} in coda',
   'cli.resumeHint': 'Crawl interrotto. Riprendilo con:',
+  'warn.nearDupBand': 'Quasi duplicati: {n} gruppo/i di impronte troppo grande/i (sito molto templatizzato) confrontati solo in parte. Alcuni quasi duplicati possono mancare.',
+  'warn.cannibalTemplate': 'Cannibalizzazione: {n} espressione/i di titolo condivisa/e da più di {max} pagine ignorate — a quella scala è il template del sito, non pagine concorrenti.',
 };

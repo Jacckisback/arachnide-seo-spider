@@ -1993,4 +1993,6 @@ export default {
   'seg.field.ga4Sessions': "Sesiones GA4",
   'cli.resumed': 'Rastreo reanudado: {n} páginas ya hechas, {queued} en cola',
   'cli.resumeHint': 'Rastreo detenido. Reanúdelo con:',
+  'warn.nearDupBand': 'Casi duplicados: {n} grupo(s) de huellas demasiado grande(s) (sitio muy plantillado) solo se compararon en parte. Pueden faltar casi duplicados.',
+  'warn.cannibalTemplate': 'Canibalización: {n} expresión(es) de título compartida(s) por más de {max} páginas se ignoraron: a esa escala es la plantilla del sitio, no páginas competidoras.',
 };
