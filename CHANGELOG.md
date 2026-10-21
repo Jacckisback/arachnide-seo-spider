@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.20.0 — 2026-10-21
+
+### Scale, step 5: server and interface — the browser never receives the whole crawl again
+Fifth step of the 200 000-page work. `GET /api/result` serialised the crawl in one block (same string limit as the old save), the app built an object per link in two maps at the first click (~110 bytes per link, 1.1 GB for 10 million links), downloaded the previous crawl in full for the comparison, sent the whole crawl back to the server when reopening a file, and recounted the 35 tabs at every render.
+- **No links in the browser** (`src/view.mjs`): the server keeps the crawl's graph (CSR over the link columns, built once per result, plus the site-map graph with its own rules) and answers on demand. `GET /api/links?url=&dir=in|out&offset=&limit=` for the detail panel, now **paginated** by 200 with the real total (it used to cut at 1 000 without saying so); `GET /api/map-graph` (distinct inlinks per page, relation count) and `POST /api/map-edges` (edges between the displayed nodes only, at most a few thousand) for the site map, whose inspector loads a page's neighbours at the first selection; `GET /api/compare?with=` runs `compareResults` server-side and returns only the small diff; `POST /api/open?file=` opens a saved crawl without any round trip of the file.
+- **A light result, streamed**: `GET /api/result` streams NDJSON (same line format as the files) with pages reduced to the fields the tables and filters read (`og`, viewport, image lists, heading skips… and the JavaScript rendering details stay on the server), issues and summary intact, no links, and the per-segment link counters in the head line (the browser cannot count links any more; `sliceResult` / `computeSummary` take them as numbers). The full page record comes on click (`GET /api/page?url=`) and is cached. Measured on the synthetic 50 000-page site: 68 M characters streamed in 0.9 s versus 157 M for the old block JSON.
+- **Import and export** go through the server: `POST /api/import` accepts an old JSON export or an NDJSON gzip file (read as a stream through a temporary file), `GET /api/export` streams the open crawl as gzipped NDJSON — the browser never serialises the crawl.
+- **Rendering**: tab counts computed once per result; one `Intl.Collator` per language (3.16); the live table is already rendered at most every 400 ms.
+- **Robustness**: a missing or corrupt crawl file now rejects the read (history, compare, open) instead of crashing the process on an unhandled stream error.
+- **Known gaps**: issue URL lists still travel whole (the issues page, the fix engine, the segments and the map colour by them); paginating them through `get_issue` is the next refinement, not needed below 200 000 pages. Opening a file from the **Import** button uploads it to the server, which keeps the whole crawl in memory — the same as after a crawl.
+- **Tests**: `test/view.test.mjs` — light records vs full result, link pagination and map rules vs the full in-memory graph, map counters and sub-graph vs the model built on the full graph, segment counters, every new route end to end (import JSON and gzip, stream, page, links, map, compare, open, export, segments), and a real browser: detail panel in / out tabs served by the server, full page record on click, site map in links mode.
+
 ## 3.19.0 — 2026-10-21
 
 ### Scale, step 4: an analysis that scales — near duplicates without a cap, linear cannibalization, one pass per segment

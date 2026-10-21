@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Version 3.19.0">
+  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Version 3.20.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,10 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🖥️ Neu in 3.20: Skalierung, Schritt 5 — der Browser erhält nie mehr den ganzen Crawl
+
+Der Server behält den Crawl und seinen Linkgraphen; der Browser erhält ein **leichtes Ergebnis als Stream** (Seiten reduziert auf das, was die Tabellen zeigen, ohne Links) und fragt den Rest bei Bedarf an: die Links einer Seite **seitenweise** im Detailbereich (kein stilles Abschneiden bei 1 000 mehr), den vollständigen Seitendatensatz per Klick, die Kanten der Sitemap nur für die angezeigten Knoten, und den Vergleich mit dem vorherigen Crawl als kleines, serverseitig berechnetes Diff. Einen gespeicherten Crawl öffnen oder eine Datei importieren schickt den Crawl nicht mehr hin und her; Exporte kommen als Stream vom Server. Tab-Zähler werden einmal pro Ergebnis berechnet.
 
 ## 🔬 Neu in 3.19: Skalierung, Schritt 4 — eine Analyse, die skaliert
 

@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Version 3.19.0">
+  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Version 3.20.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,10 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🖥️ Nouveau en 3.20 : passage à l’échelle, étape 5 — le navigateur ne reçoit plus jamais le crawl entier
+
+Le serveur garde le crawl et son graphe de liens ; le navigateur reçoit un **résultat léger en flux** (pages réduites à ce que les tableaux affichent, sans les liens) et demande le reste à la demande : les liens d’une page **paginés** dans le panneau de détail (plus de coupure silencieuse à 1 000), la fiche complète au clic, les arêtes de la carte pour les seuls nœuds affichés, et la comparaison avec le crawl précédent sous forme d’un petit diff calculé côté serveur. Ouvrir un crawl enregistré ou importer un fichier ne fait plus d’aller-retour du crawl ; les exports partent du serveur en flux. Les comptes des onglets sont calculés une fois par résultat.
 
 ## 🔬 Nouveau en 3.19 : passage à l’échelle, étape 4 — une analyse qui passe à l’échelle
 

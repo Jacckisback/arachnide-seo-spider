@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Versão 3.19.0">
+  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Versão 3.20.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,10 @@ Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🖥️ Novidades da 3.20: escala, passo 5 — o navegador nunca mais recebe o crawl inteiro
+
+O servidor guarda o crawl e o seu grafo de links; o navegador recebe um **resultado leve em fluxo** (páginas reduzidas ao que as tabelas mostram, sem links) e pede o resto a pedido: os links de uma página **paginados** no painel de detalhe (sem corte silencioso em 1 000), a ficha completa ao clicar, as arestas do mapa só para os nós mostrados, e a comparação com o crawl anterior como um pequeno diff calculado no servidor. Abrir um crawl gravado ou importar um ficheiro já não envia o crawl de ida e volta; as exportações saem do servidor em fluxo. As contagens dos separadores são calculadas uma vez por resultado.
 
 ## 🔬 Novidades da 3.19: escala, passo 4 — uma análise que escala
 

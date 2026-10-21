@@ -96,6 +96,9 @@ export function assembler() {
         R.version = rec.app_version ?? rec.version;
         R.meta = rec.meta;
         R.summary = rec.summary;
+        // Résultat léger envoyé au navigateur : compteurs de liens par segment (il n'a pas les liens).
+        if (rec.linkStats) R.linkStats = rec.linkStats;
+        if (rec.light) R.light = true;
       } else if (TAG_KEY[t]) {
         if (t === 'issue' || t === 'page') {
           const { t: _t, ...it } = rec;

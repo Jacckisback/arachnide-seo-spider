@@ -223,7 +223,8 @@ export function computeSummary(R, linkStats = null) {
   let internalLinks = 0;
   let externalLinks = 0;
   let ext = new Set();
-  if (linkStats) ({ internalLinks, externalLinks, ext } = linkStats);
+  // linkStats vient de linkStatsBySegment (ext = Set) ou du serveur, en nombres (uniqueExternal).
+  if (linkStats) ({ internalLinks = 0, externalLinks = 0, ext = { size: linkStats.uniqueExternal || 0 } } = linkStats);
   else {
     const inScope = new Set(pages.map((p) => p.url));
     const urls = linkUrls(R);
@@ -304,7 +305,7 @@ export function linkStatsBySegment(R, segments = R.meta?.segments || []) {
   return new Map(ids.map((id, i) => [id, stats[i]]));
 }
 
-export function sliceResult(R, segId, segments = R.meta?.segments || [], { linkStats = null } = {}) {
+export function sliceResult(R, segId, segments = R.meta?.segments || [], { linkStats = R.linkStats?.[segId] ?? null } = {}) {
   if (!segId) return R;
   const def = segId === NONE ? { id: NONE, name: '', color: NONE_COLOR } : segments.find((s) => s.id === segId);
   if (!def) return R;

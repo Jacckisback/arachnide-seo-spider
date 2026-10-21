@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Versión 3.19.0">
+  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Versión 3.20.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,10 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 🖥️ Novedades de la 3.20: escala, paso 5 — el navegador ya no recibe nunca el rastreo entero
+
+El servidor conserva el rastreo y su grafo de enlaces; el navegador recibe un **resultado ligero en flujo** (páginas reducidas a lo que muestran las tablas, sin enlaces) y pide el resto bajo demanda: los enlaces de una página **paginados** en el panel de detalle (sin corte silencioso en 1 000), la ficha completa al hacer clic, las aristas del mapa solo para los nodos mostrados, y la comparación con el rastreo anterior como un pequeño diff calculado en el servidor. Abrir un rastreo guardado o importar un archivo ya no envía el rastreo de ida y vuelta; las exportaciones salen del servidor en flujo. Los contadores de pestañas se calculan una vez por resultado.
 
 ## 🔬 Novedades de la 3.19: escala, paso 4 — un análisis que escala
 

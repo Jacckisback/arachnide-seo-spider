@@ -9,8 +9,14 @@ import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { findChrome } from './renderer.mjs';
 import { toCrawlerOptions } from './options.mjs';
 import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl, loadCrawl, saveSegments, crawlId, journalPath, listPending } from './store.mjs';
-import { isNdjson, ndjsonStream } from './ndjson.mjs';
-import { createReadStream } from 'node:fs';
+import { isNdjson, ndjsonStream, readResult, EXT } from './ndjson.mjs';
+import { createReadStream, createWriteStream } from 'node:fs';
+import os from 'node:os';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { createGzip } from 'node:zlib';
+import { resultRecords } from '../public/shared/ndjson.js';
+import { lightRecords, pageLinks, mapCounts, mapEdges, compareTo, linkStatsOf } from './view.mjs';
 import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, startScheduler } from './schedules.mjs';
 import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
 import { handleFixRoutes } from './fix/routes.mjs';
@@ -48,10 +54,29 @@ function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
-async function readBody(req) {
+// Flux NDJSON vers le navigateur : une ligne par enregistrement, jamais le résultat entier dans une chaîne.
+async function sendNdjson(res, records, { gzip = false, filename = null } = {}) {
+  const headers = { 'content-type': gzip ? 'application/gzip' : 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store' };
+  if (filename) headers['content-disposition'] = `attachment; filename="${filename}"`;
+  res.writeHead(200, headers);
+  async function* lines() {
+    for (const r of records) yield JSON.stringify(r) + '\n';
+  }
+  try {
+    await (gzip ? pipeline(Readable.from(lines()), createGzip({ level: 1 }), res) : pipeline(Readable.from(lines()), res));
+  } catch {
+    res.destroy();
+  }
+}
+
+async function readRaw(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
-  const raw = Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks);
+}
+
+async function readBody(req) {
+  const raw = (await readRaw(req)).toString('utf8');
   let body;
   try {
     body = raw ? JSON.parse(raw) : {};
@@ -218,16 +243,78 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true });
     }
     // Segments du crawl ouvert : appliqués sans recrawler, enregistrés avec le crawl (visibles des agents IA / MCP).
-    if (p === '/api/segments' && req.method === 'GET') return send(res, 200, { segments: lastResult?.meta?.segments || [], stats: lastResult?.summary?.segments || [] });
+    if (p === '/api/segments' && req.method === 'GET') return send(res, 200, { segments: lastResult?.meta?.segments || [], stats: lastResult?.summary?.segments || [], linkStats: lastResult ? linkStatsOf(lastResult) : {} });
     if (p === '/api/segments' && req.method === 'POST') {
       if (!lastResult) return send(res, 404, { error: 'No crawl loaded', key: 'toast.noCrawl' });
       const body = await readBody(req);
       const { segments, problems } = applySegments(lastResult, body.segments || []);
       if (lastFile) await saveSegments(lastFile, segments).catch((e) => console.error('Sauvegarde des segments impossible :', e.message));
       broadcast('segments', { segments });
-      return send(res, 200, { segments, problems, stats: lastResult.summary.segments || [] });
+      return send(res, 200, { segments, problems, stats: lastResult.summary.segments || [], linkStats: linkStatsOf(lastResult) });
     }
-    if (p === '/api/result') return lastResult ? send(res, 200, lastResult) : send(res, 404, { error: 'Aucun résultat' });
+    // Le navigateur reçoit un résultat léger en flux (pages réduites aux champs des tableaux, sans les liens) ; le graphe
+    // reste ici et répond à la demande.
+    if (p === '/api/result') return lastResult ? sendNdjson(res, lightRecords(lastResult)) : send(res, 404, { error: 'Aucun résultat' });
+    if (p === '/api/page') {
+      const u = url.searchParams.get('url') || '';
+      const page = lastResult?.pages.find((x) => x.url === u);
+      return page ? send(res, 200, page) : send(res, 404, { error: 'Unknown page' });
+    }
+    if (p === '/api/links') {
+      if (!lastResult) return send(res, 404, { error: 'Aucun résultat' });
+      const q = url.searchParams;
+      return send(res, 200, pageLinks(lastResult, q.get('url') || '', { dir: q.get('dir') === 'in' ? 'in' : 'out', offset: Math.max(0, Number(q.get('offset')) || 0), limit: Math.min(1000, Math.max(1, Number(q.get('limit')) || 200)), map: q.get('map') === '1' }));
+    }
+    if (p === '/api/map-graph') return lastResult ? send(res, 200, mapCounts(lastResult)) : send(res, 404, { error: 'Aucun résultat' });
+    if (p === '/api/map-edges' && req.method === 'POST') {
+      if (!lastResult) return send(res, 404, { error: 'Aucun résultat' });
+      const body = await readBody(req);
+      const urls = Array.isArray(body.urls) ? body.urls.filter((x) => typeof x === 'string').slice(0, 10000) : [];
+      return send(res, 200, { edges: mapEdges(lastResult, urls) });
+    }
+    // Comparaison avec un crawl enregistré : calculée ici, seul le petit diff part vers le navigateur.
+    if (p === '/api/compare') {
+      if (!lastResult) return send(res, 404, { error: 'Aucun résultat' });
+      const name = safeName(url.searchParams.get('with') || '');
+      if (!name) return send(res, 400, { error: 'Nom invalide' });
+      const prev = await loadCrawl(name).catch(() => null);
+      return prev ? send(res, 200, compareTo(lastResult, prev)) : send(res, 404, { error: 'Not found' });
+    }
+    // Ouverture d'un crawl enregistré : le serveur lit le fichier lui-même, le navigateur demande ensuite /api/result.
+    if (p === '/api/open' && req.method === 'POST') {
+      if (crawler && crawler.phase !== 'done') return send(res, 409, { error: 'A crawl is already running.', key: 'toast.busy' });
+      const name = safeName(url.searchParams.get('file') || '');
+      const R = name ? await loadCrawl(name).catch(() => null) : null;
+      if (!R) return send(res, 404, { error: 'Not found', key: 'toast.openFailed' });
+      lastResult = R;
+      lastFile = name;
+      return send(res, 200, { ok: true, file: name, summary: R.summary });
+    }
+    // Import d'un fichier depuis le navigateur : JSON (anciens exports) ou NDJSON gzip, lu en flux via un fichier temporaire.
+    if (p === '/api/import' && req.method === 'POST') {
+      if (crawler && crawler.phase !== 'done') return send(res, 409, { error: 'A crawl is already running.', key: 'toast.busy' });
+      const buf = await readRaw(req);
+      let R = null;
+      try {
+        if (buf[0] === 0x1f && buf[1] === 0x8b) {
+          const tmp = path.join(os.tmpdir(), `arachnide-import-${process.pid}-${Date.now().toString(36)}${EXT}`);
+          await fs.writeFile(tmp, buf);
+          R = await readResult(tmp).finally(() => fs.unlink(tmp).catch(() => {}));
+        } else R = JSON.parse(buf.toString('utf8'));
+      } catch {
+        R = null;
+      }
+      if (!R || !R.pages || !R.summary || !R.meta) return send(res, 400, { error: 'Invalid crawl', key: 'toast.invalidFile' });
+      lastResult = R;
+      lastFile = null;
+      return send(res, 200, { ok: true, summary: R.summary });
+    }
+    // Export du crawl ouvert : NDJSON gzip en flux (le format des fichiers enregistrés).
+    if (p === '/api/export') {
+      if (!lastResult) return send(res, 404, { error: 'Aucun résultat' });
+      const host = new URL(lastResult.meta.startUrl).hostname.replace(/[^\w.-]/g, '_');
+      return sendNdjson(res, resultRecords(lastResult), { gzip: true, filename: `${host}_${(lastResult.meta.finishedAt || '').slice(0, 10)}${EXT}` });
+    }
     if (p === '/api/crawls') return send(res, 200, await listCrawls());
     if (p === '/api/pending') return send(res, 200, await listPending());
     if (p.startsWith('/api/crawls/')) {

@@ -8,6 +8,19 @@ import { isPageNode } from './viz.js';
 const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
 export const worse = (a, b) => (!a ? b : !b ? a : SEV_ORDER[a] <= SEV_ORDER[b] ? a : b);
 
+// Ensemble « paresseux » : le navigateur connaît le nombre de voisins (compté par le serveur), pas encore leur liste.
+export class LazySet {
+  constructor(n) {
+    this.size = n;
+  }
+  has() {
+    return false;
+  }
+  *[Symbol.iterator]() {}
+}
+
+// graph : { out: Map } (graphe complet en mémoire, tests et petits crawls) ou { counts: { inl, linkCount } } (compteurs
+// du serveur : les arêtes sont demandées pour les nœuds affichés, M.lazy = true).
 export function buildModel(R, graph) {
   const home = R.meta.finalStart || R.meta.startUrl;
   const pages = R.pages.filter(isPageNode);
@@ -26,7 +39,12 @@ export function buildModel(R, graph) {
   const out = new Map();
   const inl = new Map();
   let linkCount = 0;
-  for (const [from, edges] of graph.out) {
+  const lazy = !!graph.counts;
+  if (lazy) {
+    for (const p of pages) if (graph.counts.inl[p.url]) inl.set(p.url, new LazySet(graph.counts.inl[p.url]));
+    linkCount = graph.counts.linkCount || 0;
+  }
+  for (const [from, edges] of graph.out || []) {
     if (!byUrl.has(from)) continue;
     for (const e of edges) {
       if (!e.internal || e.nofollow || e.to === from || !byUrl.has(e.to)) continue;
@@ -41,7 +59,7 @@ export function buildModel(R, graph) {
   const resources = R.pages.filter((p) => p.url.startsWith('http') && !isPageNode(p)).length;
   const maxDepth = pages.reduce((m, p) => Math.max(m, p.depth ?? 0), 0);
   const folders = foldersOf(pages);
-  return { R, home, pages, byUrl, issues, out, inl, linkCount, resources, maxDepth, folders, dirOf: (u) => topDir(u, folders), worst: (u) => issues.get(u)?.[0]?.severity || null };
+  return { R, home, pages, byUrl, issues, out, inl, linkCount, lazy, resources, maxDepth, folders, dirOf: (u) => topDir(u, folders), worst: (u) => issues.get(u)?.[0]?.severity || null };
 }
 
 // Premier segment du chemin (« /agenda/ ») : sert au regroupement et à la couleur par répertoire.

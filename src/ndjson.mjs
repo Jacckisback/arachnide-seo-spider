@@ -27,24 +27,35 @@ export async function writeResult(R, file) {
   }
 }
 
-// Lignes décompressées d'un fichier, une par une.
-export function readLines(file) {
+// Lignes décompressées d'un fichier, une par une. Une erreur du fichier (absent, tronqué, pas du gzip) ferme la
+// lecture et se retrouve dans `failed`, au lieu d'une exception non rattrapée qui tuerait le processus.
+export async function readLines(file) {
+  await fs.access(file);
   const src = createReadStream(file);
-  const rl = readline.createInterface({ input: src.pipe(createGunzip()), crlfDelay: Infinity });
-  return { rl, close: () => src.destroy() };
+  const gz = createGunzip();
+  const rl = readline.createInterface({ input: src.pipe(gz), crlfDelay: Infinity });
+  const state = { failed: null };
+  const fail = (e) => {
+    state.failed ||= e;
+    rl.close();
+  };
+  src.on('error', fail);
+  gz.on('error', fail);
+  return { rl, state, close: () => src.destroy() };
 }
 
 // Résultat entier, ligne par ligne : la mémoire ne contient jamais le fichier sous forme de chaîne.
 export async function readResult(file) {
   const A = assembler();
-  const { rl } = readLines(file);
+  const { rl, state } = await readLines(file);
   for await (const line of rl) if (line) A.push(JSON.parse(line));
+  if (state.failed) throw state.failed;
   return A.finish();
 }
 
 // Seule la première ligne : meta et summary, pour l'historique.
 export async function readHead(file) {
-  const { rl, close } = readLines(file);
+  const { rl, state, close } = await readLines(file);
   try {
     for await (const line of rl) {
       if (!line) continue;
@@ -52,11 +63,16 @@ export async function readHead(file) {
       if (rec.t !== 'head') throw new Error('Not a crawl file');
       return { version: rec.app_version ?? rec.version, meta: rec.meta, summary: rec.summary };
     }
-    throw new Error('Empty crawl file');
+    throw state.failed || new Error('Empty crawl file');
   } finally {
     close();
   }
 }
 
 // Flux NDJSON décompressé (pour l'envoyer tel quel au navigateur, qui l'assemble ligne par ligne).
-export const ndjsonStream = (file) => createReadStream(file).pipe(createGunzip());
+export function ndjsonStream(file) {
+  const src = createReadStream(file);
+  const gz = createGunzip();
+  src.on('error', (e) => gz.destroy(e)); // l'erreur du fichier suit le flux, elle ne tue pas le processus
+  return src.pipe(gz);
+}

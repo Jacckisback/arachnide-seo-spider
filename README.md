@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.19.0-3d5f17" alt="Version 3.19.0">
+  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Version 3.20.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,10 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🖥️ New in 3.20: scale, step 5 — the browser never receives the whole crawl again
+
+The server keeps the crawl and its link graph; the browser receives a **light result as a stream** (pages reduced to what the tables show, no links) and asks for the rest on demand: a page's links **paginated** in the detail panel (no more silent cut at 1 000), the full page record on click, the site-map edges for the displayed nodes only, and the comparison with the previous crawl as a small diff computed server-side. Opening a saved crawl or importing a file no longer sends the crawl back and forth; exports stream from the server. Tab counts are computed once per result.
 
 ## 🔬 New in 3.19: scale, step 4 — an analysis that scales
 
