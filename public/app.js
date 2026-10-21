@@ -13,6 +13,7 @@ import { createMap, paletteOf } from './viz.js';
 import { buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
 import { forEachLink, linkUrls, LINK_POS } from './shared/links.js';
+import { readNdjson } from './shared/ndjson.js';
 import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants, COLORS as MAP_COLORS } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 import { sliceResult, applySegments, assignSegments, segmentStats, issueBySegment, suggestFromFolders, NONE, NONE_COLOR } from './shared/segments.js';
@@ -1575,7 +1576,7 @@ $('#reportForm').addEventListener('submit', async (e) => {
   store.set('report', saved);
   let compare = null;
   if (form.compare.value) {
-    const prev = await fetch('/api/crawls/' + encodeURIComponent(form.compare.value)).then((r) => r.json()).catch(() => null);
+    const prev = await fetchCrawl(form.compare.value).catch(() => null);
     compare = compareResults(state.R, prev);
   }
   const rt = await getT(opts.lang);
@@ -1606,7 +1607,7 @@ async function loadResult(R, { sync = true, file = null } = {}) {
     }
   }
   // Crawl ouvert depuis un fichier : le serveur l'adopte aussi, pour que Corrections et MCP voient le même audit.
-  if (sync) fetch('/api/result' + (file ? '?file=' + encodeURIComponent(file) : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) }).catch(() => {});
+  if (sync) fetch('/api/result' + (file ? '?file=' + encodeURIComponent(file) : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: file ? '{}' : JSON.stringify(R) }).catch(() => {});
   else if (segChanged) postSegments(R.meta.segments);
   if (!R.version || R.version < 2) toast(t('toast.oldVersion'), 'info');
   state.full = R;
@@ -1633,15 +1634,22 @@ async function loadResult(R, { sync = true, file = null } = {}) {
     const host = hostOf();
     const prevMeta = list.find((c) => c.host === host && c.finishedAt && c.finishedAt < R.meta.finishedAt);
     if (!prevMeta || state.R !== R) return;
-    const prev = await fetch('/api/crawls/' + encodeURIComponent(prevMeta.file)).then((r) => r.json());
+    const prev = await fetchCrawl(prevMeta.file);
     state.compare = compareResults(R, prev);
     if (state.tab === 'dashboard') render();
   }).catch(() => {});
 }
 
+// Crawl enregistré, lu en flux : NDJSON ligne par ligne (3.18+) ou JSON d'un bloc (fichiers plus anciens).
+async function fetchCrawl(file) {
+  const r = await fetch('/api/crawls/' + encodeURIComponent(file));
+  if (!r.ok) throw new Error(r.statusText);
+  return /ndjson/.test(r.headers.get('content-type') || '') ? readNdjson(r.body) : r.json();
+}
+
 async function openSaved(file) {
   try {
-    const R = await fetch('/api/crawls/' + encodeURIComponent(file)).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+    const R = await fetchCrawl(file);
     await loadResult(R, { file });
   } catch (err) {
     toast(t('toast.openFailed') + ' ' + err.message, 'error');

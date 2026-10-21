@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { findChrome } from './renderer.mjs';
 import { toCrawlerOptions } from './options.mjs';
-import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl } from './store.mjs';
+import { CRAWLS, safeName, listCrawls, saveResult, deleteCrawl, loadCrawl, saveSegments, crawlId, journalPath, listPending } from './store.mjs';
+import { isNdjson, ndjsonStream } from './ndjson.mjs';
+import { createReadStream } from 'node:fs';
 import { readSchedules, saveSchedule, deleteSchedule, runSchedule, nextRun, startScheduler } from './schedules.mjs';
 import { publicSmtp, saveSmtp, sendMail } from './mailer.mjs';
 import { handleFixRoutes } from './fix/routes.mjs';
@@ -63,12 +65,24 @@ async function readBody(req) {
 // Crawls lancés depuis l'interface ou par un agent : un seul à la fois, visible en direct dans l'interface.
 const jobs = new Map();
 async function startCrawl(body) {
+  // { resume: <id> } : reprise d'un crawl interrompu depuis son journal (GET /api/pending les liste).
+  if (body.resume) return launchCrawl(null, {}, 'ui', { resume: String(body.resume) });
   return launchCrawl(body.url, toCrawlerOptions(body.options || {}), 'ui');
 }
-function launchCrawl(url, opts, via) {
+async function launchCrawl(url, opts, via, { resume = null } = {}) {
   if (crawler && crawler.phase !== 'done') throw Object.assign(new Error('A crawl is already running.'), { status: 409, key: 'toast.busy' });
-  const c = new Crawler(url, opts); // lève une erreur si l'URL est invalide
-  const job = { id: 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), url: c.startUrl, via, state: 'running', startedAt: new Date().toISOString(), crawler: c };
+  let c;
+  const jobId = resume || 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  if (resume) {
+    c = await Crawler.resume(journalPath(resume)).catch((e) => {
+      throw Object.assign(new Error('Cannot resume: ' + e.message), { status: 404, key: 'toast.openFailed' });
+    });
+  } else {
+    c = new Crawler(url, opts); // lève une erreur si l'URL est invalide
+    // Journal de reprise : écrit au fil de l'eau, supprimé en fin de crawl ; un arrêt brutal ne perd que les dernières secondes.
+    await c.openJournal(journalPath(jobId)).catch((e) => console.error('Journal de crawl impossible :', e.message));
+  }
+  const job = { id: jobId, url: c.startUrl, via, state: 'running', startedAt: c.startedAt || new Date().toISOString(), crawler: c };
   jobs.set(job.id, job);
   if (jobs.size > 50) jobs.delete(jobs.keys().next().value);
   crawler = c;
@@ -110,17 +124,17 @@ const gateway = createAgentGateway({
   broadcast,
   ctx: {
     currentResult: () => lastResult,
-    startCrawl: async (url, opts) => ({ id: launchCrawl(url, opts, 'agent').job }),
+    startCrawl: async (url, opts) => ({ id: (await launchCrawl(url, opts, 'agent')).job }),
     jobStatus(id) {
       const j = jobs.get(id);
       if (!j) return null;
-      return { id, url: j.url, state: j.state, started_at: j.startedAt, finished_at: j.finishedAt, progress: j.crawler?.progress?.() || null, crawl_id: j.file ? j.file.replace(/\.json$/, '') : (j.state === 'done' ? 'current' : undefined), result: j.digest, error: j.error };
+      return { id, url: j.url, state: j.state, started_at: j.startedAt, finished_at: j.finishedAt, progress: j.crawler?.progress?.() || null, crawl_id: j.file ? crawlId(j.file) : (j.state === 'done' ? 'current' : undefined), result: j.digest, error: j.error };
     },
     // Un agent a changé les segments du crawl ouvert : on les enregistre avec le crawl et l'interface les reprend.
     segmentsChanged(R) {
       if (R !== lastResult) return null;
       broadcast('segments', { segments: R.meta.segments || [], via: 'agent' });
-      return lastFile ? saveResult(R).catch((e) => console.error('Sauvegarde des segments impossible :', e.message)) : null;
+      return lastFile ? saveSegments(lastFile, R.meta.segments).catch((e) => console.error('Sauvegarde des segments impossible :', e.message)) : null;
     },
     adopt(R, file) {
       if (crawler && crawler.phase !== 'done') return;
@@ -192,11 +206,14 @@ const server = http.createServer(async (req, res) => {
       // Un crawl ouvert depuis un fichier dans l'interface devient aussi le crawl courant du serveur : les corrections,
       // les comparaisons et l'outil MCP travaillent alors sur ce que l'utilisateur regarde.
       if (crawler && crawler.phase !== 'done') return send(res, 409, { error: 'A crawl is already running.', key: 'toast.busy' });
-      const R = await readBody(req);
-      if (!R.pages || !R.summary || !R.meta) return send(res, 400, { error: 'Invalid crawl', key: 'toast.invalidFile' });
-      lastResult = R;
-      // Crawl rouvert depuis l'historique : on garde son fichier, pour y enregistrer les segments.
+      // Crawl rouvert depuis l'historique : le serveur le relit lui-même depuis le fichier (le navigateur n'a rien à
+      // renvoyer) et garde son nom, pour y rattacher les segments.
       const fromFile = safeName(url.searchParams.get('file') || '');
+      const body = await readBody(req);
+      let R = body.pages ? body : null;
+      if (!R && fromFile) R = await loadCrawl(fromFile).catch(() => null);
+      if (!R || !R.pages || !R.summary || !R.meta) return send(res, 400, { error: 'Invalid crawl', key: 'toast.invalidFile' });
+      lastResult = R;
       lastFile = fromFile && (await fs.stat(path.join(CRAWLS, fromFile)).then(() => true, () => false)) ? fromFile : null;
       return send(res, 200, { ok: true });
     }
@@ -206,12 +223,13 @@ const server = http.createServer(async (req, res) => {
       if (!lastResult) return send(res, 404, { error: 'No crawl loaded', key: 'toast.noCrawl' });
       const body = await readBody(req);
       const { segments, problems } = applySegments(lastResult, body.segments || []);
-      if (lastFile) await saveResult(lastResult).catch((e) => console.error('Sauvegarde des segments impossible :', e.message));
+      if (lastFile) await saveSegments(lastFile, segments).catch((e) => console.error('Sauvegarde des segments impossible :', e.message));
       broadcast('segments', { segments });
       return send(res, 200, { segments, problems, stats: lastResult.summary.segments || [] });
     }
     if (p === '/api/result') return lastResult ? send(res, 200, lastResult) : send(res, 404, { error: 'Aucun résultat' });
     if (p === '/api/crawls') return send(res, 200, await listCrawls());
+    if (p === '/api/pending') return send(res, 200, await listPending());
     if (p.startsWith('/api/crawls/')) {
       const name = safeName(decodeURIComponent(p.slice('/api/crawls/'.length)));
       if (!name) return send(res, 400, { error: 'Nom invalide' });
@@ -220,7 +238,13 @@ const server = http.createServer(async (req, res) => {
         await deleteCrawl(name);
         return send(res, 200, { ok: true });
       }
-      return send(res, 200, await fs.readFile(file));
+      // En flux : NDJSON décompressé (nouveau format, assemblé ligne par ligne par le navigateur) ou le JSON tel quel.
+      if (!(await fs.stat(file).catch(() => null))) return send(res, 404, { error: 'Not found' });
+      res.writeHead(200, { 'content-type': isNdjson(name) ? 'application/x-ndjson; charset=utf-8' : 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      const src = isNdjson(name) ? ndjsonStream(file) : createReadStream(file);
+      src.on('error', () => res.destroy());
+      src.pipe(res);
+      return;
     }
     if (p.startsWith('/api/')) return send(res, 404, { error: 'Route inconnue' });
 

@@ -9,6 +9,11 @@ import { buildReport } from '../public/shared/report.js';
 import { compareResults } from '../public/shared/compare.js';
 import { toCrawlerOptions } from './options.mjs';
 import { applySegments, suggestFromFolders, segmentStats, sliceResult, NONE } from '../public/shared/segments.js';
+import { createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { EXT, writeResult } from './ndjson.mjs';
+import { readResultFile, safeName, crawlId } from './store.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes('--' + name);
@@ -17,7 +22,7 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
+const VALUE_FLAGS = new Set(['resume', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -77,7 +82,9 @@ Usage : node src/cli.mjs <url> [options]
   --report            Also generate a professional HTML audit report (print to PDF)
       --report-title, --client, --author, --company, --contact, --website, --color "#5b8c1e"
       --compare FILE  Previous crawl .json to show the evolution in the report
-  --out DIR           Output folder (./crawls)`);
+  --out DIR           Output folder (./crawls)
+  --resume FILE       Resume an interrupted crawl from its journal (<out>/.en-cours/*.ndjson)
+  --no-journal        Do not write the resume journal during the crawl`);
   process.exit(url || flag('help') ? 0 : 1);
 }
 
@@ -136,7 +143,21 @@ if (val('segments')) {
   }
 }
 
-const crawler = new Crawler(url || '', opts);
+const outDir = path.resolve(val('out', path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'crawls')));
+await fs.mkdir(outDir, { recursive: true });
+// Journal de reprise : <sortie>/.en-cours/<hôte>_<date>.ndjson, écrit au fil de l'eau. --resume FICHIER reprend un crawl
+// interrompu ; --no-journal n'écrit rien pendant le crawl.
+let crawler;
+if (val('resume')) {
+  crawler = await Crawler.resume(path.resolve(val('resume')));
+  crawler.on('resumed', (r) => console.log(`↻ ${t('cli.resumed', { n: r.pages, queued: r.queued })}`));
+} else {
+  crawler = new Crawler(url || '', opts);
+  if (!flag('no-journal')) {
+    const stamp = new Date().toISOString().replace(/[:]/g, '-').replace(/\..+$/, '');
+    await crawler.openJournal(path.join(outDir, '.en-cours', `${new URL(crawler.startUrl || 'http://list').hostname}_${stamp}.ndjson`)).catch((e) => console.warn(`⚠ journal: ${e.message}`));
+  }
+}
 const tty = process.stdout.isTTY;
 crawler.on('status', (s) => console.log(`→ ${t('phase.' + s.phase)}`));
 crawler.on('warning', (w) => console.warn(`⚠ ${t(w.key, w.params)}`));
@@ -172,19 +193,31 @@ if (segRows.length) {
   for (const g of segRows) console.log(`  ${(g.id === NONE ? t('seg.none') : g.name).padEnd(w)}  ${String(g.pages).padStart(6)} ${t('seg.col.pages').toLowerCase()} · ${g.score ?? '—'}/100 · ${icon.error} ${g.errors} · ${icon.warning} ${g.warnings}`);
 }
 
-const outDir = path.resolve(val('out', path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'crawls')));
-await fs.mkdir(outDir, { recursive: true });
 const base = `${new URL(r.meta.startUrl).hostname}_${r.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '')}`;
-await fs.writeFile(path.join(outDir, base + '.json'), JSON.stringify(full));
-console.log(`\n${t('cli.saved')} ${path.join(outDir, base + '.json')}`);
+// Chaque sortie s'écrit en flux et indépendamment : l'échec de l'une n'empêche pas les autres.
+const failures = [];
+const output = async (label, fn) => {
+  try {
+    await fn();
+  } catch (e) {
+    failures.push(label);
+    console.error(`✖ ${label}: ${e.message}`);
+  }
+};
+await output('json', async () => {
+  const file = path.join(outDir, base + EXT);
+  await writeResult(full, file);
+  console.log(`\n${t('cli.saved')} ${file}`);
+});
+if (crawler.stopped && crawler.journalFile) console.log(`↻ ${t('cli.resumeHint')} node src/cli.mjs --resume "${crawler.journalFile}"`);
 
 // Alerte e-mail (pour une tâche cron) : comparaison avec le crawl précédent du même site dans le dossier de sortie.
 if (val('alert-email')) {
   const { evaluateAlerts, alertEmail } = await import('./schedules.mjs');
   const { sendMail } = await import('./mailer.mjs');
   const host = new URL(r.meta.startUrl).hostname;
-  const files = (await fs.readdir(outDir)).filter((f) => f.startsWith(host + '_') && f.endsWith('.json') && f !== base + '.json').sort();
-  const prev = files.length ? JSON.parse(await fs.readFile(path.join(outDir, files[files.length - 1]), 'utf8')) : null;
+  const files = (await fs.readdir(outDir)).filter((f) => f.startsWith(host + '_') && safeName(f) && crawlId(f) !== base).sort();
+  const prev = files.length ? await readResultFile(path.join(outDir, files[files.length - 1])).catch(() => null) : null;
   const { alerts, compare } = evaluateAlerts(r, prev, { scoreDrop: Number(val('alert-score-drop', 5)), errors: true });
   if (alerts.length) {
     const mail = alertEmail({ R: r, prev, alerts, compare, t, schedule: { name: host } });
@@ -194,25 +227,37 @@ if (val('alert-email')) {
   } else console.log(`✉  ${t('alert.none')}`);
 }
 
-if (flag('csv')) {
+if (flag('csv')) await output('csv', async () => {
   const esc = (v) => {
     const s = Array.isArray(v) ? v.join(' | ') : v == null ? '' : String(v);
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const toCsv = (rows, cols) => '﻿' + [cols.map((c) => esc(c[1])).join(';'), ...rows.map((row) => cols.map((c) => esc(row[c[0]])).join(';'))].join('\n');
+  // CSV écrit ligne par ligne (jamais une chaîne de tout le fichier).
+  const writeCsv = async (file, rows, cols) => {
+    const line = (row) => cols.map((c) => esc(row[c[0]])).join(';') + '\n';
+    async function* gen() {
+      yield '\ufeff' + cols.map((c) => esc(c[1])).join(';') + '\n';
+      for (const row of rows) yield line(row);
+    }
+    await pipeline(Readable.from(gen()), createWriteStream(file));
+  };
   const segName = (id) => (!id ? '' : id === NONE ? t('seg.none') : segs.find((s) => s.id === id)?.name || id);
   const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')], ...(full.meta.ga4 ? [['ga4Sessions', t('col.sessions')], ['ga4Views', t('col.views')]] : [])];
-  const pages = r.pages.map((p) => ({ ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' }));
-  await fs.writeFile(path.join(outDir, base + '_pages.csv'), toCsv(pages, pageCols));
+  function* pageRows() {
+    for (const p of r.pages) yield { ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' };
+  }
+  await writeCsv(path.join(outDir, base + '_pages.csv'), pageRows(), pageCols);
   const segOfUrl = new Map(full.pages.map((p) => [p.url, p.segment]));
-  const issueRows = r.issues.flatMap((i) => i.items.map((it) => ({ sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, segment: segName(segOfUrl.get(it.url)), detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) })));
-  await fs.writeFile(path.join(outDir, base + '_issues.csv'), toCsv(issueRows, [['sev', t('col.severity')], ['cat', t('col.category')], ['issue', t('col.issue')], ['url', 'URL'], ...(segs.length ? [['segment', t('col.segment')]] : []), ['detail', t('col.detail')], ['fix', t('col.fix')]]));
+  function* issueRows() {
+    for (const i of r.issues) for (const it of i.items) yield { sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, segment: segName(segOfUrl.get(it.url)), detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) };
+  }
+  await writeCsv(path.join(outDir, base + '_issues.csv'), issueRows(), [['sev', t('col.severity')], ['cat', t('col.category')], ['issue', t('col.issue')], ['url', 'URL'], ...(segs.length ? [['segment', t('col.segment')]] : []), ['detail', t('col.detail')], ['fix', t('col.fix')]]);
   console.log(`CSV : ${base}_pages.csv, ${base}_issues.csv`);
-}
+});
 
-if (flag('report')) {
+if (flag('report')) await output('report', async () => {
   let compare = null;
-  if (val('compare')) compare = compareResults(r, JSON.parse(await fs.readFile(val('compare'), 'utf8')));
+  if (val('compare')) compare = compareResults(r, await readResultFile(val('compare')));
   const html = buildReport(r, {
     title: val('report-title', ''),
     client: val('client', ''),
@@ -228,4 +273,5 @@ if (flag('report')) {
   const file = path.join(outDir, `${base}_report_${t.lang}.html`);
   await fs.writeFile(file, html);
   console.log(`${t('cli.report')} ${file}`);
-}
+});
+if (failures.length) process.exitCode = 1;

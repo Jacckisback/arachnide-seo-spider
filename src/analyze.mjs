@@ -7,6 +7,7 @@ import { issuePoints, computePillars, issueShare, OUTSIDE_CRAWL } from '../publi
 import { imageFormat } from './parse.mjs';
 import { applySegments } from '../public/shared/segments.js';
 import { csr, uniqueCounts, pageRankCsr, FLAG } from './graph.mjs';
+import { linksBlock } from '../public/shared/ndjson.js';
 
 export const THRESHOLDS = {
   titleMaxPx: 580,
@@ -720,8 +721,7 @@ export function analyze(crawler) {
   const rt = html200.map((p) => p.responseTime).filter((x) => x != null).sort((a, b) => a - b);
 
   // Liens en colonnes, tels qu'ils sont en mémoire : rien à convertir (voir public/shared/links.js pour la lecture).
-  const cols = links.columns();
-  const linksOut = { urls: urls.values, anchors: crawler.anchors.values, from: Array.from(cols.from), to: Array.from(cols.to), anchor: Array.from(cols.anchor), flags: Array.from(cols.flags), pos: Array.from(cols.pos) };
+  const linksOut = linksBlock({ urls: urls.values, anchors: crawler.anchors.values, ...links.columns() });
   for (const p of pages) delete p.simhash;
 
   const result = {

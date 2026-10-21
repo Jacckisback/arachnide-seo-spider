@@ -1,5 +1,9 @@
 // Moteur de crawl : file d'attente BFS, concurrence, robots.txt, sitemaps, redirections manuelles, rendu JS optionnel.
 import { EventEmitter } from 'node:events';
+import { createWriteStream, createReadStream } from 'node:fs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import readline from 'node:readline';
 import zlib from 'node:zlib';
 import { parseHtml, resolveUrl } from './parse.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
@@ -9,7 +13,7 @@ import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
 import { Interner, LinkStore, FLAG } from './graph.mjs';
 
-export const VERSION = '3.17.0';
+export const VERSION = '3.18.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -18,6 +22,8 @@ const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
 const MAX_ALTS = 5;
 const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: [], missingAlt: false, pages: 0, firstPage: '', lastPage: '', status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
 const newExternal = (url) => ({ url, status: null, statusText: '', inlinks: 0, pages: 0, firstPage: '', lastPage: '' });
+// Options rejouables : tout ce qui se sérialise (les fonctions injectées pour les tests sont ignorées).
+const journalOpts = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v !== 'function' && v !== undefined));
 const seenOn = (rec, pageUrl) => {
   if (rec.lastPage === pageUrl) return;
   rec.lastPage = pageUrl;
@@ -226,6 +232,11 @@ export class Crawler extends EventEmitter {
     this.externals = new Map(); // url -> {url, status, inlinks, pages, firstPage}
     this.sitemapUrls = new Set();
     this.sitemapFiles = [];
+    // Journal de reprise (NDJSON en ajout seul) : une ligne par URL mise en file, une par page traitée.
+    this.journal = null;
+    this.journalFile = null;
+    this.resumeFile = null;
+    this.resumed = false;
     this.robotsRules = [];
     this.robotsTxt = null;
     this.active = 0;
@@ -343,6 +354,62 @@ export class Crawler extends EventEmitter {
     this.seen.add(n);
     this.depthCounts.set(depth, (this.depthCounts.get(depth) || 0) + 1);
     this.queue.push({ url: n, depth, via, hops });
+    this.jlog({ t: 'q', u: n, d: depth, v: via, h: hops });
+  }
+
+  // ---- Journal de reprise ----
+  // Tout est en ajout seul : un arrêt brutal ne perd que les dernières secondes. La reprise relit le journal dans
+  // l'ordre (les lignes q reconstituent la file et « seen », les lignes p les pages faites, leurs liens et leurs images),
+  // puis crawle ce qui est en file sans être fait. Les identifiants d'URL (src/graph.mjs) sont attribués dans l'ordre
+  // de lecture : ils se reconstruisent à l'identique.
+  async openJournal(file, { fresh = true } = {}) {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    this.journalFile = file;
+    this.journal = createWriteStream(file, { flags: 'a' });
+    if (fresh) this.jlog({ t: 'start', version: VERSION, url: this.startUrl, opts: journalOpts(this.opts), startedAt: new Date().toISOString() });
+  }
+  jlog(rec) {
+    if (this.journal) this.journal.write(JSON.stringify(rec) + '\n');
+  }
+  async closeJournal({ remove = false } = {}) {
+    if (!this.journal) return;
+    const j = this.journal;
+    this.journal = null;
+    await new Promise((r) => j.end(r));
+    if (remove) await fs.unlink(this.journalFile).catch(() => {});
+  }
+  // Crawler reconstitué depuis un journal : mêmes options, même URL de départ, file et pages rejouées.
+  static async resume(file, extra = {}) {
+    let head = null;
+    for await (const line of readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity })) {
+      if (line) head = JSON.parse(line);
+      break;
+    }
+    if (!head || head.t !== 'start') throw new Error('Not a crawl journal: ' + file);
+    const c = new Crawler(head.url, { ...head.opts, ...extra });
+    c.startedAt = head.startedAt;
+    c.resumeFile = file; // rejoué au démarrage, une fois le périmètre du site connu (resolveStart)
+    c.resumed = true;
+    return c;
+  }
+  async replay(file) {
+    let n = 0;
+    for await (const line of readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity })) {
+      if (!line) continue;
+      let rec;
+      try {
+        rec = JSON.parse(line);
+      } catch {
+        continue; // dernière ligne tronquée par l'arrêt
+      }
+      if (rec.t === 'q') this.enqueue(rec.u, rec.d, rec.v, rec.h);
+      else if (rec.t === 'p') {
+        this.settle({ url: rec.rec.url, depth: rec.rec.depth, via: rec.rec.via }, rec.rec, rec.d, true);
+        n++;
+      }
+    }
+    this.emit('resumed', { pages: this.pages.size, queued: this.queue.length - this.qHead });
+    return n;
   }
 
   // Vitesse : plafond global de requêtes par seconde, partagé par tous les workers.
@@ -580,6 +647,10 @@ export class Crawler extends EventEmitter {
     await this.resolveStart();
     await this.loadRobotsAndSitemaps();
     await this.startRenderer();
+    if (this.resumeFile) {
+      await this.replay(this.resumeFile);
+      await this.openJournal(this.resumeFile, { fresh: false });
+    }
     if (this.listUrls) {
       for (const u of this.listUrls) this.enqueue(u, 0, 'list');
     } else {
@@ -603,6 +674,8 @@ export class Crawler extends EventEmitter {
     }
     this.setPhase('analyse');
     this.finishedAt = new Date().toISOString();
+    // Crawl terminé : le journal n'a plus d'utilité. Arrêté par l'utilisateur : il reste, pour une reprise.
+    await this.closeJournal({ remove: !this.stopped });
     const result = analyze(this);
     this.phase = 'done';
     this.emit('progress', this.progress());
@@ -641,6 +714,7 @@ export class Crawler extends EventEmitter {
         continue;
       }
       const item = this.queue[this.qHead++];
+      if (this.pages.has(item.url)) continue; // déjà traitée (reprise)
       this.active++;
       try {
         await this.process(item);
@@ -686,8 +760,7 @@ export class Crawler extends EventEmitter {
     if (blocked && this.opts.robotsMode === 'report') rec.robotsBlocked = true; // crawlé quand même, mais signalé
     else if (blocked) {
       rec.blockedByRobots = true;
-      this.pages.set(item.url, rec);
-      this.emit('page', rec);
+      this.settle(item, rec);
       return;
     }
     let reqRes;
@@ -709,9 +782,7 @@ export class Crawler extends EventEmitter {
         rec.retries = attempt + 1;
       }
     } catch (e) {
-      const r = this.errorRecord(item, e);
-      this.pages.set(item.url, r);
-      this.emit('page', r);
+      this.settle(item, this.errorRecord(item, e));
       return;
     }
     const { res, ttfb, timer } = reqRes;
@@ -737,26 +808,18 @@ export class Crawler extends EventEmitter {
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
           if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
-          // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
-          if (!this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
-            const ex = this.externals.get(rec.redirectUrl) || newExternal(rec.redirectUrl);
-            seenOn(ex, item.url);
-            this.externals.set(rec.redirectUrl, ex);
-          }
         } else {
           // Un 3xx sans en-tête Location ne mène nulle part : navigateurs et Google affichent une page d'erreur.
           rec.error = 'Redirect without Location';
         }
-        this.pages.set(item.url, rec);
-        this.emit('page', rec);
+        this.settle(item, rec);
         return;
       }
       rec.isHtml = HTML_TYPES.test(rec.contentType);
       if (!rec.isHtml) {
         rec.size = Number(res.headers.get('content-length')) || 0;
         await res.body?.cancel();
-        this.pages.set(item.url, rec);
-        this.emit('page', rec);
+        this.settle(item, rec);
         return;
       }
       const maxBytes = this.opts.maxPageSizeKb * 1024;
@@ -765,8 +828,7 @@ export class Crawler extends EventEmitter {
         rec.size = Number(res.headers.get('content-length'));
         rec.tooLarge = true;
         this.skip('pageSize');
-        this.pages.set(item.url, rec);
-        this.emit('page', rec);
+        this.settle(item, rec);
         return;
       }
       const buf = new Uint8Array(await res.arrayBuffer());
@@ -812,70 +874,89 @@ export class Crawler extends EventEmitter {
           rec.js = { rendered: false, error: e.message.slice(0, 200) };
         }
       }
-      const { links, images, ...fields } = data;
-      Object.assign(rec, fields);
-      rec.internalOutlinks = 0;
-      rec.externalOutlinks = 0;
-      rec.imagesCount = images.length;
-      // alt absent = problème ; alt="" = image déclarée décorative (valide pour Google et l'accessibilité).
-      rec.imagesMissingAlt = images.filter((i) => i.alt === null).length;
-      rec.imagesEmptyAlt = images.filter((i) => i.alt === '').length;
-      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null).slice(0, 30).map((i) => i.src);
-      rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
-      rec.imagesResponsive = images.filter((i) => i.responsive).length;
-      rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
-      rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
-      rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
-
-      const followAll = !robotsFlags(rec.metaRobots, rec.xRobotsTag).nofollow;
-      const follow = this.opts.mode !== 'list';
-      if (links.length > this.opts.maxLinksPerPage) {
-        rec.linksTruncated = links.length;
-        links.length = this.opts.maxLinksPerPage;
-      }
-      for (const l of links) {
-        const to = this.normalize(l.to) || l.to;
-        const internal = this.isInternal(to);
-        this.links.add({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, code: l.code });
-        if (internal) {
-          rec.internalOutlinks++;
-          if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
-        } else {
-          rec.externalOutlinks++;
-          const ex = this.externals.get(to) || newExternal(to);
-          ex.inlinks++;
-          seenOn(ex, item.url);
-          this.externals.set(to, ex);
-        }
-      }
-      for (const img of images) {
-        const im = this.images.get(img.src) || newImage(img.src);
-        Object.assign(im, { role: 'src', of: '' });
-        if (img.alt === null) im.missingAlt = true;
-        else if (img.alt === '') im.emptyAlt = true;
-        else if (im.alts.length < MAX_ALTS && !im.alts.includes(img.alt)) im.alts.push(img.alt);
-        seenOn(im, item.url);
-        if (img.responsive) im.responsive = true;
-        if (img.picture) im.picture = true;
-        im.variantCount = Math.max(im.variantCount, img.variants.length);
-        this.images.set(img.src, im);
-        // Chaque fichier de srcset / <picture> est un fichier distinct à contrôler (poids, statut).
-        for (const v of img.variants) {
-          const vm = this.images.get(v.url) || Object.assign(newImage(v.url), { role: v.role, of: img.src, descriptor: v.descriptor, type: v.type || '', media: v.media || '' });
-          seenOn(vm, item.url);
-          this.images.set(v.url, vm);
-        }
-      }
-      if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
-      // Versions linguistiques déclarées en hreflang : explorées pour vérifier qu'elles répondent 200, sont indexables et renvoient le lien.
-      if (follow && this.opts.crawlCanonicals) for (const h of rec.hreflang || []) this.enqueue(h.href, item.depth + 1, 'hreflang');
-      if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
-      if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
-      this.pages.set(item.url, rec);
-      this.emit('page', rec);
+      this.settle(item, rec, data);
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // Page terminée : enregistrée, journalisée, annoncée. data (liens, images, champs HTML) est absent pour les pages
+  // sans HTML (erreur, redirection, fichier). En reprise (replay), rien n'est journalisé ni annoncé.
+  settle(item, rec, data = null, replay = false) {
+    if (data) this.ingest(item, rec, data, replay);
+    // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
+    if (rec.redirectUrl && !this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
+      const ex = this.externals.get(rec.redirectUrl) || newExternal(rec.redirectUrl);
+      seenOn(ex, item.url);
+      this.externals.set(rec.redirectUrl, ex);
+    }
+    this.pages.set(item.url, rec);
+    if (replay) return;
+    this.jlog({ t: 'p', rec, d: data ? { links: data.links, images: data.images } : null });
+    this.emit('page', rec);
+  }
+
+  // Ce que la page apporte au crawl : champs HTML, liens (file, liens externes, graphe), images.
+  ingest(item, rec, data, replay = false) {
+    const { links, images, ...fields } = data;
+    Object.assign(rec, fields);
+    rec.internalOutlinks = 0;
+    rec.externalOutlinks = 0;
+    rec.imagesCount = images.length;
+    // alt absent = problème ; alt="" = image déclarée décorative (valide pour Google et l'accessibilité).
+    rec.imagesMissingAlt = images.filter((i) => i.alt === null).length;
+    rec.imagesEmptyAlt = images.filter((i) => i.alt === '').length;
+    if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null).slice(0, 30).map((i) => i.src);
+    rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
+    rec.imagesResponsive = images.filter((i) => i.responsive).length;
+    rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
+    rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
+    rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
+
+    const followAll = !robotsFlags(rec.metaRobots, rec.xRobotsTag).nofollow;
+    const follow = this.opts.mode !== 'list' && !replay; // en reprise, la file vient des lignes q du journal
+    if (links.length > this.opts.maxLinksPerPage) {
+      rec.linksTruncated = links.length;
+      links.length = this.opts.maxLinksPerPage;
+    }
+    for (const l of links) {
+      const to = this.normalize(l.to) || l.to;
+      const internal = this.isInternal(to);
+      this.links.add({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, code: l.code });
+      if (internal) {
+        rec.internalOutlinks++;
+        if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
+      } else {
+        rec.externalOutlinks++;
+        const ex = this.externals.get(to) || newExternal(to);
+        ex.inlinks++;
+        seenOn(ex, item.url);
+        this.externals.set(to, ex);
+      }
+    }
+    for (const img of images) {
+      const im = this.images.get(img.src) || newImage(img.src);
+      Object.assign(im, { role: 'src', of: '' });
+      if (img.alt === null) im.missingAlt = true;
+      else if (img.alt === '') im.emptyAlt = true;
+      else if (im.alts.length < MAX_ALTS && !im.alts.includes(img.alt)) im.alts.push(img.alt);
+      seenOn(im, item.url);
+      if (img.responsive) im.responsive = true;
+      if (img.picture) im.picture = true;
+      im.variantCount = Math.max(im.variantCount, img.variants.length);
+      this.images.set(img.src, im);
+      // Chaque fichier de srcset / <picture> est un fichier distinct à contrôler (poids, statut).
+      for (const v of img.variants) {
+        const vm = this.images.get(v.url) || Object.assign(newImage(v.url), { role: v.role, of: img.src, descriptor: v.descriptor, type: v.type || '', media: v.media || '' });
+        seenOn(vm, item.url);
+        this.images.set(v.url, vm);
+      }
+    }
+    if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
+    // Versions linguistiques déclarées en hreflang : explorées pour vérifier qu'elles répondent 200, sont indexables et renvoient le lien.
+    if (follow && this.opts.crawlCanonicals) for (const h of rec.hreflang || []) this.enqueue(h.href, item.depth + 1, 'hreflang');
+    if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
+    if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
   }
 
   async pool(items, fn, concurrency) {

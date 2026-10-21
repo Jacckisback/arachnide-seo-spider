@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.17.0-3d5f17" alt="Versione 3.17.0">
+  <img src="https://img.shields.io/badge/version-3.18.0-3d5f17" alt="Versione 3.18.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,10 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 💾 Novità della 3.18: scalabilità, passo 3 — un crawl scritto man mano
+
+Un crawl non passa più mai per una sola stringa. I risultati sono salvati in **NDJSON gzip** (un oggetto JSON per riga, i link a pacchetti), scritti e riletti in streaming, in modo atomico; la cronologia legge solo la prima riga. Durante il crawl un **diario di ripresa** annota ogni URL messo in coda e ogni pagina fatta: dopo un crash o un Ctrl+C, `--resume` (o `POST /api/crawl { resume }`) riprende il crawl da dove si era fermato, perdendo solo gli ultimi secondi. I crawl salvati arrivano al browser riga per riga, i segmenti modificati dopo vanno in un piccolo file accanto, e la riga di comando scrive JSON, CSV e report ciascuno in streaming e in modo indipendente. I vecchi crawl `.json` si aprono ancora. Passo successivo: pagine più leggere e link su richiesta nel browser.
 
 ## 🧮 Novità della 3.17: scalabilità, passo 2 — un grafo dei link compatto
 
@@ -353,7 +357,8 @@ Passa dal **2D** al **3D** e viceversa, colora in base all’indicizzabilità, a
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang it
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

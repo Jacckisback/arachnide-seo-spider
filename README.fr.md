@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.17.0-3d5f17" alt="Version 3.17.0">
+  <img src="https://img.shields.io/badge/version-3.18.0-3d5f17" alt="Version 3.18.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -29,6 +29,10 @@ Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur v
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 💾 Nouveau en 3.18 : passage à l’échelle, étape 3 — un crawl écrit au fil de l’eau
+
+Un crawl ne passe plus jamais par une seule chaîne. Les résultats sont enregistrés en **NDJSON gzip** (un objet JSON par ligne, les liens par paquets), écrits et relus en flux, de façon atomique ; l’historique ne lit que la première ligne. Pendant le crawl, un **journal de reprise** note chaque URL mise en file et chaque page traitée : après un plantage ou un Ctrl+C, `--resume` (ou `POST /api/crawl { resume }`) reprend le crawl là où il s’est arrêté, en ne perdant que les dernières secondes. Les crawls enregistrés sont envoyés au navigateur ligne par ligne, les segments modifiés après coup vont dans un petit fichier voisin, et la ligne de commande écrit JSON, CSV et rapport chacun en flux et indépendamment. Les anciens crawls `.json` s’ouvrent toujours. Étape suivante : des pages allégées et des liens à la demande dans le navigateur.
 
 ## 🧮 Nouveau en 3.17 : passage à l’échelle, étape 2 — un graphe de liens compact
 
@@ -366,7 +370,8 @@ Basculez entre **2D** et **3D**, colorez selon l’indexabilité, les problèmes
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang fr
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

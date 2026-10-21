@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { Crawler } from '../crawler.mjs';
 import { toCrawlerOptions } from '../options.mjs';
-import { listCrawls, loadCrawl, saveResult } from '../store.mjs';
+import { listCrawls, loadCrawl, saveResult, crawlId, crawlFileOf } from '../store.mjs';
 import { detectSite } from '../detect.mjs';
 import { fetchPageSummary } from '../live.mjs';
 import { buildOpportunities } from '../fixes.mjs';
@@ -23,7 +23,7 @@ export const RO = { readOnlyHint: true, destructiveHint: false, idempotentHint: 
 const LOCAL = { ...RO, openWorldHint: false };
 
 const err = (message, code = 'invalid', hint) => Object.assign(new Error(message), { code, hint });
-export const crawlId = (file) => file.replace(/\.json$/, '');
+export { crawlId };
 
 // Contexte autonome (stdio, tests) : pas d'interface, les crawls tournent dans ce processus.
 // Ce qu'une tâche de crawl terminée retient de son résultat : de quoi le résumer (meta, summary, principaux
@@ -67,8 +67,9 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   // « current » = le crawl affiché dans l'interface (ou en cours de consultation par l'agent) ; sinon le plus récent.
   async function loadRef(id) {
     if (id && id !== 'current' && id !== 'latest') {
-      const file = id.endsWith('.json') ? id : id + '.json';
-      return { id: crawlId(id), R: await loadCrawl(file), file };
+      const file = await crawlFileOf(id);
+      if (!file) throw err(`Unknown crawl ${id}. Call arachnide_list_crawls.`, 'not_found');
+      return { id: crawlId(file), R: await loadCrawl(file), file };
     }
     if (id !== 'latest') {
       const cur = ctx.currentResult();

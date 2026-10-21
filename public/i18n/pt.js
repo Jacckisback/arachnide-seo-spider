@@ -1991,4 +1991,6 @@ export default {
   'opt.ga4Days': "Período (dias)",
   'cfg.ga4Csv': "…ou importe uma exportação CSV do GA4 (Relatórios → Interação → Páginas e ecrãs):",
   'seg.field.ga4Sessions': "Sessões GA4",
+  'cli.resumed': 'Crawl retomado: {n} páginas já feitas, {queued} em fila',
+  'cli.resumeHint': 'Crawl parado. Retome-o com:',
 };
