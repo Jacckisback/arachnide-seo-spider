@@ -147,13 +147,15 @@ function hasDimensions($el) {
 }
 
 // Extraction personnalisée : sélecteur CSS ou expression régulière, comme « Custom Extraction » de Screaming Frog.
-function runExtractors($, html, extractors) {
+// skip : types traités hors du parse (regex dans un Worker avec délai, xpath par jsdom ou dans Chrome).
+function runExtractors($, html, extractors, skip = new Set()) {
   const out = {};
   for (const ex of extractors || []) {
-    if (!ex || !ex.name || !ex.selector) continue;
+    if (!ex || !ex.name || !ex.selector || skip.has(ex.type)) continue;
     let values = [];
     try {
-      if (ex.type === 'regex') {
+      if (ex.type === 'xpath') values = ['⚠ xpath: install jsdom or enable rendering'];
+      else if (ex.type === 'regex') {
         const re = new RegExp(ex.selector, 'gi');
         for (const m of html.matchAll(re)) {
           values.push(m[1] ?? m[0]);
@@ -175,9 +177,9 @@ function runExtractors($, html, extractors) {
   return out;
 }
 
-export function parseHtml(html, pageUrl, { extractors } = {}) {
+export function parseHtml(html, pageUrl, { extractors, skipExtractors } = {}) {
   const $ = cheerio.load(html);
-  const extracted = extractors?.length ? runExtractors($, html, extractors) : undefined;
+  const extracted = extractors?.length ? runExtractors($, html, extractors, skipExtractors) : undefined;
   // Le contenu d'un <template> n'est jamais rendu ni indexé : retiré avant toute extraction.
   $('template').remove();
   // Espace entre éléments de bloc et <br> AVANT toute lecture de texte : « <h1>Ligne 1<br>Ligne 2</h1> » ou une carte

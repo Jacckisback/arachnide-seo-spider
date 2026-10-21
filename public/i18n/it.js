@@ -1995,4 +1995,11 @@ export default {
   'cli.resumeHint': 'Crawl interrotto. Riprendilo con:',
   'warn.nearDupBand': 'Quasi duplicati: {n} gruppo/i di impronte troppo grande/i (sito molto templatizzato) confrontati solo in parte. Alcuni quasi duplicati possono mancare.',
   'warn.cannibalTemplate': 'Cannibalizzazione: {n} espressione/i di titolo condivisa/e da più di {max} pagine ignorate — a quella scala è il template del sito, non pagine concorrenti.',
+  'warn.facets': '{path} ha prodotto {n} varianti di parametri: è la firma di una trappola a faccette. Limita il numero di parametri o escludi questi URL perché il budget di crawl vada alle pagine vere.',
+  'warn.robotsDisallowAll': 'robots.txt ha risposto {status}: secondo la RFC 9309 tutto è considerato vietato, nessuna pagina è stata scaricata. Imposta la modalità robots.txt su «segnala» o «ignora», o l’opzione robots irraggiungibile su «consenti», per fare comunque il crawl.',
+  'warn.renderRestart': 'Chrome si è fermato durante il crawl ({error}): è stato riavviato una volta e il rendering continua.',
+  'warn.renderLost': 'Chrome si è fermato di nuovo ({error}): il resto del crawl è analizzato senza rendering JavaScript (pagine segnate rendered: false).',
+  'warn.regexTimeout': 'L’estrazione regex «{name}» ha impiegato troppo tempo su una pagina (backtracking catastrofico?): è stata interrotta per quella pagina e il crawl è continuato.',
+  'warn.xpathUnavailable': 'L’estrazione XPath sull’HTML grezzo richiede il pacchetto opzionale jsdom (npm install jsdom) o il rendering JavaScript: queste regole non hanno restituito nulla.',
+  'warn.sitemapListEmpty': 'La sitemap {url} non ha dato alcun URL: niente da esplorare in modalità lista.',
 };

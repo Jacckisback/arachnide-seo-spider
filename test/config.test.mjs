@@ -33,7 +33,7 @@ test('testeur robots.txt', () => {
 });
 
 test('Spider > Limites : dossiers, paramètres, par profondeur, par chemin', async () => {
-  const a = await crawl({ maxFolderDepth: 2, maxQueryParams: 1 });
+  const a = await crawl({ maxFolderDepth: 2, maxQueryParams: 1, normalizeParams: false }); // utm_source compte : la normalisation est testée dans guards.test.mjs
   assert.equal(a.page('/a/b/c/d/profond'), undefined);
   assert.equal(a.page('/produits?utm_source=x&id=3'), undefined);
   assert.ok(a.r.meta.skipped.folderDepth >= 1 && a.r.meta.skipped.queryParams >= 1);

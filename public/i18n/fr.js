@@ -1995,4 +1995,11 @@ export default {
   'cli.resumeHint': 'Crawl arrêté. Reprenez-le avec :',
   'warn.nearDupBand': 'Quasi-doublons : {n} groupe(s) d’empreintes trop grand(s) (site très gabarité) n’ont été comparés qu’en partie. Des quasi-doublons peuvent manquer.',
   'warn.cannibalTemplate': 'Cannibalisation : {n} expression(s) de titre partagée(s) par plus de {max} pages ont été ignorées — à cette échelle, c’est le gabarit du site, pas des pages concurrentes.',
+  'warn.facets': '{path} a produit {n} variantes de paramètres : c’est la signature d’un piège à facettes. Limitez le nombre de paramètres ou excluez ces URL pour que le budget de crawl aille aux vraies pages.',
+  'warn.robotsDisallowAll': 'robots.txt a répondu {status} : selon la RFC 9309, tout est considéré comme interdit, aucune page n’a été téléchargée. Passez le mode robots.txt en « signaler » ou « ignorer », ou l’option robots injoignable en « autoriser », pour crawler quand même.',
+  'warn.renderRestart': 'Chrome s’est arrêté pendant le crawl ({error}) : il a été relancé une fois et le rendu continue.',
+  'warn.renderLost': 'Chrome s’est de nouveau arrêté ({error}) : la suite du crawl est analysée sans rendu JavaScript (pages marquées rendered: false).',
+  'warn.regexTimeout': 'L’extraction regex « {name} » a pris trop de temps sur une page (retour arrière catastrophique ?) : elle a été interrompue pour cette page et le crawl a continué.',
+  'warn.xpathUnavailable': 'L’extraction XPath sur le HTML brut demande le paquet facultatif jsdom (npm install jsdom) ou le rendu JavaScript : ces règles n’ont rien renvoyé.',
+  'warn.sitemapListEmpty': 'Le sitemap {url} n’a donné aucune URL : rien à crawler en mode liste.',
 };

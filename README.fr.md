@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Version 3.20.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Version 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -24,11 +24,15 @@
 - un plan d’action classé par impact et par effort ;
 - un **rapport PDF en marque blanche** pour vos clients, en 6 langues.
 
-Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur votre machine.
+Pas de compte, pas de cloud : vos données restent sur votre machine. Testé sur un site synthétique de 200 000 pages (`npm run bench -- --pages 200000`) ; le budget par défaut est de 500 pages, à relever dans les options.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🛡️ Nouveau en 3.21 : garde-fous de crawl, XPath, mode liste par sitemap, et un benchmark reproductible à 200 000 pages
+
+Le budget de pages compte désormais les pages réellement téléchargées (les URL bloquées par robots.txt ne le consomment plus), les paramètres d’URL sont triés et les paramètres de suivi (`utm_*`, `gclid`, `fbclid`…) retirés par défaut, les pièges à facettes sont signalés, un robots.txt injoignable interdit tout comme l’exige la RFC 9309 (avec une sortie explicite), robots.txt est lu par hôte en mode liste, les 5xx et coupures réseau ont une nouvelle tentative différée, les corps de réponse sont lus en flux et bornés, un Chrome qui meurt est relancé et signalé, et une extraction regex emballée est interrompue dans un worker. L’**extraction XPath** rejoint CSS et regex (Chrome en rendu, jsdom facultatif sur le HTML brut) ; la CLI gagne les cibles `attr:` / `html:` / `count:` / `xpath:` avec une colonne CSV par règle, **`--sitemap URL`** crawle exactement un sitemap, le mode liste monte à 500 000 URL et les agents IA ont aussi le mode liste. `npm run bench -- --pages 200000` crawle un site synthétique local et affiche durée, mémoire maximale et taille du fichier.
 
 ## 🖥️ Nouveau en 3.20 : passage à l’échelle, étape 5 — le navigateur ne reçoit plus jamais le crawl entier
 
@@ -378,6 +382,8 @@ Basculez entre **2D** et **3D**, colorez selon l’indexabilité, les problèmes
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang fr
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
 node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report

@@ -52,7 +52,7 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 | Tool | What it does | Writes? |
 |---|---|---|
 | `arachnide_detect_site` | CMS, framework, CDN and the connector that fits | no |
-| `arachnide_crawl` | Crawl + ~95 SEO/GEO checks, waits for the result | no |
+| `arachnide_crawl` | Crawl + ~95 SEO/GEO checks, waits for the result; `mode: "list"` with `urls` or `sitemap_url` crawls exactly those URLs | no |
 | `arachnide_start_crawl` / `arachnide_crawl_status` | Same crawl in the background, **live in the app**, polled by job id | no |
 | `arachnide_list_crawls` | Saved crawls; `current` first when the app has one open | no |
 | `arachnide_get_summary` | Score, grade, pillars, top issues | no |

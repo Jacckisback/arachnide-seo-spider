@@ -1857,7 +1857,7 @@ $('#scheduleBtn').addEventListener('click', () => openSchedules());
 /* ---------- Configuration & lancement ---------- */
 const configForm = $('#configForm');
 const configDialog = $('#configDialog');
-const SECRET = new Set(['httpPass']); // jamais enregistré dans le navigateur
+const SECRET = new Set(['httpPass', 'customHeaders']); // jamais enregistrés dans le navigateur : un en-tête porte souvent un cookie de session ou un jeton
 const DEFAULTS = {};
 configForm.querySelectorAll('[name]').forEach((el) => {
   if (el.type === 'radio') { if (el.checked) DEFAULTS[el.name] = el.value; } else DEFAULTS[el.name] = el.type === 'checkbox' ? el.checked : el.value;
@@ -1900,7 +1900,7 @@ function saveOptions() {
 function extractorRow(e = {}) {
   return `<div class="ex-row">
     <input class="ex-name" type="text" placeholder="${esc(t('cfg.exName'))}" value="${esc(e.name || '')}">
-    <select class="ex-type"><option value="css" ${e.type !== 'regex' ? 'selected' : ''}>CSS</option><option value="regex" ${e.type === 'regex' ? 'selected' : ''}>Regex</option></select>
+    <select class="ex-type"><option value="css" ${e.type !== 'regex' && e.type !== 'xpath' ? 'selected' : ''}>CSS</option><option value="xpath" ${e.type === 'xpath' ? 'selected' : ''}>XPath</option><option value="regex" ${e.type === 'regex' ? 'selected' : ''}>Regex</option></select>
     <input class="ex-sel mono" type="text" placeholder="${esc(t('cfg.exSelector'))}" value="${esc(e.selector || '')}">
     <select class="ex-target">${['text', 'attr', 'html', 'count'].map((x) => `<option value="${x}" ${e.target === x ? 'selected' : ''}>${esc(t('cfg.ex.' + x))}</option>`).join('')}</select>
     <input class="ex-attr" type="text" placeholder="href" value="${esc(e.attr || '')}" ${e.target === 'attr' ? '' : 'hidden'}>

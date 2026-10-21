@@ -3,8 +3,8 @@ import { USER_AGENTS } from './crawler.mjs';
 import { normalizeSegments } from '../public/shared/segments.js';
 
 const NUMBERS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'timeoutMs', 'limitPerDepth', 'maxFolderDepth', 'maxQueryParams', 'maxRedirects', 'maxUrlLength', 'maxLinksPerPage', 'maxPageSizeKb', 'maxUrlPerSec', 'psiMax', 'gscDays', 'ga4Days'];
-const BOOLS = ['crawlSubdomains', 'stayInFolder', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render'];
-const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders', 'psiKey', 'gscKeyFile', 'gscProperty', 'gscCsv', 'ga4KeyFile', 'ga4Property', 'ga4Csv'];
+const BOOLS = ['crawlSubdomains', 'stayInFolder', 'ignoreQuery', 'useSitemaps', 'crawlCanonicals', 'checkExternal', 'checkImages', 'render', 'normalizeParams'];
+const STRINGS = ['include', 'exclude', 'search', 'acceptLanguage', 'customRobots', 'removeParams', 'httpUser', 'httpPass', 'customHeaders', 'psiKey', 'gscKeyFile', 'gscProperty', 'gscCsv', 'ga4KeyFile', 'ga4Property', 'ga4Csv', 'sitemapUrl'];
 
 const bad = (key, detail) => Object.assign(new Error(`Invalid option: ${detail}`), { status: 400, key });
 
@@ -32,15 +32,18 @@ export function toCrawlerOptions(o = {}) {
   for (const k of STRINGS) if (o[k]) opts[k] = String(o[k]);
   if (['respect', 'report', 'ignore'].includes(o.robotsMode)) opts.robotsMode = o.robotsMode;
   else if (o.respectRobots === false) opts.robotsMode = 'ignore';
-  if (o.mode === 'list') {
+  if (['disallow', 'allow'].includes(o.robotsUnavailable)) opts.robotsUnavailable = o.robotsUnavailable;
+  // Mode liste : URL fournies, ou lues dans un sitemap au démarrage (sitemapUrl). Plafond relevé depuis que le crawl
+  // s'écrit au fil de l'eau (3.18).
+  if (o.mode === 'list' || o.sitemapUrl) {
     opts.mode = 'list';
-    opts.urls = (Array.isArray(o.urls) ? o.urls : String(o.urls || '').split(/\s+/)).map(String).filter(Boolean).slice(0, 100000);
+    opts.urls = (Array.isArray(o.urls) ? o.urls : String(o.urls || '').split(/\s+/)).map(String).filter(Boolean).slice(0, 500000);
   }
   opts.pathLimits = Array.isArray(o.pathLimits) ? o.pathLimits : parsePathLimits(o.pathLimits);
   opts.extractors = (Array.isArray(o.extractors) ? o.extractors : [])
     .filter((e) => e && e.name && e.selector)
     .slice(0, 20)
-    .map((e) => ({ name: String(e.name).slice(0, 40), type: e.type === 'regex' ? 'regex' : 'css', selector: String(e.selector), target: ['text', 'html', 'attr', 'count'].includes(e.target) ? e.target : 'text', attr: String(e.attr || '') }));
+    .map((e) => ({ name: String(e.name).slice(0, 40), type: ['regex', 'xpath'].includes(e.type) ? e.type : 'css', selector: String(e.selector), target: ['text', 'html', 'attr', 'count'].includes(e.target) ? e.target : 'text', attr: String(e.attr || '') }));
   // Une regex par ligne : chacune est vérifiée, l'erreur nomme la ligne fautive.
   for (const k of ['include', 'exclude']) for (const line of String(opts[k] || '').split(/\r?\n/)) if (line.trim()) checkRegex(line.trim(), k);
   for (const l of opts.pathLimits) checkRegex(l.pattern, 'pathLimits');

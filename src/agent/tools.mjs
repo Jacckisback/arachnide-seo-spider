@@ -128,12 +128,16 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
   });
   const crawlOptions = (a) => toCrawlerOptions({
     maxPages: a.max_pages, maxDepth: a.max_depth, render: a.render, checkImages: a.check_images, checkExternal: a.check_external, userAgent: a.user_agent, robotsMode: a.robots,
+    mode: a.mode === 'list' || a.sitemap_url ? 'list' : undefined, urls: a.urls, sitemapUrl: a.sitemap_url || '',
     include: a.include || '', exclude: a.exclude || '', stayInFolder: !!a.stay_in_folder, concurrency: a.concurrency, psiMax: a.psi_pages, psiStrategy: a.psi_strategy,
     gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv || '', ga4KeyFile: a.ga4_key_file || '', ga4Property: a.ga4_property || '', ga4Csv: a.ga4_csv || '', segments: a.segments,
   });
   const crawlShape = {
-    url: z.string().url().describe('Start URL (usually the home page)'),
-    max_pages: z.number().int().min(1).max(20000).default(500).describe('Maximum number of URLs to crawl'),
+    url: z.string().url().optional().describe('Start URL (usually the home page). Optional in list mode.'),
+    mode: z.enum(['spider', 'list']).default('spider').describe('spider: follow links from the start URL; list: crawl exactly the given urls (or the sitemap_url), without following links'),
+    urls: z.array(z.string().url()).max(200000).optional().describe('List mode: the URLs to crawl'),
+    sitemap_url: z.string().url().optional().describe('List mode: crawl exactly the URLs of this sitemap or sitemap index'),
+    max_pages: z.number().int().min(1).max(200000).default(500).describe('Maximum number of pages to download (URLs blocked by robots.txt do not count)'),
     max_depth: z.number().int().min(0).max(50).optional().describe('Maximum click depth'),
     render: z.boolean().default(false).describe('Render JavaScript with the installed Chrome/Edge (slower; for JS-built sites)'),
     check_images: z.boolean().default(true).describe('Check every image (size, status, format, srcset variants)'),
@@ -182,7 +186,8 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     shape: crawlShape,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (a, extra) => {
-      const c = new Crawler(a.url, crawlOptions(a));
+      if (!a.url && a.mode !== 'list' && !a.sitemap_url) throw err('url is required unless mode is "list" (with urls or sitemap_url).', 'invalid');
+      const c = new Crawler(a.url || '', crawlOptions(a));
       const token = extra?._meta?.progressToken;
       let last = 0;
       if (token !== undefined && extra?.sendNotification) {
@@ -205,7 +210,8 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     shape: crawlShape,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (a) => {
-      const job = await ctx.startCrawl(a.url, crawlOptions(a));
+      if (!a.url && a.mode !== 'list' && !a.sitemap_url) throw err('url is required unless mode is "list" (with urls or sitemap_url).', 'invalid');
+      const job = await ctx.startCrawl(a.url || '', crawlOptions(a));
       return { job_id: job.id, state: 'running', next: 'Call arachnide_crawl_status with this job_id.' };
     },
   });

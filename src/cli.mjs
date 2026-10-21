@@ -22,12 +22,12 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['resume', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
+const VALUE_FLAGS = new Set(['resume', 'sitemap', 'robots-unavailable', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
 
-if ((!url && !flag('list')) || flag('help')) {
+if ((!url && !flag('list') && !val('sitemap')) || flag('help')) {
   console.log(`Arachnide SEO Spider ${VERSION}
 
 Usage : node src/cli.mjs <url> [options]
@@ -53,7 +53,11 @@ Usage : node src/cli.mjs <url> [options]
   --remove-params L   Remove URL parameters, e.g. "utm_*,gclid"
   --auth USER:PASS    HTTP authentication (staging sites)
   --header "K: V"     Custom HTTP header (repeatable)
-  --extract N=SEL     Custom extraction: CSS selector, or N=/regex/ (repeatable)
+  --extract N=SEL     Custom extraction (repeatable): N=SEL (CSS, text), N=/regex/, N=xpath:EXPR,
+                      N=attr:href:SEL, N=html:SEL, N=count:SEL — one column per rule in pages.csv
+  --sitemap URL       List mode from a sitemap or sitemap index: crawl exactly the URLs it lists
+  --keep-params       Keep URL parameters as they are (by default: sorted, tracking params utm_*/gclid/fbclid… removed)
+  --robots-unavailable allow|disallow   robots.txt in 5xx or unreachable: disallow all (RFC 9309, default) or allow
   --psi N             PageSpeed Insights + Core Web Vitals (CrUX) for the N most important pages
   --psi-key KEY       Google API key (or env ARACHNIDE_PSI_KEY)   --psi-strategy mobile|desktop
   --gsc-key FILE      Search Console: service account JSON key file
@@ -115,12 +119,10 @@ const opts = toCrawlerOptions({
   httpPass: pass.join(':'),
   customHeaders: vals('header').join('\n'),
   pathLimits: vals('path-limit').join('\n'),
-  extractors: vals('extract').map((e) => {
-    const [name, ...rest] = e.split('=');
-    const sel = rest.join('=');
-    const re = /^\/(.+)\/$/.exec(sel);
-    return re ? { name, type: 'regex', selector: re[1] } : { name, type: 'css', selector: sel, target: 'text' };
-  }),
+  extractors: vals('extract').map(parseExtractArg),
+  normalizeParams: !flag('keep-params'),
+  robotsUnavailable: val('robots-unavailable', 'disallow'),
+  sitemapUrl: val('sitemap', ''),
 });
 if (!USER_AGENTS[val('ua', 'arachnide')] && val('ua')) opts.userAgent = val('ua');
 if (val('psi')) Object.assign(opts, toCrawlerOptions({ psiMax: val('psi'), psiStrategy: val('psi-strategy', 'mobile') }), { psiKey: val('psi-key', process.env.ARACHNIDE_PSI_KEY || '') });
@@ -132,6 +134,23 @@ if (val('custom-robots')) opts.customRobots = await fs.readFile(val('custom-robo
 if (flag('list')) {
   opts.mode = 'list';
   opts.urls = (await fs.readFile(val('list'), 'utf8')).split(/\s+/).filter((x) => /^https?:\/\//i.test(x));
+}
+if (val('sitemap')) opts.mode = 'list';
+
+// --extract N=SEL · N=/re/ · N=xpath:EXPR · N=attr:NAME:SEL · N=html:SEL · N=count:SEL
+function parseExtractArg(e) {
+  const [name, ...rest] = e.split('=');
+  const sel = rest.join('=');
+  const re = /^\/(.+)\/$/.exec(sel);
+  if (re) return { name, type: 'regex', selector: re[1] };
+  const m = /^(xpath|attr|html|count):(.*)$/s.exec(sel);
+  if (!m) return { name, type: 'css', selector: sel, target: 'text' };
+  if (m[1] === 'xpath') return { name, type: 'xpath', selector: m[2], target: 'text' };
+  if (m[1] === 'attr') {
+    const [attr, ...s2] = m[2].split(':');
+    return { name, type: 'css', selector: s2.join(':'), target: 'attr', attr };
+  }
+  return { name, type: 'css', selector: m[2], target: m[1] };
 }
 
 if (val('segments')) {
@@ -242,9 +261,14 @@ if (flag('csv')) await output('csv', async () => {
     await pipeline(Readable.from(gen()), createWriteStream(file));
   };
   const segName = (id) => (!id ? '' : id === NONE ? t('seg.none') : segs.find((s) => s.id === id)?.name || id);
-  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')], ...(full.meta.ga4 ? [['ga4Sessions', t('col.sessions')], ['ga4Views', t('col.views')]] : [])];
+  const exNames = (full.meta.options?.extractors || []).map((x) => x.name);
+  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')], ...(full.meta.ga4 ? [['ga4Sessions', t('col.sessions')], ['ga4Views', t('col.views')]] : []), ...exNames.map((n) => ['ex:' + n, n])];
   function* pageRows() {
-    for (const p of r.pages) yield { ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' };
+    for (const p of r.pages) {
+      const row = { ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' };
+      for (const n of exNames) row['ex:' + n] = (p.extracted?.[n] || []).join(' | ');
+      yield row;
+    }
   }
   await writeCsv(path.join(outDir, base + '_pages.csv'), pageRows(), pageCols);
   const segOfUrl = new Map(full.pages.map((p) => [p.url, p.segment]));

@@ -29,6 +29,11 @@ test('scores de liens : 140 000 URL sans dépasser la pile d’appels', async ()
   assert.equal(R.pages.length, N);
   assert.ok(R.pages.every((p) => p.linkScore >= 0 && p.linkScore <= 100));
   assert.ok(Date.now() - t0 < 60_000);
+  // Sauvegarde du même volume : jamais une seule chaîne (plantage « Invalid string length » du JSON d'un bloc).
+  const { writeResult, readHead } = await import('../src/ndjson.mjs');
+  const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'arachnide-scale-')), 'big.jsonl.gz');
+  await writeResult(R, file);
+  assert.equal((await readHead(file)).summary.totalUrls, N);
 });
 
 test('règles déterministes : un problème qui touche 140 000 URL, sans spread, en temps linéaire', async () => {

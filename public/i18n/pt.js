@@ -1995,4 +1995,11 @@ export default {
   'cli.resumeHint': 'Crawl parado. Retome-o com:',
   'warn.nearDupBand': 'Quase duplicados: {n} grupo(s) de impressões demasiado grande(s) (site muito baseado em modelo) só foram comparados em parte. Podem faltar quase duplicados.',
   'warn.cannibalTemplate': 'Canibalização: {n} expressão(ões) de título partilhada(s) por mais de {max} páginas foram ignoradas — a essa escala é o modelo do site, não páginas concorrentes.',
+  'warn.facets': '{path} produziu {n} variantes de parâmetros: é a assinatura de uma armadilha de facetas. Limite o número de parâmetros ou exclua estes URL para que o orçamento de crawl vá para páginas reais.',
+  'warn.robotsDisallowAll': 'robots.txt respondeu {status}: segundo a RFC 9309 tudo é considerado proibido, nenhuma página foi descarregada. Ponha o modo robots.txt em «assinalar» ou «ignorar», ou a opção robots inacessível em «permitir», para fazer o crawl mesmo assim.',
+  'warn.renderRestart': 'O Chrome parou durante o crawl ({error}): foi reiniciado uma vez e a renderização continua.',
+  'warn.renderLost': 'O Chrome parou de novo ({error}): o resto do crawl é analisado sem renderização JavaScript (páginas marcadas rendered: false).',
+  'warn.regexTimeout': 'A extração regex «{name}» demorou demasiado numa página (retrocesso catastrófico?): foi interrompida para essa página e o crawl continuou.',
+  'warn.xpathUnavailable': 'A extração XPath sobre o HTML bruto precisa do pacote opcional jsdom (npm install jsdom) ou da renderização JavaScript: estas regras não devolveram nada.',
+  'warn.sitemapListEmpty': 'O sitemap {url} não deu nenhum URL: nada a rastrear em modo lista.',
 };

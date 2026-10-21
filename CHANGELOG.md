@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.21.0 — 2026-10-21
+
+### Scale, step 6: crawl guard-rails, Screaming Frog parity items, and a reproducible 200 000-page proof
+Last step of the 200 000-page work. On a big site the danger is not only memory: it is spending the budget on useless URLs, or losing the rendering silently.
+- **Page budget**: `maxPages` now counts pages actually downloaded, not URLs discovered; URLs blocked by robots.txt no longer consume it (they are still recorded). Discovery stays bounded in memory (4 × the budget).
+- **URL parameters**: sorted by key, and known tracking parameters (`utm_*`, `gclid`, `fbclid`, `msclkid`, `mc_cid`, `srsltid`, `_ga`…) removed by default, so `?a=1&b=2` and `?b=2&a=1` are one page. `normalizeParams: false` / `--keep-params` restores the raw behaviour.
+- **Facet traps**: a path that produces 200 parameter variants is reported once (`warn.facets`, up to 20 paths) — the signature of combinable filters eating the budget.
+- **robots.txt unreachable** (5xx or network error): everything is disallowed, as RFC 9309 § 2.3.1.4 requires, with an explicit warning (`warn.robotsDisallowAll`) and two ways out (`robotsUnavailable: 'allow'` / `--robots-unavailable allow`, or the *report* / *ignore* robots mode); 4xx means everything is allowed (§ 2.3.1.3). **List mode and sub-domains**: robots.txt is read per origin, at the first URL of each host, one download per origin even with concurrent workers.
+- **JavaScript rendering**: Chrome's `disconnected` event is watched; if Chrome dies it is restarted once (`warn.renderRestart`), a second death is reported (`warn.renderLost`) instead of silent `rendered: false` pages. Chrome is also restarted every 500 rendered pages (`renderRestartEvery`) to bound its memory.
+- **5xx and network cuts**: 500 / 502 / 504 and connection errors get one deferred retry (5 s, end of queue, journaled for resume) before the page is recorded; `retries` says how many attempts a page took.
+- **Response size**: bodies are read as a stream and abandoned beyond `maxPageSizeKb`, with or without `Content-Length`; sitemaps and robots.txt are bounded by `maxSitemapKb` (50 MB).
+- **Regex extraction** runs in a `worker_threads` Worker with a 2 s timeout: a catastrophic-backtracking regex is interrupted for that page (`⚠ timeout`, `warn.regexTimeout`) and the crawl goes on.
+- **XPath extraction** (new type `xpath`, in the app, CLI and options): in JavaScript rendering through `document.evaluate` in Chrome, no dependency; on raw HTML through **jsdom**, an optional dependency loaded by `import()` at the first XPath rule only (`warn.xpathUnavailable` when missing). Targets text / html / attr / count like CSS rules.
+- **CLI extraction**: `--extract N=SEL`, `N=/regex/`, `N=xpath:EXPR`, `N=attr:NAME:SEL`, `N=html:SEL`, `N=count:SEL`; **one column per rule in `pages.csv`**.
+- **List mode**: cap raised from 100 000 to 500 000 URLs; **`--sitemap URL`** / `sitemapUrl` crawls exactly the URLs of a sitemap or sitemap index (deduplicated, parameters normalised, links not followed). **AI agents**: `mode`, `urls` and `sitemap_url` on `arachnide_crawl` / `arachnide_start_crawl`, `max_pages` up to 200 000 (`url` optional in list mode).
+- **Security**: custom headers are no longer remembered in the browser's localStorage (they often carry a session cookie or a token), like the HTTP password.
+- **Documentation**: the READMEs no longer claim "no page limit"; they give the tested volume and the default budget.
+- **Proof at scale**: `test/scale.test.mjs` now saves the 150 000-URL result as well (the call-stack and string-length crashes never depended on the number of links). New `bench/site.mjs`, a local synthetic site (N pages generated on the fly, ~60 template links and 40 deterministic links per page, 404s, redirects, near duplicates — no real site is ever hit) and **`npm run bench -- --pages 200000`**, which measures duration, peak memory (`process.resourceUsage().maxRSS`) and file size, and fails above a memory budget. Measured: see below.
+- **Tests**: `test/guards.test.mjs` — parameter normalisation, budget on downloaded pages, facet warning, robots.txt 5xx / 4xx / allow / report, per-origin robots in list mode, deferred retries (502, connection cut, persistent 500), streamed body limit without Content-Length and bounded sitemaps, regex worker timeout, XPath via jsdom plus attr / html / count, sitemap list mode through the option and the CLI with one CSV column per rule.
+
+BENCH_PLACEHOLDER
+
 ## 3.20.0 — 2026-10-21
 
 ### Scale, step 5: server and interface — the browser never receives the whole crawl again

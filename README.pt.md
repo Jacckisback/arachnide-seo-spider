@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.20.0-3d5f17" alt="Versão 3.20.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Versão 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -24,11 +24,15 @@ O **Arachnide** é um crawler de SEO técnico gratuito que funciona no seu próp
 - um plano de ação ordenado por impacto e esforço;
 - um **relatório PDF em marca branca** para os seus clientes, em 6 idiomas.
 
-Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu computador.
+Não há conta nem nuvem, e os seus dados ficam no seu computador. Testado num site sintético de 200 000 páginas (`npm run bench -- --pages 200000`); o orçamento por defeito é de 500 páginas, a aumentar nas opções.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🛡️ Novidades da 3.21: salvaguardas de crawl, XPath, modo lista por sitemap e um benchmark reproduzível de 200 000 páginas
+
+O orçamento de páginas conta agora as páginas realmente descarregadas (os URL bloqueados pelo robots.txt já não o consomem), os parâmetros de URL são ordenados e os de rastreio (`utm_*`, `gclid`, `fbclid`…) removidos por defeito, as armadilhas de facetas são assinaladas, um robots.txt inacessível proíbe tudo como exige a RFC 9309 (com uma saída explícita), o robots.txt é lido por anfitrião em modo lista, os 5xx e cortes de rede têm uma nova tentativa diferida, os corpos das respostas são lidos em fluxo e limitados, um Chrome que morre é reiniciado e assinalado, e uma extração regex descontrolada é interrompida num worker. A **extração XPath** junta-se a CSS e regex (Chrome em renderização, jsdom opcional sobre o HTML bruto); a CLI ganha os alvos `attr:` / `html:` / `count:` / `xpath:` com uma coluna CSV por regra, **`--sitemap URL`** rastreia exatamente um sitemap, o modo lista sobe a 500 000 URL e os agentes de IA também têm modo lista. `npm run bench -- --pages 200000` rastreia um site sintético local e mostra duração, memória máxima e tamanho do ficheiro.
 
 ## 🖥️ Novidades da 3.20: escala, passo 5 — o navegador nunca mais recebe o crawl inteiro
 
@@ -365,6 +369,8 @@ Alterne entre **2D** e **3D**, colore por indexabilidade, problemas ou profundid
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang pt
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
 node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
 node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report

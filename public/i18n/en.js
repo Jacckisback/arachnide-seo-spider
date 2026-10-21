@@ -1995,4 +1995,11 @@ export default {
   'cli.resumeHint': 'Crawl stopped. Resume it with:',
   'warn.nearDupBand': 'Near-duplicate search: {n} fingerprint group(s) were too large (a very templated site) and were only partly compared. Some near duplicates may be missing.',
   'warn.cannibalTemplate': 'Cannibalization: {n} title expression(s) shared by more than {max} pages were ignored — at that scale it is the site template, not competing pages.',
+  'warn.facets': '{path} produced {n} parameter variants: this looks like a faceted-navigation trap. Limit the number of query parameters or exclude these URLs so the crawl budget goes to real pages.',
+  'warn.robotsDisallowAll': 'robots.txt returned {status}: per RFC 9309 everything is treated as disallowed, so no page was fetched. Set the robots.txt mode to “report” or “ignore”, or the robots-unavailable option to “allow”, to crawl anyway.',
+  'warn.renderRestart': 'Chrome died during the crawl ({error}): it was restarted once and rendering continues.',
+  'warn.renderLost': 'Chrome died again ({error}): the rest of the crawl is analysed without JavaScript rendering (pages marked rendered: false).',
+  'warn.regexTimeout': 'Regex extraction “{name}” took too long on a page (catastrophic backtracking?): it was interrupted for that page and the crawl went on.',
+  'warn.xpathUnavailable': 'XPath extraction on raw HTML needs the optional jsdom package (npm install jsdom) or JavaScript rendering: these rules returned no value.',
+  'warn.sitemapListEmpty': 'The sitemap {url} gave no URL: nothing to crawl in list mode.',
 };
