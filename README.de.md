@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.16.0-3d5f17" alt="Version 3.16.0">
+  <img src="https://img.shields.io/badge/version-3.17.0-3d5f17" alt="Version 3.17.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -29,6 +29,10 @@ Es gibt kein Konto, keine Cloud und kein Seitenlimit. Ihre Daten bleiben auf Ihr
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🧮 Neu in 3.17: Skalierung, Schritt 2 — ein kompakter Linkgraph
+
+Ein Link war ein JavaScript-Objekt mit sieben Eigenschaften und zwei URL-Strings; die Analyse kopierte ihn in Maps von Sets und in ein Tupel-Array. Links liegen jetzt in **Integer-Spalten** (URLs und Ankertexte einmal gespeichert, 14 Bytes pro Link) und die Analyse läuft auf einem **CSR-Graphen**: eingehende Links, Klicktiefe, PageRank und Linkprüfungen lesen dieselben Spalten, ohne Objekt pro Link. Gemessen an 50 000 Seiten × 100 Links: Linkspeicher 690 MB → 55 MB, Analyse 29 s / 2,5 GB → 5,5 s / 647 MB, gleiche Ergebnisse. Ein Crawl mit 200 000 Seiten und 20 Millionen Links kommt jetzt durch die Analyse. Der gespeicherte `links`-Block ist spaltenorientiert; alte Crawl-Dateien öffnen weiterhin. Nächster Schritt: Datei und Browserdaten als Stream schreiben.
 
 ## 🏗️ Neu in 3.16: Skalierung, Schritt 1 — große Sites stürzen am Ende nicht mehr ab
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.17.0 — 2026-10-21
+
+### Scale, step 2: a compact link graph — 14 bytes per link instead of an object
+Second step of the 200 000-page work. Until now each link was a JavaScript object with seven properties and two URL strings, copied by the analysis into three `Map`s of `Set`s of strings and then into an array of tuples. Measured on 50 000 pages × 100 links: 690 MB of heap for the links alone and 29 s of analysis in 2.5 GB.
+- **`src/graph.mjs`** (no dependency): `Interner` (a URL or an anchor text = one integer, assigned at first sight — « Contact » in the menu is stored once, not 200 000 times), `LinkStore` (links in typed-array columns `from`, `to`, `anchor`, `flags`, `pos`, doubling when full; an iterator still produces link objects on the fly for code that reads them one by one), `csr()` (compressed sparse row graph built in two passes from the columns plus the canonical / redirect edges added by the analysis, with optional node renumbering and per-row de-duplication), `uniqueCounts()` (distinct inlinks without a `Set`, one stamp buffer) and `pageRankCsr()`.
+- **Crawler**: links go straight into the `LinkStore`; images and external links count their pages with a counter and the last page seen instead of a `Set` per entry (pages are processed one by one), alt texts capped at 5 distinct values.
+- **Analysis on the CSR graph**: inlinks, unique inlinks, content inlinks, click depth (level by level, redirects at zero cost), path parent, PageRank (same result as the object version, unit-tested) and the broken / generic-anchor / nofollow link checks all read the columns. No object per link anywhere.
+- **Saved format**: `links` is now columnar — `{ urls, anchors, from, to, anchor, flags, pos }` — nothing to convert at save time. `public/shared/links.js` (`forEachLink`, `linkCount`, `linkUrls`) reads both this format and the tuple format of 3.16 and earlier, so old crawl files still open; the app, segments and fix rules use it.
+- **Measured** (synthetic site, 100 links per page): 50 000 pages — link storage 690 MB → 55 MB of heap, analysis 29.2 s / 2.5 GB → 5.5 s / 647 MB, identical inlinks and Link Scores. 200 000 pages / 20 million links — storage 142 MB, analysis 35 s in 2.3 GB (it completes; 3.16 could not). The remaining wall is the single `JSON.stringify` of the result (*Invalid string length* at that size): that is step 3.
+- **Review rule, enforced by a test**: never `...array` as a call argument when the array size depends on the site (`test/scale.test.mjs` greps `src/` and `public/` and lists the few bounded exceptions); the remaining spreads in connectors and the live page stream became loops.
+- **Tests**: `Interner` / `LinkStore` growth and iterator, CSR neighbours, de-duplication, unique counts, PageRank parity, both link formats, graph parity of the analysis (inlinks, uniques, content, depth through a redirect, path parent), Link Score on 150 000 URLs.
+
 ## 3.16.0 — 2026-10-21
 
 ### Scale, step 1: no more crash at 125 000 URLs, no more quadratic loops

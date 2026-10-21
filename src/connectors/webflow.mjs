@@ -96,7 +96,7 @@ export default class WebflowConnector extends Connector {
       const out = [];
       for (let offset = 0; ; offset += 100) {
         const r = await this.call(`/sites/${this.site.siteId}/pages${this.qs({ localeId, limit: 100, offset })}`);
-        out.push(...(r?.pages || []));
+        for (const x of r?.pages || []) out.push(x);
         if (!r?.pages?.length || out.length >= (r.pagination?.total ?? 0)) break;
       }
       return out;
@@ -230,7 +230,7 @@ export default class WebflowConnector extends Connector {
     const out = [];
     for (let offset = 0; ; offset += 100) {
       const r = await this.enterprise(() => this.call(`/sites/${this.site.siteId}/redirects${this.qs({ limit: 100, offset })}`));
-      out.push(...(r?.redirects || []));
+      for (const x of r?.redirects || []) out.push(x);
       if (!r?.redirects?.length || !r.pagination || out.length >= r.pagination.total) break;
     }
     return out;

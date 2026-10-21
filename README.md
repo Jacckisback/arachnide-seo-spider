@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.16.0-3d5f17" alt="Version 3.16.0">
+  <img src="https://img.shields.io/badge/version-3.17.0-3d5f17" alt="Version 3.17.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -29,6 +29,10 @@ There is no account, no cloud and no page limit, and your data stays on your mac
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🧮 New in 3.17: scale, step 2 — a compact link graph
+
+A link used to be a JavaScript object with seven properties and two URL strings; the analysis then copied it into maps of sets and into an array of tuples. Links now live in **columns of integers** (URLs and anchor texts stored once, 14 bytes per link) and the analysis runs on a **CSR graph**: inlinks, click depth, PageRank and the link checks read the same columns, with no object per link. Measured on 50 000 pages × 100 links: link storage 690 MB → 55 MB, analysis 29 s / 2.5 GB → 5.5 s / 647 MB, same results. A 200 000-page / 20-million-link crawl now gets through the analysis. The saved `links` block is columnar; old crawl files still open. Next step: streaming the saved file and the data sent to the browser.
 
 ## 🏗️ New in 3.16: scale, step 1 — large sites no longer crash at the end
 

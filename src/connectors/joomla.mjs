@@ -94,7 +94,7 @@ export default class JoomlaConnector extends Connector {
     for (let offset = 0, n = 0; n < 50; n++, offset += 100) {
       const r = await this.req(`${path}${sep}page[limit]=100&page[offset]=${offset}`, { allow404: true });
       const data = r?.data || [];
-      out.push(...data);
+      for (const d of data) out.push(d);
       if (data.length < 100 || !r.links?.next) break;
     }
     return out;

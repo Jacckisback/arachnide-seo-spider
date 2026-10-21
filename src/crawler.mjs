@@ -7,12 +7,23 @@ import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
+import { Interner, LinkStore, FLAG } from './graph.mjs';
 
-export const VERSION = '3.16.0';
+export const VERSION = '3.17.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
-const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: new Set(), missingAlt: false, pages: new Set(), status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
+// Pages qui utilisent une image ou un lien externe : les pages étant traitées une par une, un compteur et la dernière
+// page vue suffisent à compter les pages distinctes, sans Set par image (il y en a des centaines de milliers).
+const MAX_ALTS = 5;
+const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: [], missingAlt: false, pages: 0, firstPage: '', lastPage: '', status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
+const newExternal = (url) => ({ url, status: null, statusText: '', inlinks: 0, pages: 0, firstPage: '', lastPage: '' });
+const seenOn = (rec, pageUrl) => {
+  if (rec.lastPage === pageUrl) return;
+  rec.lastPage = pageUrl;
+  rec.pages++;
+  if (!rec.firstPage) rec.firstPage = pageUrl;
+};
 
 export const DEFAULT_UA = 'Mozilla/5.0 (compatible; ArachnideSEO/2.0; +https://github.com/Jacckisback/arachnide-seo-spider)';
 export const USER_AGENTS = {
@@ -207,9 +218,12 @@ export class Crawler extends EventEmitter {
     this.qHead = 0;
     this.deferred = []; // URLs issues des sitemaps, crawlées en dernier
     this.seen = new Set();
-    this.links = []; // {from, to, anchor, nofollow}
-    this.images = new Map(); // url -> {src, role: src|srcset|source, of, alts: Set, missingAlt, pages: Set, status, size, …}
-    this.externals = new Map(); // url -> {url, status, inlinks}
+    // Liens en colonnes d'entiers (src/graph.mjs) : URL et ancres internées, 14 octets par lien.
+    this.urls = new Interner();
+    this.anchors = new Interner();
+    this.links = new LinkStore(this.urls, this.anchors);
+    this.images = new Map(); // url -> {src, role: src|srcset|source, of, alts: [], missingAlt, pages, firstPage, status, size, …}
+    this.externals = new Map(); // url -> {url, status, inlinks, pages, firstPage}
     this.sitemapUrls = new Set();
     this.sitemapFiles = [];
     this.robotsRules = [];
@@ -725,8 +739,8 @@ export class Crawler extends EventEmitter {
           if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
           // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
           if (!this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
-            const ex = this.externals.get(rec.redirectUrl) || { url: rec.redirectUrl, status: null, statusText: '', inlinks: 0, pages: new Set() };
-            ex.pages.add(item.url);
+            const ex = this.externals.get(rec.redirectUrl) || newExternal(rec.redirectUrl);
+            seenOn(ex, item.url);
             this.externals.set(rec.redirectUrl, ex);
           }
         } else {
@@ -822,15 +836,15 @@ export class Crawler extends EventEmitter {
       for (const l of links) {
         const to = this.normalize(l.to) || l.to;
         const internal = this.isInternal(to);
-        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, ...(l.code && { code: true }) });
+        this.links.add({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, code: l.code });
         if (internal) {
           rec.internalOutlinks++;
           if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
         } else {
           rec.externalOutlinks++;
-          const ex = this.externals.get(to) || { url: to, status: null, statusText: '', inlinks: 0, pages: new Set() };
+          const ex = this.externals.get(to) || newExternal(to);
           ex.inlinks++;
-          ex.pages.add(item.url);
+          seenOn(ex, item.url);
           this.externals.set(to, ex);
         }
       }
@@ -839,8 +853,8 @@ export class Crawler extends EventEmitter {
         Object.assign(im, { role: 'src', of: '' });
         if (img.alt === null) im.missingAlt = true;
         else if (img.alt === '') im.emptyAlt = true;
-        else im.alts.add(img.alt);
-        im.pages.add(item.url);
+        else if (im.alts.length < MAX_ALTS && !im.alts.includes(img.alt)) im.alts.push(img.alt);
+        seenOn(im, item.url);
         if (img.responsive) im.responsive = true;
         if (img.picture) im.picture = true;
         im.variantCount = Math.max(im.variantCount, img.variants.length);
@@ -848,7 +862,7 @@ export class Crawler extends EventEmitter {
         // Chaque fichier de srcset / <picture> est un fichier distinct à contrôler (poids, statut).
         for (const v of img.variants) {
           const vm = this.images.get(v.url) || Object.assign(newImage(v.url), { role: v.role, of: img.src, descriptor: v.descriptor, type: v.type || '', media: v.media || '' });
-          vm.pages.add(item.url);
+          seenOn(vm, item.url);
           this.images.set(v.url, vm);
         }
       }
@@ -928,7 +942,8 @@ export class Crawler extends EventEmitter {
     this.setPhase('psi');
     const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !robotsFlags(p.metaRobots, p.xRobotsTag).noindex);
     const inl = new Map();
-    for (const l of this.links) if (l.internal && l.from !== l.to) inl.set(l.to, (inl.get(l.to) || 0) + 1);
+    const { from, to, flags } = this.links.columns();
+    for (let i = 0; i < this.links.n; i++) if (flags[i] & FLAG.internal && from[i] !== to[i]) inl.set(this.urls.values[to[i]], (inl.get(this.urls.values[to[i]]) || 0) + 1);
     const clicks = new Map((this.gsc?.rows || []).map((r) => [r.url, r.clicks || 0]));
     const home = this.finalStart || this.startUrl;
     const ranked = html.sort((a, b) => (b.url === home) - (a.url === home) || (clicks.get(b.url) || 0) - (clicks.get(a.url) || 0) || (inl.get(b.url) || 0) - (inl.get(a.url) || 0)).slice(0, this.opts.psiMax);

@@ -6,6 +6,7 @@ import { robotsFlags } from '../public/shared/directives.js';
 import { issuePoints, computePillars, issueShare, OUTSIDE_CRAWL } from '../public/shared/pillars.js';
 import { imageFormat } from './parse.mjs';
 import { applySegments } from '../public/shared/segments.js';
+import { csr, uniqueCounts, pageRankCsr, FLAG } from './graph.mjs';
 
 export const THRESHOLDS = {
   titleMaxPx: 580,
@@ -66,35 +67,6 @@ function indexability(p) {
 const D = (k, p = {}) => ({ k, p });
 
 // PageRank interne (Link Score 0-100), comme le « Link Score » de Screaming Frog.
-function pageRank(nodes, adj, iterations = 30, d = 0.85) {
-  const N = nodes.length;
-  if (!N) return new Map();
-  const idx = new Map(nodes.map((u, i) => [u, i]));
-  const out = nodes.map((u) => [...(adj.get(u) || [])].map((v) => idx.get(v)).filter((x) => x !== undefined));
-  let pr = new Float64Array(N).fill(1 / N);
-  for (let it = 0; it < iterations; it++) {
-    const next = new Float64Array(N).fill((1 - d) / N);
-    let dangling = 0;
-    for (let i = 0; i < N; i++) {
-      if (!out[i].length) dangling += pr[i];
-      else for (const j of out[i]) next[j] += (d * pr[i]) / out[i].length;
-    }
-    for (let i = 0; i < N; i++) next[i] += (d * dangling) / N;
-    pr = next;
-  }
-  // Pas de spread : Math.min(...logs) dépasse la pile d'appels au-delà de ~125 000 URL.
-  const logs = new Float64Array(N);
-  let min = Infinity;
-  let max = -Infinity;
-  for (let i = 0; i < N; i++) {
-    const l = Math.log(pr[i]);
-    logs[i] = l;
-    if (l < min) min = l;
-    if (l > max) max = l;
-  }
-  return new Map(nodes.map((u, i) => [u, max > min ? Math.round(((logs[i] - min) / (max - min)) * 100) : 100]));
-}
-
 export function grade(score) {
   return score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : score >= 20 ? 'E' : 'F';
 }
@@ -122,90 +94,90 @@ export function analyze(crawler) {
     p.urlLength = p.url.length;
   }
 
-  // Graphe de liens internes
-  const inFrom = new Map();
-  const contentFrom = new Map();
-  const adj = new Map();
-  for (const l of crawler.links) {
-    if (!l.internal) continue;
-    // Un lien vers soi-même n'est pas un lien entrant ; Google ne suit pas les liens d'une page en erreur.
-    if (l.from === l.to) continue;
-    const src = byUrl.get(l.from);
-    if (src && src.status >= 400) continue;
-    const t = byUrl.get(l.to);
-    if (t) t.inlinks++;
-    if (!inFrom.has(l.to)) inFrom.set(l.to, new Set());
-    inFrom.get(l.to).add(l.from);
-    if (l.pos === 'content') {
-      if (!contentFrom.has(l.to)) contentFrom.set(l.to, new Set());
-      contentFrom.get(l.to).add(l.from);
-    }
-    if (!l.nofollow) {
-      if (!adj.has(l.from)) adj.set(l.from, new Set());
-      adj.get(l.from).add(l.to);
-    }
-  }
-  for (const [to, set] of inFrom) {
-    const t = byUrl.get(to);
-    if (t) t.uniqueInlinks = set.size;
-  }
-  for (const [to, set] of contentFrom) {
-    const t = byUrl.get(to);
-    if (t) t.contentInlinks = set.size;
-  }
+  // Graphe de liens internes, en entiers : chaque page et chaque cible de redirection ou de canonical reçoit un
+  // indice dans la table d'URL du crawl. Aucun objet ni Set par lien (src/graph.mjs).
+  const { urls, links } = crawler;
+  for (const p of pages) urls.id(p.url);
+  const roots = (crawler.listUrls || [start]).map((u) => urls.id(u));
   // Les redirections (HTTP ou meta refresh) ne sont pas des clics : arêtes de poids 0 pour la profondeur.
-  const hop = new Map();
+  const hopOf = new Map();
+  const canonOf = new Map();
   for (const p of pages) {
     const target = p.redirectUrl || p.metaRefreshUrl || p.jsRedirectUrl;
-    if (target) hop.set(p.url, norm(target));
-    if (p.canonical && p.canonical !== p.url && p.indexabilityReason === 'canonicalised') {
-      if (!adj.has(p.url)) adj.set(p.url, new Set());
-      adj.get(p.url).add(norm(p.canonical));
-    }
+    if (target) hopOf.set(urls.id(p.url), urls.id(norm(target)));
+    if (p.canonical && p.canonical !== p.url && p.indexabilityReason === 'canonicalised') canonOf.set(urls.id(p.url), urls.id(norm(p.canonical)));
   }
+  const n = urls.size;
+  const { from, to, flags, pos } = links.columns();
+  const m = links.n;
+  const errSrc = new Uint8Array(n);
+  for (const p of pages) if (p.status >= 400) errSrc[urls.get(p.url)] = 1;
+  // Un lien compte s'il est interne, ne pointe pas vers sa propre page et ne part pas d'une page en erreur
+  // (Google ne suit pas les liens d'une page en erreur).
+  const counted = (i) => flags[i] & FLAG.internal && from[i] !== to[i] && !errSrc[from[i]];
+  const followed = (i) => counted(i) && !(flags[i] & FLAG.nofollow);
+  const inl = new Int32Array(n);
+  for (let i = 0; i < m; i++) if (counted(i)) inl[to[i]]++;
+  const uniq = uniqueCounts(n, csr(n, [{ src: to, dst: from, m, keep: counted }]));
+  const uniqContent = uniqueCounts(n, csr(n, [{ src: to, dst: from, m, keep: (i) => counted(i) && pos[i] === 0 }]));
+  for (const p of pages) {
+    const u = urls.get(p.url);
+    p.inlinks = inl[u];
+    p.uniqueInlinks = uniq[u];
+    p.contentInlinks = uniqContent[u];
+  }
+  const extra = { src: [], dst: [] };
+  for (const [u, v] of canonOf) extra.src.push(u), extra.dst.push(v);
 
-  // Profondeur réelle (plus court chemin depuis l'accueil, ou depuis chaque URL en mode liste)
-  for (const p of pages) p.depth = null;
-  // Parcours 0-1 : l'accueil après redirection (http → https, www) reste au niveau 0.
-  const roots = crawler.listUrls ? crawler.listUrls : [start];
-  const dist = new Map(roots.map((r) => [r, 0]));
-  // Prédécesseur sur ce plus court chemin : le chemin affiché (cartographie) compte exactement « depth » clics.
-  const pred = new Map();
-  const dq = [...roots];
-  while (dq.length) {
-    const cur = dq.shift();
-    const d = dist.get(cur);
-    const h = hop.get(cur);
-    if (h && (!dist.has(h) || dist.get(h) > d)) {
-      dist.set(h, d);
-      pred.set(h, [cur, 'redirect']);
-      dq.unshift(h);
-    }
-    for (const v of adj.get(cur) || []) {
-      if (!dist.has(v) || dist.get(v) > d + 1) {
-        dist.set(v, d + 1);
-        pred.set(v, [cur, 'link']);
-        dq.push(v);
+  // Profondeur réelle (plus court chemin depuis l'accueil, ou depuis chaque URL en mode liste), par niveaux :
+  // une redirection garde le niveau de sa source, un lien ajoute un clic.
+  const fwd = csr(n, [{ src: from, dst: to, m, keep: followed }, extra], { dedupe: true });
+  const dist = new Int32Array(n).fill(-1);
+  const pred = new Int32Array(n).fill(-1);
+  const viaRedirect = new Uint8Array(n);
+  let level = roots;
+  for (const r of roots) dist[r] = 0;
+  for (let d = 0; level.length; d++) {
+    const next = [];
+    for (let k = 0; k < level.length; k++) {
+      const u = level[k];
+      if (dist[u] !== d) continue;
+      const h = hopOf.get(u);
+      if (h !== undefined && (dist[h] < 0 || dist[h] > d)) {
+        dist[h] = d;
+        pred[h] = u;
+        viaRedirect[h] = 1;
+        level.push(h);
+      }
+      for (let j = fwd.off[u]; j < fwd.off[u + 1]; j++) {
+        const v = fwd.adj[j];
+        if (dist[v] < 0 || dist[v] > d + 1) {
+          dist[v] = d + 1;
+          pred[v] = u;
+          viaRedirect[v] = 0;
+          next.push(v);
+        }
       }
     }
+    level = next;
   }
-  for (const [u, d] of dist) {
-    const p = byUrl.get(u);
-    if (p) p.depth = d;
-    const pr = pred.get(u);
-    if (p && pr) {
-      p.pathParent = pr[0];
-      if (pr[1] === 'redirect') p.pathViaRedirect = true;
+  for (const p of pages) {
+    const u = urls.get(p.url);
+    p.depth = dist[u] < 0 ? null : dist[u];
+    if (pred[u] >= 0) {
+      p.pathParent = urls.values[pred[u]];
+      if (viaRedirect[u]) p.pathViaRedirect = true;
     }
   }
 
-  // PageRank interne sur les pages crawlées
-  const nodes = pages.map((p) => p.url);
-  const adjCrawled = new Map();
-  for (const [u, set] of adj) adjCrawled.set(u, new Set([...set].filter((v) => byUrl.has(v))));
-  for (const [u, v] of hop) if (byUrl.has(v)) adjCrawled.set(u, new Set([...(adjCrawled.get(u) || []), v]));
-  const pr = pageRank(nodes, adjCrawled);
-  for (const p of pages) p.linkScore = pr.get(p.url) ?? 0;
+  // PageRank interne sur les pages crawlées (liens suivis, canonicals et redirections entre pages crawlées).
+  const crawledId = new Int32Array(n).fill(-1);
+  pages.forEach((p, k) => (crawledId[urls.get(p.url)] = k));
+  const hops = { src: [], dst: [] };
+  for (const [u, v] of hopOf) hops.src.push(u), hops.dst.push(v);
+  const prGraph = csr(pages.length, [{ src: from, dst: to, m, keep: followed }, extra, hops], { map: crawledId, dedupe: true });
+  const scores = pageRankCsr(pages.length, prGraph);
+  pages.forEach((p, k) => (p.linkScore = scores[k]));
 
   // Chaînes de redirection
   const redirects = [];
@@ -337,25 +309,32 @@ export function analyze(crawler) {
   const genericAnchors = new Map();
   const emptyAnchors = new Map();
   const unverifiedExternal = [];
-  for (const l of crawler.links) {
-    if (l.internal) {
-      const t = byUrl.get(l.to);
-      if (l.nofollow) nofollowInternal.push(l);
+  const anchorsOf = crawler.anchors.values;
+  const urlsOf = urls.values;
+  const { anchor: anchorCol } = links.columns();
+  for (let i = 0; i < m; i++) {
+    const f = flags[i];
+    const fromU = urlsOf[from[i]];
+    const toU = urlsOf[to[i]];
+    const anchor = anchorsOf[anchorCol[i]];
+    if (f & FLAG.internal) {
+      const t = byUrl.get(toU);
+      if (f & FLAG.nofollow) nofollowInternal.push({ from: fromU, to: toU });
       // Vide = aucun texte du tout ; « ! », « >> » sont des ancres réelles (opérateurs, pagination).
-      const a = (l.anchor || '').toLowerCase().replace(/[.…:!»›→>\s]+$/u, '').trim();
-      if (!(l.anchor || '').trim()) emptyAnchors.set(l.from, (emptyAnchors.get(l.from) || 0) + 1);
-      else if (a && !l.code && GENERIC_ANCHORS.has(a)) {
-        if (!genericAnchors.has(l.from)) genericAnchors.set(l.from, new Set());
-        genericAnchors.get(l.from).add(l.anchor);
+      const a = (anchor || '').toLowerCase().replace(/[.…:!»›→>\s]+$/u, '').trim();
+      if (!(anchor || '').trim()) emptyAnchors.set(fromU, (emptyAnchors.get(fromU) || 0) + 1);
+      else if (a && !(f & FLAG.code) && GENERIC_ANCHORS.has(a)) {
+        if (!genericAnchors.has(fromU)) genericAnchors.set(fromU, new Set());
+        genericAnchors.get(fromU).add(anchor);
       }
       if (!t || t.blockedByRobots || t.rateLimited) continue;
-      if (!t.status || t.status >= 400) brokenLinks.push({ from: l.from, to: l.to, anchor: l.anchor, status: t.status, statusText: t.statusText || t.error });
-      else if (t.status >= 300) linksToRedirects.push({ from: l.from, to: l.to, anchor: l.anchor, status: t.status, target: t.redirectUrl });
+      if (!t.status || t.status >= 400) brokenLinks.push({ from: fromU, to: toU, anchor, status: t.status, statusText: t.statusText || t.error });
+      else if (t.status >= 300) linksToRedirects.push({ from: fromU, to: toU, anchor, status: t.status, target: t.redirectUrl });
     } else {
-      const ex = crawler.externals.get(l.to);
+      const ex = crawler.externals.get(toU);
       if (ex && ex.status !== null && (ex.status === 0 || ex.status >= 400)) {
         // Anti-bot, limite de débit ou délai dépassé : le lien n'a pas pu être vérifié, il n'est pas forcément cassé.
-        const item = { from: l.from, to: l.to, anchor: l.anchor, status: ex.status, statusText: ex.statusText, external: true };
+        const item = { from: fromU, to: toU, anchor, status: ex.status, statusText: ex.statusText, external: true };
         if (UNVERIFIABLE.has(ex.status)) unverifiedExternal.push(item);
         else brokenLinks.push(item);
       }
@@ -568,10 +547,10 @@ export function analyze(crawler) {
   // Images
   add('img-alt-missing', 'warning', 'images', 'medium', 'low', u(indexableHtml.filter((p) => p.imagesMissingAlt > 0), (p) => `${p.imagesMissingAlt}/${p.imagesCount}`));
   add('img-alt-empty', 'notice', 'images', 'low', 'low', u(indexableHtml.filter((p) => p.imagesEmptyAlt > 0), (p) => `${p.imagesEmptyAlt}/${p.imagesCount}`));
-  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && i.status >= 400 && !UNVERIFIABLE.has(i.status)).map((i) => ({ url: [...i.pages][0], detail: `${i.src}${imgRole(i)} (${i.status})` })));
-  add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.${imgRole(i)}` })), { max: Math.round(T.largeImageBytes / 1024) });
+  add('img-broken', 'error', 'images', 'medium', 'low', imgs.filter((i) => i.status !== null && i.status >= 400 && !UNVERIFIABLE.has(i.status)).map((i) => ({ url: i.firstPage, detail: `${i.src}${imgRole(i)} (${i.status})` })));
+  add('img-large', 'warning', 'images', 'medium', 'low', imgs.filter((i) => i.size > T.largeImageBytes).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages} p.${imgRole(i)}` })), { max: Math.round(T.largeImageBytes / 1024) });
   add('img-dimensions', 'notice', 'images', 'low', 'low', u(indexableHtml.filter((p) => p.imagesNoDimensions > 0), (p) => `${p.imagesNoDimensions}/${p.imagesCount}`));
-  add('img-not-responsive', 'notice', 'images', 'medium', 'medium', imgs.filter((i) => i.role === 'src' && !i.responsive && i.size > T.largeImageBytes && !/svg/.test(i.contentType + imageFormat(i.src))).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages.size} p.` })), { max: Math.round(T.largeImageBytes / 1024) });
+  add('img-not-responsive', 'notice', 'images', 'medium', 'medium', imgs.filter((i) => i.role === 'src' && !i.responsive && i.size > T.largeImageBytes && !/svg/.test(i.contentType + imageFormat(i.src))).map((i) => ({ url: i.src, detail: `${Math.round(i.size / 1024)} KB · ${i.pages} p.` })), { max: Math.round(T.largeImageBytes / 1024) });
   add('img-legacy-format', 'notice', 'images', 'medium', 'medium', u(indexableHtml.filter((p) => p.imagesLegacyOnly > 0), (p) => `${p.imagesLegacyOnly}/${p.imagesCount}`));
   add('img-srcset-no-sizes', 'notice', 'images', 'low', 'low', u(indexableHtml.filter((p) => p.imagesNoSizes > 0), (p) => `${p.imagesNoSizes}/${p.imagesCount}`));
 
@@ -740,18 +719,9 @@ export function analyze(crawler) {
   }
   const rt = html200.map((p) => p.responseTime).filter((x) => x != null).sort((a, b) => a - b);
 
-  // Sérialisation compacte des liens : [from, to, ancre, drapeaux, position]
-  const urlIndex = new Map();
-  const urls = [];
-  const idx = (x) => {
-    if (!urlIndex.has(x)) {
-      urlIndex.set(x, urls.length);
-      urls.push(x);
-    }
-    return urlIndex.get(x);
-  };
-  const POS = { content: 0, nav: 1, header: 2, footer: 3, aside: 4 };
-  const edges = crawler.links.map((l) => [idx(l.from), idx(l.to), l.anchor, (l.nofollow ? 1 : 0) | (l.internal ? 2 : 0) | (l.imageLink ? 4 : 0), POS[l.pos] ?? 0]);
+  // Liens en colonnes, tels qu'ils sont en mémoire : rien à convertir (voir public/shared/links.js pour la lecture).
+  const cols = links.columns();
+  const linksOut = { urls: urls.values, anchors: crawler.anchors.values, from: Array.from(cols.from), to: Array.from(cols.to), anchor: Array.from(cols.anchor), flags: Array.from(cols.flags), pos: Array.from(cols.pos) };
   for (const p of pages) delete p.simhash;
 
   const result = {
@@ -793,8 +763,8 @@ export function analyze(crawler) {
       avgResponseTime: rt.length ? Math.round(rt.reduce((a, b) => a + b, 0) / rt.length) : 0,
       medianResponseTime: rt.length ? rt[Math.floor(rt.length / 2)] : 0,
       avgWords: html200.length ? Math.round(html200.reduce((a, p) => a + p.wordCount, 0) / html200.length) : 0,
-      internalLinks: crawler.links.filter((l) => l.internal).length,
-      externalLinks: crawler.links.filter((l) => !l.internal).length,
+      internalLinks: links.count((f) => f & FLAG.internal),
+      externalLinks: links.count((f) => !(f & FLAG.internal)),
       uniqueExternal: crawler.externals.size,
       images: crawler.images.size,
       errors: issues.filter((i) => i.severity === 'error').reduce((a, i) => a + i.count, 0),
@@ -809,11 +779,11 @@ export function analyze(crawler) {
     brokenLinks,
     nearDuplicates: nearDup.sort((a, b) => b.similarity - a.similarity).slice(0, 5000),
     cannibalization: cannibal.map(([keyword, arr]) => ({ keyword, urls: arr.map((p) => p.url) })),
-    images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: [...i.alts].join(' | '), missingAlt: i.missingAlt, emptyAlt: i.emptyAlt || undefined, pages: i.pages.size, firstPage: [...i.pages][0], status: i.status, size: i.size })),
+    images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: i.alts.join(' | '), missingAlt: i.missingAlt, emptyAlt: i.emptyAlt || undefined, pages: i.pages, firstPage: i.firstPage, status: i.status, size: i.size })),
     gscOnly,
     ga4Only,
-    externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages.size, firstPage: [...e.pages][0] })),
-    links: { urls, edges },
+    externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages, firstPage: e.firstPage })),
+    links: linksOut,
   };
   // Segments définis avant le crawl (CLI --segments, agent, crawl planifié) : appliqués au résultat enregistré.
   // Ils restent modifiables ensuite dans l'interface, sans recrawler.

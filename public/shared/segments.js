@@ -10,6 +10,7 @@
 // - segmentStats() donne la vue d'ensemble : une ligne par segment avec son score, ses erreurs et ses moyennes.
 //
 // Partagé par le moteur (src/), la CLI, les outils agents (MCP / REST) et l'interface : un seul calcul partout.
+import { forEachLink, linkUrls } from './links.js';
 import { issuePoints, computePillars, scoredPages, issueShare, OUTSIDE_CRAWL } from './pillars.js';
 
 export const NONE = '__none';
@@ -221,15 +222,15 @@ export function computeSummary(R) {
   let internalLinks = 0;
   let externalLinks = 0;
   const ext = new Set();
-  const { urls = [], edges = [] } = R.links || {};
-  for (const [f, to, , flags] of edges) {
-    if (!inScope.has(urls[f])) continue;
+  const urls = linkUrls(R);
+  forEachLink(R, (f, to, _a, flags) => {
+    if (!inScope.has(urls[f])) return;
     if (flags & 2) internalLinks++;
     else {
       externalLinks++;
       ext.add(urls[to]);
     }
-  }
+  });
   const sum = (sev) => issues.filter((i) => i.severity === sev).reduce((a, i) => a + i.count, 0);
   return {
     score,

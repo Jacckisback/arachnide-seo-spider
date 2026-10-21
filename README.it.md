@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.16.0-3d5f17" alt="Versione 3.16.0">
+  <img src="https://img.shields.io/badge/version-3.17.0-3d5f17" alt="Versione 3.17.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -29,6 +29,10 @@ Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🧮 Novità della 3.17: scalabilità, passo 2 — un grafo dei link compatto
+
+Un link era un oggetto JavaScript con sette proprietà e due stringhe URL; l’analisi lo copiava poi in Map di Set e in un array di tuple. I link vivono ora in **colonne di interi** (URL e testi di ancoraggio memorizzati una volta, 14 byte per link) e l’analisi lavora su un **grafo CSR**: link in entrata, profondità di clic, PageRank e controlli dei link leggono le stesse colonne, senza alcun oggetto per link. Misurato su 50 000 pagine × 100 link: memoria dei link 690 MB → 55 MB, analisi 29 s / 2,5 GB → 5,5 s / 647 MB, stessi risultati. Un crawl di 200 000 pagine e 20 milioni di link ora supera l’analisi. Il blocco `links` salvato è a colonne; i vecchi file si aprono ancora. Passo successivo: scrivere il file e i dati del browser in streaming.
 
 ## 🏗️ Novità della 3.16: scalabilità, passo 1 — i siti grandi non si bloccano più alla fine
 

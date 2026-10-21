@@ -1,5 +1,6 @@
 // Règles déterministes : corrections calculées sans IA à partir du résultat du crawl.
 import { makeFix } from './schema.mjs';
+import { forEachLink, linkUrls } from '../../public/shared/links.js';
 
 const segs = (u) => {
   try {
@@ -77,10 +78,10 @@ function finalOf(redirects, url) {
 // chaque page coûtait O(pages × liens).
 function outlinkIndex(R) {
   const out = new Map();
-  for (const e of R.links?.edges || []) {
-    if (!out.has(e[0])) out.set(e[0], []);
-    out.get(e[0]).push(e[1]);
-  }
+  forEachLink(R, (f, to) => {
+    if (!out.has(f)) out.set(f, []);
+    out.get(f).push(to);
+  });
   return out;
 }
 
@@ -118,7 +119,7 @@ export function deterministicFixes(R, issue) {
       out.push(makeFix({ ...base, kind: 'noindex', oldValue: true, newValue: false, confidence: Math.min(0.9, 0.4 + signals * 0.2), rationale: 'fix.r.noindexAccidental' }));
     } else if (issue.id === 'links-to-redirect') {
       // Un Fix par lien : href qui redirige → URL finale (200).
-      const idx = R.links?.urls || [];
+      const idx = linkUrls(R);
       urlIndex ||= new Map(idx.map((u, i) => [u, i]));
       outlinks ||= outlinkIndex(R);
       const seen = new Set();

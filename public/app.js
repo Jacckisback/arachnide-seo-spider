@@ -12,6 +12,7 @@ import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories,
 import { createMap, paletteOf } from './viz.js';
 import { buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
+import { forEachLink, linkUrls, LINK_POS } from './shared/links.js';
 import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants, COLORS as MAP_COLORS } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 import { sliceResult, applySegments, assignSegments, segmentStats, issueBySegment, suggestFromFolders, NONE, NONE_COLOR } from './shared/segments.js';
@@ -95,17 +96,16 @@ function debounce(fn, ms) {
 function linkGraph() {
   if (state.graph) return state.graph;
   const F = state.full || state.R;
-  const { urls, edges } = F.links;
-  const POS = ['content', 'nav', 'header', 'footer', 'aside'];
+  const urls = linkUrls(F);
   const inl = new Map();
   const out = new Map();
-  for (const [f, to, a, flags, pos] of edges) {
-    const e = { from: urls[f], to: urls[to], anchor: a, nofollow: !!(flags & 1), internal: !!(flags & 2), image: !!(flags & 4), pos: POS[pos || 0] };
+  forEachLink(F, (f, to, a, flags, pos) => {
+    const e = { from: urls[f], to: urls[to], anchor: a, nofollow: !!(flags & 1), internal: !!(flags & 2), image: !!(flags & 4), pos: LINK_POS[pos || 0] };
     if (!out.has(e.from)) out.set(e.from, []);
     out.get(e.from).push(e);
     if (!inl.has(e.to)) inl.set(e.to, []);
     inl.get(e.to).push(e);
-  }
+  });
   state.graph = { inl, out, byUrl: new Map(F.pages.map((p) => [p.url, p])) };
   return state.graph;
 }
@@ -2059,7 +2059,7 @@ function connect() {
     render();
     if (d.via === 'agent') toast(t('seg.saved', { n: segDefs().length }), 'info');
   });
-  es.addEventListener('pages', (e) => { state.live.push(...JSON.parse(e.data)); throttledRender(); });
+  es.addEventListener('pages', (e) => { for (const r of JSON.parse(e.data)) state.live.push(r); throttledRender(); });
   es.addEventListener('done', async () => {
     setRunning(false);
     try {

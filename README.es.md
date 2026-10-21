@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.16.0-3d5f17" alt="Versión 3.16.0">
+  <img src="https://img.shields.io/badge/version-3.17.0-3d5f17" alt="Versión 3.17.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -29,6 +29,10 @@ No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu orde
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 🧮 Novedades de la 3.17: escala, paso 2 — un grafo de enlaces compacto
+
+Un enlace era un objeto JavaScript de siete propiedades con dos cadenas de URL; el análisis lo copiaba después en Maps de Sets y en un array de tuplas. Los enlaces viven ahora en **columnas de enteros** (URL y textos de ancla almacenados una vez, 14 bytes por enlace) y el análisis trabaja sobre un **grafo CSR**: enlaces entrantes, profundidad de clic, PageRank y comprobaciones de enlaces leen las mismas columnas, sin ningún objeto por enlace. Medido en 50 000 páginas × 100 enlaces: almacenamiento 690 MB → 55 MB, análisis 29 s / 2,5 GB → 5,5 s / 647 MB, mismos resultados. Un rastreo de 200 000 páginas y 20 millones de enlaces ya supera el análisis. El bloque `links` guardado es columnar; los archivos antiguos siguen abriéndose. Próximo paso: escribir el archivo y los datos del navegador en flujo.
 
 ## 🏗️ Novedades de la 3.16: escala, paso 1 — los sitios grandes ya no fallan al final
 
