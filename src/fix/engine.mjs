@@ -29,22 +29,60 @@ export async function fetchPageContext(url, { fetch = globalThis.fetch, maxChars
 }
 
 const valueOf = (p, kind) => ({ seo_title: p.title || null, meta_description: p.metaDescription || null, h1: p.h1?.[0] || null, json_ld: null })[kind] ?? null;
-const siblingValues = (R, p, kind, n = 30) =>
-  R.pages
-    .filter((x) => x.url !== p.url && x.isHtml && x.status === 200)
-    .map((x) => valueOf(x, kind))
-    .filter(Boolean)
-    .slice(0, n);
+const folderOf = (u) => {
+  try {
+    return new URL(u).pathname.replace(/[^/]*$/, '');
+  } catch {
+    return '';
+  }
+};
+// Exemples de valeurs existantes (titres, descriptions…) donnés à l'IA : calculés une fois par type de correction,
+// puis servis par page en privilégiant les pages du même dossier (même rubrique, même ton).
+function siblingIndex(R) {
+  const byKind = new Map();
+  return (p, kind, n = 30) => {
+    if (!byKind.has(kind)) {
+      const byFolder = new Map();
+      const all = [];
+      for (const x of R.pages) {
+        if (!x.isHtml || x.status !== 200) continue;
+        const v = valueOf(x, kind);
+        if (!v) continue;
+        const e = { url: x.url, v };
+        all.push(e);
+        const f = folderOf(x.url);
+        if (!byFolder.has(f)) byFolder.set(f, []);
+        byFolder.get(f).push(e);
+      }
+      byKind.set(kind, { byFolder, all });
+    }
+    const { byFolder, all } = byKind.get(kind);
+    const out = [];
+    const seen = new Set([p.url]);
+    for (const list of [byFolder.get(folderOf(p.url)) || [], all]) {
+      for (const e of list) {
+        if (out.length >= n) return out;
+        if (seen.has(e.url)) continue;
+        seen.add(e.url);
+        out.push(e.v);
+      }
+    }
+    return out;
+  };
+}
 
 // Travaux à faire pour un groupe : une URL (ou une image) = une demande.
 function jobsFor(R, issue, urls) {
   const kind = fixKind(issue.id);
   const pages = new Map(R.pages.map((p) => [p.url, p]));
   const jobs = [];
+  const wanted = urls ? new Set(urls) : null;
+  const seen = new Set();
   for (const it of issue.items) {
-    if (urls && !urls.includes(it.url)) continue;
+    if (wanted && !wanted.has(it.url)) continue;
     const p = pages.get(it.url);
-    if (!p || jobs.some((j) => j.url === it.url)) continue;
+    if (!p || seen.has(it.url)) continue;
+    seen.add(it.url);
     if (kind === 'image_alt') for (const src of p.imagesMissingAltSrc || []) jobs.push({ url: p.url, page: p, kind, target: src, oldValue: null, detail: '' });
     else jobs.push({ url: p.url, page: p, kind, oldValue: valueOf(p, kind), detail: typeof it.detail === 'string' ? it.detail : '' });
   }
@@ -100,8 +138,9 @@ export async function proposeFixes(R, { issueIds, urls, provider, fetch = global
   for (const issue of R.issues.filter((i) => issueIds.includes(i.id))) {
     const method = fixMethod(issue.id);
     if (method === 'deterministic') {
-      const scoped = urls ? { ...issue, items: issue.items.filter((it) => urls.includes(it.url)) } : issue;
-      fixes.push(...deterministicFixes(R, scoped));
+      const wanted = urls ? new Set(urls) : null;
+      const scoped = wanted ? { ...issue, items: issue.items.filter((it) => wanted.has(it.url)) } : issue;
+      for (const f of deterministicFixes(R, scoped)) fixes.push(f); // pas de spread : un problème peut toucher plus de 125 000 URL
     } else if (method === 'ai') {
       for (const j of jobsFor(R, issue, urls)) aiJobs.push({ issue, ...j });
     } else {
@@ -110,13 +149,14 @@ export async function proposeFixes(R, { issueIds, urls, provider, fetch = global
   }
   if (aiJobs.length && !provider) throw Object.assign(new Error('No AI provider configured'), { code: 'no_provider' });
   const ctxCache = new Map();
+  const siblings = siblingIndex(R);
   const results = await pool(
     aiJobs,
     concurrency,
     async (job) => {
       if (!ctxCache.has(job.url)) ctxCache.set(job.url, fetchPageContext(job.url, { fetch }).catch(() => ({ lang: job.page.lang || '', title: job.page.title, h1: job.page.h1?.[0] || '', excerpt: '' })));
       const pc = await ctxCache.get(job.url);
-      const ctx = { ...pc, lang: pc.lang || job.page.lang || '', url: job.url, kind: job.kind, target: job.target, oldValue: job.oldValue, detail: job.detail, siblings: siblingValues(R, job.page, job.kind) };
+      const ctx = { ...pc, lang: pc.lang || job.page.lang || '', url: job.url, kind: job.kind, target: job.target, oldValue: job.oldValue, detail: job.detail, siblings: siblings(job.page, job.kind) };
       return provider.generateFix(job.issue, ctx);
     },
     { onProgress, signal }

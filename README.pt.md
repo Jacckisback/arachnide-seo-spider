@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Versão 3.13.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Versão 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -24,11 +24,35 @@ O **Arachnide** é um crawler de SEO técnico gratuito que funciona no seu próp
 - um plano de ação ordenado por impacto e esforço;
 - um **relatório PDF em marca branca** para os seus clientes, em 6 idiomas.
 
-Não há conta, nem nuvem, nem limite de páginas, e os seus dados ficam no seu computador.
+Não há conta nem nuvem, e os seus dados ficam no seu computador. Testado num site sintético de 200 000 páginas (`npm run bench -- --pages 200000`); o orçamento por defeito é de 500 páginas, a aumentar nas opções.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🛡️ Novidades da 3.21: salvaguardas de crawl, XPath, modo lista por sitemap e um benchmark reproduzível de 200 000 páginas
+
+O orçamento de páginas conta agora as páginas realmente descarregadas (os URL bloqueados pelo robots.txt já não o consomem), os parâmetros de URL são ordenados e os de rastreio (`utm_*`, `gclid`, `fbclid`…) removidos por defeito, as armadilhas de facetas são assinaladas, um robots.txt inacessível proíbe tudo como exige a RFC 9309 (com uma saída explícita), o robots.txt é lido por anfitrião em modo lista, os 5xx e cortes de rede têm uma nova tentativa diferida, os corpos das respostas são lidos em fluxo e limitados, um Chrome que morre é reiniciado e assinalado, e uma extração regex descontrolada é interrompida num worker. A **extração XPath** junta-se a CSS e regex (Chrome em renderização, jsdom opcional sobre o HTML bruto); a CLI ganha os alvos `attr:` / `html:` / `count:` / `xpath:` com uma coluna CSV por regra, **`--sitemap URL`** rastreia exatamente um sitemap, o modo lista sobe a 500 000 URL e os agentes de IA também têm modo lista. `npm run bench -- --pages 200000` rastreia um site sintético local e mostra duração, memória máxima e tamanho do ficheiro.
+
+## 🖥️ Novidades da 3.20: escala, passo 5 — o navegador nunca mais recebe o crawl inteiro
+
+O servidor guarda o crawl e o seu grafo de links; o navegador recebe um **resultado leve em fluxo** (páginas reduzidas ao que as tabelas mostram, sem links) e pede o resto a pedido: os links de uma página **paginados** no painel de detalhe (sem corte silencioso em 1 000), a ficha completa ao clicar, as arestas do mapa só para os nós mostrados, e a comparação com o crawl anterior como um pequeno diff calculado no servidor. Abrir um crawl gravado ou importar um ficheiro já não envia o crawl de ida e volta; as exportações saem do servidor em fluxo. As contagens dos separadores são calculadas uma vez por resultado.
+
+## 🔬 Novidades da 3.19: escala, passo 4 — uma análise que escala
+
+**Todas as páginas são agora comparadas para quase duplicados**: a antiga verificação parava nas primeiras 5 000 páginas sem o dizer. A pesquisa é exata por bandas sobre a impressão de 64 bits (duas páginas a 5 bits de distância partilham sempre uma banda), pelo que um site de 200 000 páginas é comparado em segundos; um site muito baseado em modelo é assinalado em vez de truncado em silêncio. A **canibalização** calcula-se em tempo linear com um índice invertido, e as expressões partilhadas por mais de 500 páginas são assinaladas como modelo do site. Os **segmentos** contam os seus links numa única passagem em vez de uma por segmento (475 ms contra ~16 s para 10 segmentos em 20 milhões de links), e as regras de correção leem o grafo compacto.
+
+## 💾 Novidades da 3.18: escala, passo 3 — um crawl escrito à medida
+
+Um crawl nunca mais passa por uma única cadeia. Os resultados são gravados em **NDJSON gzip** (um objeto JSON por linha, os links por lotes), escritos e lidos em fluxo, de forma atómica; o histórico lê apenas a primeira linha. Durante o crawl, um **diário de retoma** regista cada URL em fila e cada página feita: após uma falha ou um Ctrl+C, `--resume` (ou `POST /api/crawl { resume }`) retoma o crawl onde parou, perdendo apenas os últimos segundos. Os crawls gravados chegam ao navegador linha a linha, os segmentos editados depois vão para um pequeno ficheiro ao lado, e a linha de comandos escreve JSON, CSV e relatório cada um em fluxo e de forma independente. Os antigos crawls `.json` continuam a abrir. Próximo passo: páginas mais leves e links a pedido no navegador.
+
+## 🧮 Novidades da 3.17: escala, passo 2 — um grafo de links compacto
+
+Um link era um objeto JavaScript com sete propriedades e duas cadeias de URL; a análise copiava-o depois para Maps de Sets e para um array de tuplos. Os links vivem agora em **colunas de inteiros** (URL e textos de âncora guardados uma vez, 14 bytes por link) e a análise trabalha sobre um **grafo CSR**: links de entrada, profundidade de clique, PageRank e verificações de links leem as mesmas colunas, sem nenhum objeto por link. Medido em 50 000 páginas × 100 links: armazenamento 690 MB → 55 MB, análise 29 s / 2,5 GB → 5,5 s / 647 MB, mesmos resultados. Um crawl de 200 000 páginas e 20 milhões de links já passa a análise. O bloco `links` gravado é em colunas; os ficheiros antigos continuam a abrir. Próximo passo: escrever o ficheiro e os dados do navegador em fluxo.
+
+## 🏗️ Novidades da 3.16: escala, passo 1 — os sites grandes já não falham no fim
+
+Uma revisão técnica num crawl de 200 000 páginas mostrou que o motor escala, mas algumas linhas de tratamento de dados não: um `Math.min(...)` sobre um valor por URL fazia falhar a análise além de ~125 000 URL (após horas de crawl), e vários ciclos eram quadráticos. **Catorze pequenas correções**: sem spread em arrays do tamanho do site, índices construídos uma só vez (redirecionamentos, links de saída, URL mais próximo de um 404 procurando primeiro na pasta mãe), exemplos para a IA tirados da mesma pasta, ordenação das tabelas 20× mais rápida (um só `Intl.Collator`), contagem das pastas do mapa 5× mais rápida, tarefas de crawl terminadas reduzidas a um resumo, e **escritas atómicas** para que uma paragem durante a gravação nunca deixe um crawl truncado. Os próximos passos vão compactar o armazenamento dos links e enviar o ficheiro e os dados do navegador em fluxo.
 
 ## 📊 Novidades da 3.15: Google Analytics 4 — páginas órfãs com tráfego
 
@@ -345,7 +369,10 @@ Alterne entre **2D** e **3D**, colore por indexabilidade, problemas ou profundid
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang pt
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

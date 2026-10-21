@@ -17,7 +17,7 @@ async function walk(dir, base = dir) {
   const out = [];
   for (const e of await fs.readdir(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) out.push(...(await walk(p, base)));
+    if (e.isDirectory()) for (const f of await walk(p, base)) out.push(f);
     else out.push({ name: path.relative(base, p).split(path.sep).join('/'), data: await fs.readFile(p) });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));

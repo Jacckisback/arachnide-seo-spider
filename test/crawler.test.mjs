@@ -73,7 +73,7 @@ test('crawl complet du site de test', async () => {
   for (const i of r.issues) assert.ok(i.priority > 0 && ['high', 'medium', 'low'].includes(i.impact));
   assert.ok(r.summary.score > 0 && r.summary.score < 100);
   assert.match(r.summary.grade, /^[A-F]$/);
-  assert.ok(r.links.edges.length > 10);
+  assert.ok(r.links.from.length > 10 && r.links.from.length === r.links.to.length && r.links.urls.length > 0 && r.links.anchors.length > 0);
 });
 
 test('mode liste : ne suit pas les liens', async () => {

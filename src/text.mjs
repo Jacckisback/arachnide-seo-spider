@@ -91,3 +91,57 @@ function popcount(x) {
 
 export const hamming = (a, b) => popcount((a[0] ^ b[0]) >>> 0) + popcount((a[1] ^ b[1]) >>> 0);
 export const similarity = (a, b) => Math.round((1 - hamming(a, b) / 64) * 100);
+
+// ---- Quasi-doublons sans plafond : recherche exacte par bandes ----
+// Deux empreintes à maxDist bits d'écart ou moins (5 pour le seuil de 92 %) ont forcément une bande identique parmi
+// 6 bandes (11, 11, 10 bits sur chaque moitié) : 5 différences ne peuvent pas toucher 6 bandes. On ne compare donc que
+// les pages qui partagent une bande, au lieu de toutes les paires (la double boucle plafonnait à 5 000 pages).
+const BANDS = 6;
+const bands = ([hi, lo]) => [hi & 0x7ff, (hi >>> 11) & 0x7ff, hi >>> 22, lo & 0x7ff, (lo >>> 11) & 0x7ff, lo >>> 22];
+
+// Distance de Hamming maximale pour un seuil de similarité (en %), tel que similarity() l'arrondit.
+export function maxDistFor(threshold) {
+  let d = 0;
+  while (d < 64 && Math.round((1 - (d + 1) / 64) * 100) >= threshold) d++;
+  return d;
+}
+
+// Paires [i, j] (i < j) d'empreintes à maxDist bits ou moins, chacune une seule fois. Un site très gabarité peut remplir
+// une bande au-delà du raisonnable : ses listes sont tronquées à maxBucket et le nombre de bandes tronquées est renvoyé,
+// pour le dire dans le rapport plutôt que de le taire.
+export function nearPairs(hashes, maxDist, { maxBucket = 3000 } = {}) {
+  if (maxDist >= 6) throw new Error('nearPairs: 6 bands guarantee at most 5 differing bits');
+  const n = hashes.length;
+  const B = new Int32Array(n * BANDS);
+  const buckets = new Map();
+  for (let i = 0; i < n; i++) {
+    const b = bands(hashes[i]);
+    for (let k = 0; k < BANDS; k++) {
+      B[i * BANDS + k] = b[k];
+      const key = k * 2048 + b[k];
+      const list = buckets.get(key);
+      list ? list.push(i) : buckets.set(key, [i]);
+    }
+  }
+  const pairs = [];
+  let overflow = 0;
+  for (const [key, list] of buckets) {
+    const band = Math.floor(key / 2048);
+    if (list.length > maxBucket) {
+      overflow++;
+      list.length = maxBucket;
+    }
+    for (let x = 0; x < list.length; x++) {
+      const i = list[x];
+      for (let y = x + 1; y < list.length; y++) {
+        const j = list[y];
+        // La paire appartient à la première bande qu'elle partage : elle n'est comptée qu'une fois.
+        let first = 0;
+        while (B[i * BANDS + first] !== B[j * BANDS + first]) first++;
+        if (first !== band) continue;
+        if (hamming(hashes[i], hashes[j]) <= maxDist) pairs.push(i < j ? [i, j] : [j, i]);
+      }
+    }
+  }
+  return { pairs, overflow };
+}

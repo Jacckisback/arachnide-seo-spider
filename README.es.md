@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Versión 3.13.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Versión 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -24,11 +24,35 @@
 - un plan de acción ordenado por impacto y esfuerzo;
 - un **informe PDF de marca blanca** para tus clientes, en 6 idiomas.
 
-No hay cuenta, ni nube, ni límite de páginas, y tus datos se quedan en tu ordenador.
+No hay cuenta ni nube, y tus datos se quedan en tu ordenador. Probado en un sitio sintético de 200 000 páginas (`npm run bench -- --pages 200000`); el presupuesto por defecto es de 500 páginas, auméntalo en las opciones.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 🛡️ Novedades de la 3.21: salvaguardas de rastreo, XPath, modo lista por sitemap y un benchmark reproducible de 200 000 páginas
+
+El presupuesto de páginas cuenta ahora las páginas realmente descargadas (las URL bloqueadas por robots.txt ya no lo consumen), los parámetros de URL se ordenan y los de seguimiento (`utm_*`, `gclid`, `fbclid`…) se eliminan por defecto, las trampas de facetas se señalan, un robots.txt inaccesible lo prohíbe todo como exige la RFC 9309 (con una salida explícita), robots.txt se lee por host en modo lista, los 5xx y cortes de red tienen un reintento diferido, los cuerpos de respuesta se leen en flujo y se acotan, un Chrome que muere se reinicia y se señala, y una extracción regex desbocada se interrumpe en un worker. La **extracción XPath** se une a CSS y regex (Chrome en renderizado, jsdom opcional sobre el HTML bruto); la CLI gana los objetivos `attr:` / `html:` / `count:` / `xpath:` con una columna CSV por regla, **`--sitemap URL`** rastrea exactamente un sitemap, el modo lista sube a 500 000 URL y los agentes de IA también tienen modo lista. `npm run bench -- --pages 200000` rastrea un sitio sintético local y muestra duración, memoria máxima y tamaño del archivo.
+
+## 🖥️ Novedades de la 3.20: escala, paso 5 — el navegador ya no recibe nunca el rastreo entero
+
+El servidor conserva el rastreo y su grafo de enlaces; el navegador recibe un **resultado ligero en flujo** (páginas reducidas a lo que muestran las tablas, sin enlaces) y pide el resto bajo demanda: los enlaces de una página **paginados** en el panel de detalle (sin corte silencioso en 1 000), la ficha completa al hacer clic, las aristas del mapa solo para los nodos mostrados, y la comparación con el rastreo anterior como un pequeño diff calculado en el servidor. Abrir un rastreo guardado o importar un archivo ya no envía el rastreo de ida y vuelta; las exportaciones salen del servidor en flujo. Los contadores de pestañas se calculan una vez por resultado.
+
+## 🔬 Novedades de la 3.19: escala, paso 4 — un análisis que escala
+
+**Ahora se comparan todas las páginas en busca de casi duplicados**: la antigua comprobación se detenía en las primeras 5 000 páginas sin decirlo. La búsqueda es exacta por bandas sobre la huella de 64 bits (dos páginas a 5 bits de distancia siempre comparten una banda), así que un sitio de 200 000 páginas se compara en segundos; un sitio muy plantillado se señala en lugar de truncarse en silencio. La **canibalización** se calcula en tiempo lineal con un índice invertido, y las expresiones compartidas por más de 500 páginas se señalan como plantilla del sitio. Los **segmentos** cuentan sus enlaces en una sola pasada en lugar de una por segmento (475 ms frente a ~16 s para 10 segmentos sobre 20 millones de enlaces), y las reglas de corrección leen el grafo compacto.
+
+## 💾 Novedades de la 3.18: escala, paso 3 — un rastreo escrito sobre la marcha
+
+Un rastreo ya no pasa nunca por una sola cadena. Los resultados se guardan en **NDJSON gzip** (un objeto JSON por línea, los enlaces por lotes), escritos y leídos en flujo, de forma atómica; el historial solo lee la primera línea. Durante el rastreo, un **diario de reanudación** anota cada URL encolada y cada página hecha: tras un fallo o un Ctrl+C, `--resume` (o `POST /api/crawl { resume }`) retoma el rastreo donde se detuvo, perdiendo solo los últimos segundos. Los rastreos guardados se envían al navegador línea a línea, los segmentos editados después van a un pequeño archivo vecino, y la línea de comandos escribe JSON, CSV e informe cada uno en flujo e independientemente. Los antiguos rastreos `.json` siguen abriéndose. Próximo paso: páginas más ligeras y enlaces bajo demanda en el navegador.
+
+## 🧮 Novedades de la 3.17: escala, paso 2 — un grafo de enlaces compacto
+
+Un enlace era un objeto JavaScript de siete propiedades con dos cadenas de URL; el análisis lo copiaba después en Maps de Sets y en un array de tuplas. Los enlaces viven ahora en **columnas de enteros** (URL y textos de ancla almacenados una vez, 14 bytes por enlace) y el análisis trabaja sobre un **grafo CSR**: enlaces entrantes, profundidad de clic, PageRank y comprobaciones de enlaces leen las mismas columnas, sin ningún objeto por enlace. Medido en 50 000 páginas × 100 enlaces: almacenamiento 690 MB → 55 MB, análisis 29 s / 2,5 GB → 5,5 s / 647 MB, mismos resultados. Un rastreo de 200 000 páginas y 20 millones de enlaces ya supera el análisis. El bloque `links` guardado es columnar; los archivos antiguos siguen abriéndose. Próximo paso: escribir el archivo y los datos del navegador en flujo.
+
+## 🏗️ Novedades de la 3.16: escala, paso 1 — los sitios grandes ya no fallan al final
+
+Una revisión técnica sobre un rastreo de 200 000 páginas mostró que el motor escala, pero algunas líneas de tratamiento de datos no: un `Math.min(...)` sobre un valor por URL hacía fallar el análisis más allá de ~125 000 URL (tras horas de rastreo), y varios bucles eran cuadráticos. **Catorce correcciones pequeñas**: sin spread sobre arrays del tamaño del sitio, índices construidos una sola vez (redirecciones, enlaces salientes, URL más cercana a un 404 buscando primero en la carpeta padre), ejemplos para la IA tomados de la misma carpeta, ordenación de tablas 20× más rápida (un solo `Intl.Collator`), recuento de carpetas del mapa 5× más rápido, tareas de rastreo terminadas reducidas a un resumen, y **escrituras atómicas** para que una parada durante el guardado nunca deje un rastreo truncado. Los próximos pasos compactarán el almacenamiento de enlaces y enviarán el archivo y los datos del navegador en flujo.
 
 ## 📊 Novedades de la 3.15: Google Analytics 4 — páginas huérfanas con tráfico
 
@@ -345,7 +369,10 @@ Cambia entre **2D** y **3D**, colorea por indexabilidad, problemas o profundidad
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang es
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

@@ -2,7 +2,6 @@
 import { LANGS, getT, detailText, detectLang } from './shared/i18n.js';
 import { icon } from './shared/icons.js';
 import { buildReport } from './shared/report.js';
-import { compareResults } from './shared/compare.js';
 import { robotsFlags } from './shared/directives.js';
 import { initFix, refreshFixTexts, renderFixTab, renderFixHistory } from './fix.js';
 import { initAgents } from './agents.js';
@@ -10,8 +9,9 @@ import { summarize, filterSort, summaryHtml, listHtml, detailHtml } from './issu
 import { reconcile, storeKey, summary as planSummary, visible as planVisible, actionTitles as planTitles, defaultStatus as planDefault, cardsHtml as planCardsHtml, tableHtml as planTableHtml, detailHtml as planDetailHtml } from './plan.js';
 import { overviewHtml, playOverview, wireHighlight, pillarsOf, pillarCategories, topActions, strengths } from './overview.js';
 import { createMap, paletteOf } from './viz.js';
-import { buildModel } from './map-model.js';
+import { LazySet, buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
+import { readNdjson } from './shared/ndjson.js';
 import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants, COLORS as MAP_COLORS } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 import { sliceResult, applySegments, assignSegments, segmentStats, issueBySegment, suggestFromFolders, NONE, NONE_COLOR } from './shared/segments.js';
@@ -21,6 +21,13 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const PAGE_SIZE = 100;
+// Comparateur de tri créé une fois par langue : localeCompare(y, locale, options) en recrée un à chaque comparaison
+// (5 s par tri mesurées sur 200 000 lignes).
+const collators = new Map();
+const collatorFor = (locale) => {
+  if (!collators.has(locale)) collators.set(locale, new Intl.Collator(locale, { numeric: true }));
+  return collators.get(locale);
+};
 const agentListeners = [];
 const store = {
   get(k, d = null) {
@@ -85,22 +92,31 @@ function debounce(fn, ms) {
   return (...a) => { clearTimeout(h); h = setTimeout(() => fn(...a), ms); };
 }
 
-function linkGraph() {
-  if (state.graph) return state.graph;
-  const F = state.full || state.R;
-  const { urls, edges } = F.links;
-  const POS = ['content', 'nav', 'header', 'footer', 'aside'];
-  const inl = new Map();
-  const out = new Map();
-  for (const [f, to, a, flags, pos] of edges) {
-    const e = { from: urls[f], to: urls[to], anchor: a, nofollow: !!(flags & 1), internal: !!(flags & 2), image: !!(flags & 4), pos: POS[pos || 0] };
-    if (!out.has(e.from)) out.set(e.from, []);
-    out.get(e.from).push(e);
-    if (!inl.has(e.to)) inl.set(e.to, []);
-    inl.get(e.to).push(e);
-  }
-  state.graph = { inl, out, byUrl: new Map(F.pages.map((p) => [p.url, p])) };
-  return state.graph;
+// Le navigateur ne reçoit plus les liens : le serveur garde le graphe et répond à la demande (liens d'une page,
+// sous-graphe de la carte, fiche complète). Ici, seulement l'index des pages légères.
+const pageOf = (url) => state.byUrl?.get(url);
+const api = (u) => fetch(u).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+// Résultat léger, lu en flux (NDJSON ligne par ligne) : jamais le crawl entier dans une chaîne.
+const fetchLight = () => fetch('/api/result').then((r) => { if (!r.ok) throw new Error(r.statusText); return readNdjson(r.body); });
+const LINKS_PAGE = 200;
+// Liens d'une page (panneau de détail), paginés et mis en cache par page de résultat.
+function linksOf(url, dir, page) {
+  const key = `${url}|${dir}|${page}`;
+  const c = state.linkCache;
+  if (c.has(key)) return c.get(key);
+  c.set(key, null);
+  api(`/api/links?url=${encodeURIComponent(url)}&dir=${dir}&offset=${page * LINKS_PAGE}&limit=${LINKS_PAGE}`)
+    .then((d) => { c.set(key, d); if (state.selected === url && state.detailTab === dir) renderDetail(); })
+    .catch(() => c.delete(key));
+  return null;
+}
+// Fiche complète d'une page (champs que seule la fiche lit), demandée au clic et gardée.
+function fullPageOf(url) {
+  const c = state.pageCache;
+  if (c.has(url)) return c.get(url) || pageOf(url);
+  c.set(url, null);
+  api('/api/page?url=' + encodeURIComponent(url)).then((p) => { c.set(url, p); if (state.selected === url) renderDetail(); }).catch(() => c.delete(url));
+  return pageOf(url);
 }
 
 /* ---------- Colonnes ---------- */
@@ -184,7 +200,7 @@ const TABS = [
   { id: 'neardup', icon: 'copy', rows: (R) => R.nearDuplicates || [],
     cols: [{ k: 'a', l: 'col.pageA', cls: 'trunc', html: (r) => urlCell(r.a) }, { k: 'b', l: 'col.pageB', cls: 'trunc', html: (r) => urlCell(r.b) }, { k: 'similarity', l: 'col.similarity', num: true, html: (r) => `<b>${r.similarity} %</b>` }] },
   { id: 'cannibal', icon: 'target', rows: (R) => (R.cannibalization || []).flatMap((g) => g.urls.map((url) => ({ keyword: g.keyword, url, count: g.urls.length }))),
-    cols: [{ k: 'keyword', l: 'col.keyword' }, { k: 'count', l: 'col.pages', num: true }, C.url, { k: 'title', l: 'col.title', cls: 'trunc', v: (r) => linkGraph().byUrl.get(r.url)?.title || '' }] },
+    cols: [{ k: 'keyword', l: 'col.keyword' }, { k: 'count', l: 'col.pages', num: true }, C.url, { k: 'title', l: 'col.title', cls: 'trunc', v: (r) => pageOf(r.url)?.title || '' }] },
   { id: 'images', icon: 'image', rows: (R) => R.images,
     cols: [{ k: 'src', l: 'col.image', cls: 'trunc', html: (r) => urlCell(r.src) }, { k: 'role', l: 'col.imgSource', v: imgSource }, { k: 'format', l: 'col.format' }, { k: 'variants', l: 'col.variants', num: true }, { k: 'of', l: 'col.mainImage', cls: 'trunc' }, { k: 'alt', l: 'col.alt', cls: 'wrap' }, { k: 'missingAlt', l: 'col.altMissing', v: (r) => (r.missingAlt ? t('ui.yes') : ''), html: (r) => (r.missingAlt ? `<span class="chip warning">${t('ui.yes')}</span>` : '') }, { k: 'size', l: 'col.size', num: true, html: (r) => (r.size == null ? '' : kb(r.size)) }, { k: 'status', l: 'col.status', num: true }, { k: 'pages', l: 'col.pages', num: true }, { k: 'firstPage', l: 'col.foundOn', cls: 'trunc' }],
     filters: { all: () => true, mainImages: (i) => !i.role || i.role === 'src', variantsOnly: (i) => i.role && i.role !== 'src', responsive: (i) => i.responsive, notResponsive: (i) => (!i.role || i.role === 'src') && !i.responsive, legacyFormat: (i) => LEGACY_IMG.has(i.format), altMissing: (i) => i.missingAlt, heavy: (i) => i.size > (TH().largeImageBytes || 153600), broken: (i) => i.status !== null && (i.status === 0 || i.status >= 400) } },
@@ -253,12 +269,18 @@ const navLabel = (id) => {
   return v && v !== k ? v : t('tab.' + id);
 };
 
+// Comptes des onglets calculés une fois par résultat, pas à chaque rendu (35 onglets × toutes les lignes).
+function tabCount(x, R) {
+  if (state.counts?.R !== R) state.counts = { R, map: new Map() };
+  const m = state.counts.map;
+  if (!m.has(x.id)) m.set(x.id, x.count ? x.count(R) : x.rows ? x.rows(R).length : '');
+  return m.get(x.id);
+}
 function tabButton(x) {
   const R = state.R;
   let count = '';
   if (!NO_COUNT.has(x.id)) {
-    if (R && x.count) count = x.count(R);
-    else if (R && x.rows) count = x.rows(R).length;
+    if (R && (x.count || x.rows)) count = tabCount(x, R);
     else if (!R && x.id === 'internal' && state.live.length) count = state.live.length;
   }
   const active = state.tab === x.id;
@@ -382,13 +404,14 @@ function renderTable(view, tab, allRows, opts = {}) {
   const s = state.sort[tab.id];
   if (s) {
     const col = tab.cols.find((c) => c.k === s.k) || tab.cols[0];
+    const collator = collatorFor(t.locale);
     rows.sort((a, b) => {
       const x = cellValue(col, a);
       const y = cellValue(col, b);
       const nx = x == null || x === '';
       const ny = y == null || y === '';
       if (nx || ny) return nx === ny ? 0 : nx ? 1 : -1;
-      const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), t.locale, { numeric: true });
+      const r = typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y));
       return s.desc ? -r : r;
     });
   }
@@ -539,7 +562,7 @@ const segX = () => ({ t, esc, icon, num });
 const segDefs = () => state.full?.meta?.segments || [];
 const segLabel = (id) => (!id ? '' : id === NONE ? t('seg.none') : segDefs().find((s) => s.id === id)?.name || id);
 const segColor = (id) => (id === NONE ? NONE_COLOR : segDefs().find((s) => s.id === id)?.color || NONE_COLOR);
-const segOfUrl = (url) => (segDefs().length ? linkGraph().byUrl.get(url)?.segment || '' : '');
+const segOfUrl = (url) => (segDefs().length ? pageOf(url)?.segment || '' : '');
 const hostKey = () => (state.full?.meta?.startUrl ? new URL(state.full.meta.startUrl).hostname : 'crawl');
 function segCounts() {
   const c = new Map([...segDefs().map((s) => [s.id, 0]), [NONE, 0]]);
@@ -582,7 +605,14 @@ function setSegment(id, { keepIssue = false } = {}) {
   renderDetail();
 }
 function postSegments(segments) {
-  return fetch('/api/segments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ segments }) }).catch(() => {});
+  const F = state.full;
+  return fetch('/api/segments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ segments }) })
+    .then((r) => r.json())
+    .then((d) => {
+      // Compteurs de liens par segment : seuls le serveur les connaît (le navigateur n'a pas les liens).
+      if (d?.linkStats && state.full === F) { F.linkStats = d.linkStats; applyView(); if (state.tab === 'dashboard') render(); }
+    })
+    .catch(() => {});
 }
 function saveSegments(list, { quiet = false } = {}) {
   applySegments(state.full, list);
@@ -929,7 +959,7 @@ function mapCtx() {
     clearLayoutCache();
     state.map = null;
     const t0 = performance.now();
-    const M = buildModel(R, linkGraph());
+    const M = buildModel(R, { counts: state.mapGraph || { inl: {}, linkCount: 0 } });
     performance.measure?.('map:model', { start: t0 });
     state.map = { key, M, expanded: { crawl: new Set(), dir: new Set() }, extra: new Set(), isolate: null, sel: null, tab: 'page', filters: { ...DEFAULT_FILTERS, _mode: 'highlight' }, listPage: 0 };
   }
@@ -941,6 +971,15 @@ async function renderViz(view) {
   // remplacer le contenu, sinon le navigateur relance un rendu au milieu du remplacement (erreur DOM).
   const ae = document.activeElement;
   if (ae && view.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) ae.blur();
+  // Compteurs de la carte (liens entrants distincts par page) : demandés une fois par résultat au serveur.
+  if (!state.mapGraph) {
+    try {
+      state.mapGraph = await api('/api/map-graph');
+    } catch {
+      state.mapGraph = { inl: {}, linkCount: 0 };
+    }
+    state.map = null;
+  }
   const ctx = mapCtx();
   const { M } = ctx;
   ctx.filters.segment = state.segId || '';
@@ -1007,6 +1046,16 @@ async function renderViz(view) {
   ctx.showAll ||= { crawl: new Set(), dir: new Set() };
   const pin = new Set(ctx.sel && o.mode !== 'links' && treeOf(M, o.mode, ctx.key).tree.nodes.has(ctx.sel) ? [ctx.sel, ...ancestorsOf(M, o.mode, ctx.key, ctx.sel)] : []);
   const scene = makeScene(M, { mode: o.mode, dim: o.dim, layout: o.layout, showAll: ctx.showAll[o.mode], pin, expanded: ctx.expanded[o.mode], isolate: ctx.isolate?.mode === o.mode ? ctx.isolate.ids : null, extra: ctx.extra }, ctx.key, t);
+  // Mode maillage : les arêtes entre les nœuds affichés (au plus quelques milliers) sont demandées au serveur.
+  if (o.mode === 'links' && M.lazy && scene.nodes.length) {
+    const ids = scene.nodes.map((n) => n.id);
+    const root = $m('#mapRoot');
+    try {
+      const { edges } = await fetch('/api/map-edges', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ urls: ids }) }).then((r) => r.json());
+      scene.links = edges.map(([a, b]) => ({ s: ids[a], t: ids[b] }));
+    } catch { scene.links = []; }
+    if ($m('#mapRoot') !== root) return; // un autre rendu a pris la main pendant l'attente
+  }
   const byId = new Map(scene.nodes.map((n) => [n.id, n]));
   const crawl = treeOf(M, 'crawl', ctx.key);
   const dirColor = (() => { const m = new Map(dirs.slice(0, P.dir.length).map((d, i) => [d, i])); return (n) => (n.url ? (m.has(M.dirOf(n.url)) ? P.dir[m.get(M.dirOf(n.url))] : P.unknown) : null); })();
@@ -1064,11 +1113,19 @@ async function renderViz(view) {
     el.hidden = !path.length;
     el.innerHTML = path.length ? `<span class="muted">${esc(t('map.discoveryPath'))} :</span> ${path.map((s, i) => `<button class="link${i === path.length - 1 ? ' cur' : ''}" data-goto="${esc(s.url || '')}">${esc(s.label)}</button>`).join(' <span class="muted">›</span> ')} <span class="muted">· ${esc(t('map.clicks', { n: pathClicks(path) }))}</span>` : '';
   };
+  // Voisins d'une page dans la carte (listes de l'inspecteur) : demandés au serveur à la première sélection.
+  const neighborsLoaded = (url) => !M.lazy || !url || (M.inl.get(url)?.has && M.out.get(url)?.has && !(M.inl.get(url) instanceof LazySet));
+  const loadNeighbors = async (url) => {
+    const [i, o2] = await Promise.all([api(`/api/links?url=${encodeURIComponent(url)}&dir=in&map=1&limit=1000`), api(`/api/links?url=${encodeURIComponent(url)}&dir=out&map=1&limit=1000`)]);
+    M.inl.set(url, new Set(i.items.map((x) => x.url)));
+    M.out.set(url, new Set(o2.items.map((x) => x.url)));
+  };
   const inspector = () => {
     const node = ctx.sel ? byId.get(ctx.sel) || (M.byUrl.has(ctx.sel) ? { id: ctx.sel, kind: 'page', url: ctx.sel, page: M.byUrl.get(ctx.sel) } : null) : null;
     const insp = $m('#mapInspector');
     insp.innerHTML = inspectorHtml({ M, node, tab: ctx.tab, mode: o.mode, crawlPath: node?.url ? crawlPathOf(node.url) : [], inferred: crawl.tree.inferred, isolate: ctx.isolate }, mapX());
     wireInspector(node);
+    if (node?.url && !neighborsLoaded(node.url)) loadNeighbors(node.url).then(() => ctx.sel === node.id && $m('#mapInspector') && inspector()).catch(() => {});
   };
   const select = (id, { focus = false } = {}) => {
     ctx.sel = id;
@@ -1375,7 +1432,7 @@ function renderDetail() {
   const url = state.selected;
   // Le panneau accompagne un tableau : sur les autres pages il se cache (la sélection est gardée pour le retour).
   if (!url || !TAB_BY_ID[state.tab]?.rows) { box.hidden = true; return; }
-  const p = state.R ? linkGraph().byUrl.get(url) : state.live.find((x) => x.url === url);
+  const p = state.R ? (state.detailTab === 'details' || state.detailTab === 'serp' || state.detailTab === 'js' ? fullPageOf(url) : pageOf(url)) : state.live.find((x) => x.url === url);
   box.hidden = false;
   const pageIssues = state.R ? (state.full || state.R).issues.filter((i) => i.items.some((it) => it.url === url)) : [];
   const tabs = state.R ? ['details', 'issues', 'serp', 'in', 'out', ...(p?.js ? ['js'] : [])] : ['details'];
@@ -1387,15 +1444,20 @@ function renderDetail() {
   else if (state.detailTab === 'serp') body = serpPreview(p);
   else if (state.detailTab === 'js') body = jsCompare(p);
   else {
-    const g = linkGraph();
-    const list = (state.detailTab === 'in' ? g.inl.get(url) : g.out.get(url)) || [];
-    const other = state.detailTab === 'in' ? 'from' : 'to';
-    body = list.length ? `<div class="table-wrap"><table><thead><tr><th>${esc(t(state.detailTab === 'in' ? 'detail.from' : 'detail.to'))}</th><th>${esc(t('col.anchor'))}</th><th>${esc(t('detail.position'))}</th><th>${esc(t('col.type'))}</th><th>${esc(t('col.status'))}</th></tr></thead><tbody>${list.slice(0, 1000).map((e) => {
-      const target = g.byUrl.get(e[other]);
-      return `<tr data-url="${esc(e[other])}"><td class="trunc">${esc(e[other])}</td><td class="trunc">${e.anchor ? esc(e.anchor) : `<span class="muted">${esc(t(e.image ? 'detail.imageNoAlt' : 'detail.noAnchor'))}</span>`}</td><td>${esc(t('pos.' + e.pos))}</td><td>${esc(e.internal ? t('ui.internal') : t('ui.external'))}${e.nofollow ? ' <span class="chip warning">nofollow</span>' : ''}</td><td>${target ? `<span class="${statusCls(target.status)}">${target.status || '—'}</span>` : ''}</td></tr>`;
-    }).join('')}</tbody></table></div>` : `<p class="muted">${esc(t('detail.noLinks'))}</p>`;
+    // Liens de la page, demandés au serveur et paginés (plus de coupure silencieuse à 1 000).
+    const dir = state.detailTab;
+    const pg = state.linkPage?.[url + dir] || 0;
+    const data = linksOf(url, dir, pg);
+    const other = dir === 'in' ? 'from' : 'to';
+    if (!data) body = `<p class="muted">${esc(t('ui.loading'))}</p>`;
+    else if (!data.total) body = `<p class="muted">${esc(t('detail.noLinks'))}</p>`;
+    else {
+      const pages = Math.ceil(data.total / LINKS_PAGE);
+      body = `<div class="table-wrap"><table><thead><tr><th>${esc(t(dir === 'in' ? 'detail.from' : 'detail.to'))}</th><th>${esc(t('col.anchor'))}</th><th>${esc(t('detail.position'))}</th><th>${esc(t('col.type'))}</th><th>${esc(t('col.status'))}</th></tr></thead><tbody>${data.items.map((e) => `<tr data-url="${esc(e[other])}"><td class="trunc">${esc(e[other])}</td><td class="trunc">${e.anchor ? esc(e.anchor) : `<span class="muted">${esc(t(e.image ? 'detail.imageNoAlt' : 'detail.noAnchor'))}</span>`}</td><td>${esc(t('pos.' + e.pos))}</td><td>${esc(e.internal ? t('ui.internal') : t('ui.external'))}${e.nofollow ? ' <span class="chip warning">nofollow</span>' : ''}</td><td>${e.status != null ? `<span class="${statusCls(e.status)}">${e.status || '—'}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>${pages > 1 ? `<div class="pager"><button class="btn small" data-lpage="${pg - 1}" ${pg <= 0 ? 'disabled' : ''}>‹</button><span class="muted">${num(pg * LINKS_PAGE + 1)}–${num(Math.min(data.total, (pg + 1) * LINKS_PAGE))} / ${num(data.total)}</span><button class="btn small" data-lpage="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>›</button></div>` : ''}`;
+    }
   }
-  const label = (k) => (k === 'in' || k === 'out' ? `${t('detail.' + k)} <span class="count">${num(((k === 'in' ? linkGraph().inl : linkGraph().out).get(url) || []).length)}</span>` : k === 'issues' ? `${esc(t('detail.issues'))} <span class="count${pageIssues.length ? ' warn' : ''}">${num(pageIssues.length)}</span>` : esc(t('detail.' + k)));
+  const linkTotal = (k) => { const d = state.linkCache.get(`${url}|${k}|0`); return d ? num(d.total) : k === 'in' ? num(p?.uniqueInlinks ?? 0) : num((p?.internalOutlinks || 0) + (p?.externalOutlinks || 0)); };
+  const label = (k) => (k === 'in' || k === 'out' ? `${t('detail.' + k)} <span class="count">${linkTotal(k)}</span>` : k === 'issues' ? `${esc(t('detail.issues'))} <span class="count${pageIssues.length ? ' warn' : ''}">${num(pageIssues.length)}</span>` : esc(t('detail.' + k)));
   box.innerHTML = `<div class="resizer" title="${esc(t('detail.resize'))}"></div><div class="detail-head">
       <span class="url" title="${esc(url)}">${esc(url)}</span>
       <div class="detail-tabs">${tabs.map((k) => `<button data-dt="${k}" class="${state.detailTab === k ? 'active' : ''}">${label(k)}</button>`).join('')}</div>
@@ -1406,6 +1468,7 @@ function renderDetail() {
   $('#closeDetail').addEventListener('click', () => { state.selected = null; renderDetail(); });
   box.querySelectorAll('tr[data-url]').forEach((tr) => tr.addEventListener('click', () => selectUrl(tr.dataset.url)));
   box.querySelectorAll('tr[data-issue]').forEach((tr) => tr.addEventListener('click', () => openIssue(tr.dataset.issue)));
+  box.querySelectorAll('[data-lpage]').forEach((b) => b.addEventListener('click', () => { (state.linkPage ||= {})[url + state.detailTab] = Number(b.dataset.lpage); renderDetail(); }));
   initResizer(box);
 }
 
@@ -1510,7 +1573,13 @@ function exportCsv(tab, rows, fname, title) {
 
 $('#exportJsonBtn').addEventListener('click', () => {
   if (!state.R) return;
-  download(`${hostOf()}_${state.R.meta.finishedAt.slice(0, 10)}.json`, JSON.stringify(state.full || state.R), 'application/json');
+  // Le crawl complet (liens compris) ne vit que sur le serveur : il l'écrit en flux, au format des fichiers enregistrés.
+  const a = document.createElement('a');
+  a.href = '/api/export';
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 });
 $('#exportIssuesBtn')?.addEventListener('click', () => exportAllIssues());
 function exportAllIssues() {
@@ -1566,10 +1635,7 @@ $('#reportForm').addEventListener('submit', async (e) => {
   const saved = { ...store.get('report', {}), ...opts };
   store.set('report', saved);
   let compare = null;
-  if (form.compare.value) {
-    const prev = await fetch('/api/crawls/' + encodeURIComponent(form.compare.value)).then((r) => r.json()).catch(() => null);
-    compare = compareResults(state.R, prev);
-  }
+  if (form.compare.value) compare = await api('/api/compare?with=' + encodeURIComponent(form.compare.value)).catch(() => null);
   const rt = await getT(opts.lang);
   const html = buildReport(state.R, { ...saved, compare: state.segId ? null : compare, segments: segDefs().length ? segmentStats(state.full) : null }, rt);
   $('#reportDialog').close();
@@ -1584,7 +1650,7 @@ $('#reportForm').addEventListener('submit', async (e) => {
 });
 
 /* ---------- Chargement ---------- */
-async function loadResult(R, { sync = true, file = null } = {}) {
+async function loadResult(R, { file = null } = {}) {
   if (!R || !R.pages || !R.summary) throw new Error(t('toast.invalidFile'));
   // Segments : ceux du crawl, sinon ceux déjà utilisés pour ce site (appliqués sans recrawler).
   const host = R.meta?.startUrl ? new URL(R.meta.startUrl).hostname : 'crawl';
@@ -1597,12 +1663,16 @@ async function loadResult(R, { sync = true, file = null } = {}) {
       segChanged = true;
     }
   }
-  // Crawl ouvert depuis un fichier : le serveur l'adopte aussi, pour que Corrections et MCP voient le même audit.
-  if (sync) fetch('/api/result' + (file ? '?file=' + encodeURIComponent(file) : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) }).catch(() => {});
-  else if (segChanged) postSegments(R.meta.segments);
+  if (segChanged) postSegments(R.meta.segments);
   if (!R.version || R.version < 2) toast(t('toast.oldVersion'), 'info');
   state.full = R;
   state.R = R;
+  state.byUrl = new Map(R.pages.map((p) => [p.url, p]));
+  state.linkCache = new Map();
+  state.pageCache = new Map();
+  state.linkPage = {};
+  state.mapGraph = null;
+  state.counts = null;
   const savedSeg = store.get('seg:' + host, '');
   state.segId = savedSeg && (savedSeg === NONE || (R.meta.segments || []).some((s) => s.id === savedSeg)) ? savedSeg : '';
   applyView();
@@ -1625,16 +1695,20 @@ async function loadResult(R, { sync = true, file = null } = {}) {
     const host = hostOf();
     const prevMeta = list.find((c) => c.host === host && c.finishedAt && c.finishedAt < R.meta.finishedAt);
     if (!prevMeta || state.R !== R) return;
-    const prev = await fetch('/api/crawls/' + encodeURIComponent(prevMeta.file)).then((r) => r.json());
-    state.compare = compareResults(R, prev);
+    // Comparaison calculée par le serveur : seul le petit diff arrive ici, pas le crawl précédent entier.
+    const cmp = await api('/api/compare?with=' + encodeURIComponent(prevMeta.file));
+    if (state.full !== R) return;
+    state.compare = cmp;
     if (state.tab === 'dashboard') render();
   }).catch(() => {});
 }
 
+// Crawl enregistré : le serveur l'ouvre lui-même (plus d'aller-retour du fichier), puis envoie le résultat léger.
 async function openSaved(file) {
   try {
-    const R = await fetch('/api/crawls/' + encodeURIComponent(file)).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
-    await loadResult(R, { file });
+    const r = await fetch('/api/open?file=' + encodeURIComponent(file), { method: 'POST' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+    await loadResult(await fetchLight(), { file });
   } catch (err) {
     toast(t('toast.openFailed') + ' ' + err.message, 'error');
   }
@@ -1644,7 +1718,10 @@ $('#importInput').addEventListener('change', async (e) => {
   const f = e.target.files[0];
   if (!f) return;
   try {
-    await loadResult(JSON.parse(await f.text()));
+    // Fichier JSON (anciens exports) ou NDJSON gzip : le serveur le lit en flux, le navigateur reçoit le résultat léger.
+    const r = await fetch('/api/import', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: f });
+    if (!r.ok) throw new Error(t((await r.json().catch(() => ({}))).key || 'toast.invalidFile'));
+    await loadResult(await fetchLight());
   } catch (err) {
     toast(t('toast.openFailed') + ' ' + err.message, 'error');
   }
@@ -1780,7 +1857,7 @@ $('#scheduleBtn').addEventListener('click', () => openSchedules());
 /* ---------- Configuration & lancement ---------- */
 const configForm = $('#configForm');
 const configDialog = $('#configDialog');
-const SECRET = new Set(['httpPass']); // jamais enregistré dans le navigateur
+const SECRET = new Set(['httpPass', 'customHeaders']); // jamais enregistrés dans le navigateur : un en-tête porte souvent un cookie de session ou un jeton
 const DEFAULTS = {};
 configForm.querySelectorAll('[name]').forEach((el) => {
   if (el.type === 'radio') { if (el.checked) DEFAULTS[el.name] = el.value; } else DEFAULTS[el.name] = el.type === 'checkbox' ? el.checked : el.value;
@@ -1823,7 +1900,7 @@ function saveOptions() {
 function extractorRow(e = {}) {
   return `<div class="ex-row">
     <input class="ex-name" type="text" placeholder="${esc(t('cfg.exName'))}" value="${esc(e.name || '')}">
-    <select class="ex-type"><option value="css" ${e.type !== 'regex' ? 'selected' : ''}>CSS</option><option value="regex" ${e.type === 'regex' ? 'selected' : ''}>Regex</option></select>
+    <select class="ex-type"><option value="css" ${e.type !== 'regex' && e.type !== 'xpath' ? 'selected' : ''}>CSS</option><option value="xpath" ${e.type === 'xpath' ? 'selected' : ''}>XPath</option><option value="regex" ${e.type === 'regex' ? 'selected' : ''}>Regex</option></select>
     <input class="ex-sel mono" type="text" placeholder="${esc(t('cfg.exSelector'))}" value="${esc(e.selector || '')}">
     <select class="ex-target">${['text', 'attr', 'html', 'count'].map((x) => `<option value="${x}" ${e.target === x ? 'selected' : ''}>${esc(t('cfg.ex.' + x))}</option>`).join('')}</select>
     <input class="ex-attr" type="text" placeholder="href" value="${esc(e.attr || '')}" ${e.target === 'attr' ? '' : 'hidden'}>
@@ -2051,11 +2128,11 @@ function connect() {
     render();
     if (d.via === 'agent') toast(t('seg.saved', { n: segDefs().length }), 'info');
   });
-  es.addEventListener('pages', (e) => { state.live.push(...JSON.parse(e.data)); throttledRender(); });
+  es.addEventListener('pages', (e) => { for (const r of JSON.parse(e.data)) state.live.push(r); throttledRender(); });
   es.addEventListener('done', async () => {
     setRunning(false);
     try {
-      await loadResult(await fetch('/api/result').then((r) => r.json()), { sync: false });
+      await loadResult(await fetchLight());
       toast(t('toast.done'), 'ok');
     } catch (err) { toast(err.message, 'error'); }
   });
@@ -2123,6 +2200,6 @@ document.addEventListener('keydown', (e) => {
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());
-    if (s.hasResult && !s.running) await loadResult(await fetch('/api/result').then((r) => r.json()), { sync: false });
+    if (s.hasResult && !s.running) await loadResult(await fetchLight());
   } catch { /* serveur indisponible */ }
 })();

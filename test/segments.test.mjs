@@ -11,6 +11,7 @@ import { Crawler } from '../src/crawler.mjs';
 import { toCrawlerOptions } from '../src/options.mjs';
 import { getT } from '../public/shared/i18n.js';
 import { buildReport } from '../public/shared/report.js';
+import { readResultFile, crawlId } from '../src/store.mjs';
 import { normalizeSegments, compileSegments, assignSegments, applySegments, sliceResult, computeSummary, segmentStats, issueBySegment, suggestFromFolders, NONE } from '../public/shared/segments.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -171,11 +172,17 @@ test('API et outils agents : segments enregistrés avec le crawl, filtre « segm
     }
     assert.ok(st.hasResult);
     // Depuis l'interface : appliqués sans recrawler, enregistrés dans le fichier du crawl.
-    const saved = await post('/api/segments', { segments: SEGS });
-    assert.equal(saved.status, 200);
-    assert.deepEqual(saved.body.segments.map((s) => s.id), ['blog', 'delf']);
-    assert.deepEqual(saved.body.stats.map((g) => g.id), ['blog', 'delf', NONE]);
-    const file = JSON.parse(await fs.readFile(path.join(home, 'crawls', st.file), 'utf8'));
+    const posted = await post('/api/segments', { segments: SEGS });
+    assert.equal(posted.status, 200);
+    assert.deepEqual(posted.body.segments.map((s) => s.id), ['blog', 'delf']);
+    assert.deepEqual(posted.body.stats.map((g) => g.id), ['blog', 'delf', NONE]);
+    // Segments modifiés après le crawl : fichier voisin <nom>.segments.json, le crawl lui-même n'est pas réécrit.
+    const saved = async () => {
+      const R = await readResultFile(path.join(home, 'crawls', st.file));
+      applySegments(R, JSON.parse(await fs.readFile(path.join(home, 'crawls', crawlId(st.file) + '.segments.json'), 'utf8')));
+      return R;
+    };
+    const file = await saved();
     assert.deepEqual(file.meta.segments.map((s) => s.id), ['blog', 'delf']);
     assert.ok(file.pages.some((p) => p.segment === 'delf'));
     assert.deepEqual((await j('/api/segments')).body.segments.map((s) => s.id), ['blog', 'delf']);
@@ -207,7 +214,7 @@ test('API et outils agents : segments enregistrés avec le crawl, filtre « segm
     const set = await post('/api/agent/arachnide_segments', { action: 'set', segments: [{ name: 'Espagnol', rules: [{ field: 'path', op: 'startsWith', value: '/es/' }] }] }, H);
     assert.equal(set.status, 200);
     assert.deepEqual((await j('/api/segments')).body.segments.map((s) => s.id), ['espagnol']);
-    const file2 = JSON.parse(await fs.readFile(path.join(home, 'crawls', st.file), 'utf8'));
+    const file2 = await saved();
     assert.deepEqual(file2.meta.segments.map((s) => s.id), ['espagnol']);
   } finally {
     child.kill();

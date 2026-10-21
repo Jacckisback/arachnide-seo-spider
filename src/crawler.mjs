@@ -1,5 +1,9 @@
 // Moteur de crawl : file d'attente BFS, concurrence, robots.txt, sitemaps, redirections manuelles, rendu JS optionnel.
 import { EventEmitter } from 'node:events';
+import { createWriteStream, createReadStream } from 'node:fs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import readline from 'node:readline';
 import zlib from 'node:zlib';
 import { parseHtml, resolveUrl } from './parse.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
@@ -7,12 +11,51 @@ import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
 import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
+import { Interner, LinkStore, FLAG } from './graph.mjs';
+import { RegexRunner } from './regex-runner.mjs';
+import { xpathExtract } from './xpath.mjs';
 
-export const VERSION = '3.15.0';
+export const VERSION = '3.21.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
-const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: new Set(), missingAlt: false, pages: new Set(), status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
+// Pages qui utilisent une image ou un lien externe : les pages étant traitées une par une, un compteur et la dernière
+// page vue suffisent à compter les pages distinctes, sans Set par image (il y en a des centaines de milliers).
+const MAX_ALTS = 5;
+const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: [], missingAlt: false, pages: 0, firstPage: '', lastPage: '', status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
+// Paramètres de suivi retirés par défaut : ils ne changent pas la page (RFC 3986 ne les distingue pas, Google les ignore).
+const TRACKING_PARAMS = /^(utm_[a-z0-9_]+|gclid|gclsrc|dclid|gbraid|wbraid|fbclid|msclkid|mc_cid|mc_eid|yclid|twclid|ttclid|igshid|srsltid|_hsenc|_hsmi|hsctatracking|mkt_tok|vero_id|s_kwcid|ef_id|zanpid|_ga|_gl|_gid|_ke|oly_enc_id|oly_anon_id|rb_clickid|trk_[a-z0-9_]+|ref_src|ref_url)$/i;
+// Facettes : au-delà de ce nombre de variantes de paramètres sur un même chemin, le site est probablement un piège à facettes.
+const FACET_WARN = 200;
+const FACET_PATHS_MAX = 20;
+// Budget de pages : au-delà de maxPages × ce facteur d'URL découvertes, la file cesse de grandir (mémoire bornée).
+const DISCOVERY_FACTOR = 4;
+const RETRY_STATUS = new Set([500, 502, 504]);
+const RETRY_DELAY_MS = 5000;
+const newExternal = (url) => ({ url, status: null, statusText: '', inlinks: 0, pages: 0, firstPage: '', lastPage: '' });
+// Options rejouables : tout ce qui se sérialise (les fonctions injectées pour les tests sont ignorées).
+const journalOpts = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v !== 'function' && v !== undefined));
+// Corps de réponse lu en flux : abandonné dès que la limite est dépassée, sans attendre la fin du téléchargement.
+async function readBodyLimited(res, maxBytes) {
+  if (!res.body) return { buf: new Uint8Array(await res.arrayBuffer()) };
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.byteLength;
+    if (size > maxBytes) {
+      await res.body.cancel().catch(() => {});
+      return { tooLarge: true, size };
+    }
+    chunks.push(chunk);
+  }
+  return { buf: Buffer.concat(chunks) };
+}
+const seenOn = (rec, pageUrl) => {
+  if (rec.lastPage === pageUrl) return;
+  rec.lastPage = pageUrl;
+  rec.pages++;
+  if (!rec.firstPage) rec.firstPage = pageUrl;
+};
 
 export const DEFAULT_UA = 'Mozilla/5.0 (compatible; ArachnideSEO/2.0; +https://github.com/Jacckisback/arachnide-seo-spider)';
 export const USER_AGENTS = {
@@ -80,7 +123,12 @@ export const DEFAULT_OPTIONS = {
   maxRedirects: 10, // redirections suivies dans une chaîne
   maxUrlLength: 2000,
   maxLinksPerPage: 10000,
-  maxPageSizeKb: 51200, // 50 Mo
+  maxPageSizeKb: 51200, // 50 Mo, lu en flux : au-delà, le corps est abandonné
+  maxSitemapKb: 51200, // taille maximale d'un fichier sitemap ou robots.txt
+  normalizeParams: true, // paramètres d'URL triés, paramètres de suivi (utm_*, gclid, fbclid…) retirés
+  robotsUnavailable: 'disallow', // robots.txt en 5xx ou injoignable : tout interdit (RFC 9309 § 2.3.1.4) ; 'allow' pour crawler quand même
+  renderRestartEvery: 500, // Chrome relancé toutes les N pages rendues, pour borner sa mémoire
+  sitemapUrl: '', // mode liste : URL d'un sitemap (ou index) qui fournit la liste
   pathLimits: [], // [{ pattern: '/blog/', max: 200 }]
   // Vitesse
   maxUrlPerSec: 0, // 0 = illimité ; plafond global de requêtes par seconde
@@ -173,8 +221,9 @@ export class Crawler extends EventEmitter {
     const fix = (x) => startUrlOf(x);
     if (this.opts.mode === 'list') {
       this.listUrls = [...new Set((this.opts.urls || []).map((x) => { try { return fix(x); } catch { return null; } }).filter(Boolean))];
-      if (!this.listUrls.length) throw new Error('URL list is empty');
-      startUrl = this.listUrls[0];
+      // Liste issue d'un sitemap : remplie au démarrage par le lecteur de sitemaps (sitemapUrlsFrom).
+      if (!this.listUrls.length && !this.opts.sitemapUrl) throw new Error('URL list is empty');
+      startUrl = this.listUrls[0] || new URL(this.opts.sitemapUrl).origin + '/';
       this.opts.maxPages = Math.max(this.opts.maxPages, this.listUrls.length);
     }
     this.startUrl = fix(startUrl);
@@ -207,11 +256,28 @@ export class Crawler extends EventEmitter {
     this.qHead = 0;
     this.deferred = []; // URLs issues des sitemaps, crawlées en dernier
     this.seen = new Set();
-    this.links = []; // {from, to, anchor, nofollow}
-    this.images = new Map(); // url -> {src, role: src|srcset|source, of, alts: Set, missingAlt, pages: Set, status, size, …}
-    this.externals = new Map(); // url -> {url, status, inlinks}
+    // Liens en colonnes d'entiers (src/graph.mjs) : URL et ancres internées, 14 octets par lien.
+    this.urls = new Interner();
+    this.anchors = new Interner();
+    this.links = new LinkStore(this.urls, this.anchors);
+    this.images = new Map(); // url -> {src, role: src|srcset|source, of, alts: [], missingAlt, pages, firstPage, status, size, …}
+    this.externals = new Map(); // url -> {url, status, inlinks, pages, firstPage}
     this.sitemapUrls = new Set();
     this.sitemapFiles = [];
+    // Journal de reprise (NDJSON en ajout seul) : une ligne par URL mise en file, une par page traitée.
+    this.journal = null;
+    this.journalFile = null;
+    this.resumeFile = null;
+    this.resumed = false;
+    // Garde-fous : pages réellement téléchargées (budget), variantes de paramètres par chemin (facettes),
+    // robots.txt par origine (mode liste, sous-domaines), extraction regex hors du fil principal, rendus comptés.
+    this.fetched = 0;
+    this.variants = new Map();
+    this.facetWarned = new Set();
+    this.robotsByOrigin = new Map();
+    this.regexRunner = null;
+    this.rendered = 0;
+    this.rendererRestarts = 0;
     this.robotsRules = [];
     this.robotsTxt = null;
     this.active = 0;
@@ -247,6 +313,20 @@ export class Crawler extends EventEmitter {
             }
             return kv && !this.removeParamRes.some((re) => re.test(k));
           });
+        u.search = kept.length ? '?' + kept.join('&') : '';
+      }
+      if (u.search && this.opts.normalizeParams) {
+        // ?b=2&a=1 et ?a=1&b=2 sont la même page : paramètres triés par clé ; les paramètres de suivi sont retirés.
+        const pairs = u.search.slice(1).split('&').filter(Boolean);
+        const keyOf = (kv) => {
+          let k = kv.split('=')[0];
+          try {
+            k = decodeURIComponent(k.replace(/\+/g, ' '));
+          } catch {}
+          return k;
+        };
+        const kept = pairs.filter((kv) => !TRACKING_PARAMS.test(keyOf(kv)));
+        kept.sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : keyOf(a) > keyOf(b) ? 1 : 0));
         u.search = kept.length ? '?' + kept.join('&') : '';
       }
       if (u.search) u.search = upperHex(u.search);
@@ -325,10 +405,83 @@ export class Crawler extends EventEmitter {
       if (pl && pl.count >= pl.max) return this.skip('path');
       if (pl) pl.count++;
     }
-    if (this.seen.size >= o.maxPages) return this.skip('total');
+    // maxPages compte les pages téléchargées (voir worker) ; ici seulement une borne de mémoire sur la découverte.
+    if (this.seen.size >= o.maxPages * DISCOVERY_FACTOR + 1000) return this.skip('total');
     this.seen.add(n);
+    this.noteVariant(n);
     this.depthCounts.set(depth, (this.depthCounts.get(depth) || 0) + 1);
     this.queue.push({ url: n, depth, via, hops });
+    this.jlog({ t: 'q', u: n, d: depth, v: via, h: hops });
+  }
+
+  // Facettes : un même chemin qui produit un grand nombre de variantes de paramètres est la signature d'un piège
+  // à facettes (filtres combinables). Signalé une fois par chemin, pour que l'utilisateur borne les paramètres.
+  noteVariant(url) {
+    const q = url.indexOf('?');
+    if (q < 0) return;
+    const path = url.slice(0, q);
+    const n = (this.variants.get(path) || 0) + 1;
+    this.variants.set(path, n);
+    if (n === FACET_WARN && this.facetWarned.size < FACET_PATHS_MAX) {
+      this.facetWarned.add(path);
+      this.warn('warn.facets', { path: new URL(path).pathname, n });
+    }
+  }
+
+  // ---- Journal de reprise ----
+  // Tout est en ajout seul : un arrêt brutal ne perd que les dernières secondes. La reprise relit le journal dans
+  // l'ordre (les lignes q reconstituent la file et « seen », les lignes p les pages faites, leurs liens et leurs images),
+  // puis crawle ce qui est en file sans être fait. Les identifiants d'URL (src/graph.mjs) sont attribués dans l'ordre
+  // de lecture : ils se reconstruisent à l'identique.
+  async openJournal(file, { fresh = true } = {}) {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    this.journalFile = file;
+    this.journal = createWriteStream(file, { flags: 'a' });
+    if (fresh) this.jlog({ t: 'start', version: VERSION, url: this.startUrl, opts: journalOpts(this.opts), startedAt: new Date().toISOString() });
+  }
+  jlog(rec) {
+    if (this.journal) this.journal.write(JSON.stringify(rec) + '\n');
+  }
+  async closeJournal({ remove = false } = {}) {
+    if (!this.journal) return;
+    const j = this.journal;
+    this.journal = null;
+    await new Promise((r) => j.end(r));
+    if (remove) await fs.unlink(this.journalFile).catch(() => {});
+  }
+  // Crawler reconstitué depuis un journal : mêmes options, même URL de départ, file et pages rejouées.
+  static async resume(file, extra = {}) {
+    let head = null;
+    for await (const line of readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity })) {
+      if (line) head = JSON.parse(line);
+      break;
+    }
+    if (!head || head.t !== 'start') throw new Error('Not a crawl journal: ' + file);
+    const c = new Crawler(head.url, { ...head.opts, ...extra });
+    c.startedAt = head.startedAt;
+    c.resumeFile = file; // rejoué au démarrage, une fois le périmètre du site connu (resolveStart)
+    c.resumed = true;
+    return c;
+  }
+  async replay(file) {
+    let n = 0;
+    for await (const line of readline.createInterface({ input: createReadStream(file), crlfDelay: Infinity })) {
+      if (!line) continue;
+      let rec;
+      try {
+        rec = JSON.parse(line);
+      } catch {
+        continue; // dernière ligne tronquée par l'arrêt
+      }
+      if (rec.t === 'q' && rec.r) this.queue.push({ url: rec.u, depth: rec.d, via: rec.v, hops: rec.h, retry: rec.r });
+      else if (rec.t === 'q') this.enqueue(rec.u, rec.d, rec.v, rec.h);
+      else if (rec.t === 'p') {
+        this.settle({ url: rec.rec.url, depth: rec.rec.depth, via: rec.rec.via }, rec.rec, rec.d, true);
+        n++;
+      }
+    }
+    this.emit('resumed', { pages: this.pages.size, queued: this.queue.length - this.qHead });
+    return n;
   }
 
   // Vitesse : plafond global de requêtes par seconde, partagé par tous les workers.
@@ -384,7 +537,12 @@ export class Crawler extends EventEmitter {
           await res.body?.cancel();
           return null;
         }
-        let buf = Buffer.from(await res.arrayBuffer());
+        const body = await readBodyLimited(res, this.opts.maxSitemapKb * 1024);
+        if (body.tooLarge) {
+          info.tooLarge = true;
+          return null;
+        }
+        let buf = Buffer.from(body.buf);
         // Un .gz servi avec Content-Encoding: gzip est déjà décompressé par fetch : seuls les octets magiques comptent.
         if (buf[0] === 0x1f && buf[1] === 0x8b) {
           try {
@@ -471,6 +629,10 @@ export class Crawler extends EventEmitter {
     const robots = this.robotsTxt ? parseRobots(this.robotsTxt) : null;
     this.robotsRules = robots ? rulesFor(robots, this.opts.userAgent) : [];
     const unknown = this.robotsUnreadable && !this.opts.customRobots;
+    // RFC 9309 § 2.3.1.4 : robots.txt en 5xx ou injoignable = tout interdit ; § 2.3.1.3 : 4xx = tout permis.
+    this.robotsBlockAll = this.blockAllFor(rInfo, robotsHtml);
+    if (this.robotsBlockAll) this.warn('warn.robotsDisallowAll', { status: rInfo.status || rInfo.error || '—' });
+    this.robotsByOrigin.set(this.origin, { rules: this.robotsRules, blockAll: this.robotsBlockAll });
     this.botAccess = BOTS.map((bot) => ({ bot, allowed: unknown ? null : robots ? isAllowed(rulesFor(robots, bot), '/') : true }));
     if (!this.opts.useSitemaps || this.opts.mode === 'list') return;
 
@@ -494,7 +656,7 @@ export class Crawler extends EventEmitter {
         // Sitemaps d'images, de vidéos ou d'actualités : ils ne listent pas de pages, inutile d'épuiser le quota.
         const pages = locs.filter((l) => !/(^|[/_-])(image|video|news)[-_]?sitemap|sitemap[-_](image|video|news)/i.test(l));
         // Index : les sitemaps de pages passent avant les sitemaps imbriqués suivants (parcours en largeur).
-        toFetch.push(...pages);
+        for (const p of pages) toFetch.push(p); // pas de spread : un index de sitemaps peut lister des centaines de milliers d'entrées
         this.sitemapFiles.push({ url: sm, type: 'index', count: locs.length });
       } else {
         let n = 0;
@@ -518,11 +680,34 @@ export class Crawler extends EventEmitter {
     if (this.sitemapsTruncated) this.warn('warn.sitemapsTruncated', { n: MAX_FILES });
   }
 
+  blockAllFor(info, html) {
+    if (this.opts.customRobots || this.opts.robotsMode !== 'respect' || this.opts.robotsUnavailable !== 'disallow') return false;
+    return !html && (info.status === 0 || info.status == null || info.status >= 500);
+  }
+
+  // robots.txt d'une autre origine du périmètre (mode liste, sous-domaines) : lu à la première URL de cet hôte.
+  async ensureRobots(origin) {
+    const known = this.robotsByOrigin.get(origin);
+    if (known) return known.ready; // un seul téléchargement par origine ; les autres workers attendent la même promesse
+    const entry = { rules: [], blockAll: false, ready: null };
+    this.robotsByOrigin.set(origin, entry);
+    entry.ready = (async () => {
+      const info = {};
+      const txt = await this.fetchText(origin + '/robots.txt', info);
+      const html = txt != null && /<(html|head|body)[\s>]/i.test(txt.slice(0, 1000));
+      if (txt && !html && info.status === 200) entry.rules = rulesFor(parseRobots(txt), this.opts.userAgent);
+      entry.blockAll = this.blockAllFor(info, html);
+    })();
+    return entry.ready;
+  }
+
   blockedByRobots(url) {
-    if (this.opts.robotsMode === 'ignore' || !this.robotsRules.length) return false;
+    if (this.opts.robotsMode === 'ignore') return false;
     const u = new URL(url);
-    if (u.origin !== this.origin) return false;
-    return !isAllowed(this.robotsRules, u.pathname + u.search);
+    const entry = u.origin === this.origin ? { rules: this.robotsRules, blockAll: this.robotsBlockAll } : this.robotsByOrigin.get(u.origin);
+    if (!entry) return false;
+    if (entry.blockAll) return true;
+    return entry.rules.length ? !isAllowed(entry.rules, u.pathname + u.search) : false;
   }
 
   setPhase(phase) {
@@ -566,6 +751,15 @@ export class Crawler extends EventEmitter {
     await this.resolveStart();
     await this.loadRobotsAndSitemaps();
     await this.startRenderer();
+    if (this.resumeFile) {
+      await this.replay(this.resumeFile);
+      await this.openJournal(this.resumeFile, { fresh: false });
+    }
+    if (this.listUrls && this.opts.sitemapUrl && !this.listUrls.length) {
+      this.listUrls = await this.sitemapUrlsFrom([this.opts.sitemapUrl]);
+      this.opts.maxPages = Math.max(this.opts.maxPages, this.listUrls.length);
+      if (!this.listUrls.length) this.warn('warn.sitemapListEmpty', { url: this.opts.sitemapUrl });
+    }
     if (this.listUrls) {
       for (const u of this.listUrls) this.enqueue(u, 0, 'list');
     } else {
@@ -586,9 +780,12 @@ export class Crawler extends EventEmitter {
     } finally {
       clearInterval(progressTimer);
       await this.renderer?.close();
+      await this.regexRunner?.close();
     }
     this.setPhase('analyse');
     this.finishedAt = new Date().toISOString();
+    // Crawl terminé : le journal n'a plus d'utilité. Arrêté par l'utilisateur : il reste, pour une reprise.
+    await this.closeJournal({ remove: !this.stopped });
     const result = analyze(this);
     this.phase = 'done';
     this.emit('progress', this.progress());
@@ -627,6 +824,13 @@ export class Crawler extends EventEmitter {
         continue;
       }
       const item = this.queue[this.qHead++];
+      if (this.pages.has(item.url)) continue; // déjà traitée (reprise)
+      // Budget : maxPages compte les pages réellement téléchargées, pas les URL découvertes ni celles bloquées par robots.txt.
+      if (this.fetched >= this.opts.maxPages) {
+        this.skip('total');
+        continue;
+      }
+      if (item.notBefore && item.notBefore > Date.now()) await sleep(Math.min(item.notBefore - Date.now(), RETRY_DELAY_MS));
       this.active++;
       try {
         await this.process(item);
@@ -668,14 +872,17 @@ export class Crawler extends EventEmitter {
 
   async process(item) {
     const rec = this.baseRecord(item);
+    const origin = new URL(item.url).origin;
+    if (origin !== this.origin && this.opts.robotsMode !== 'ignore') await this.ensureRobots(origin);
     const blocked = this.blockedByRobots(item.url);
     if (blocked && this.opts.robotsMode === 'report') rec.robotsBlocked = true; // crawlé quand même, mais signalé
     else if (blocked) {
       rec.blockedByRobots = true;
-      this.pages.set(item.url, rec);
-      this.emit('page', rec);
+      this.settle(item, rec);
       return;
     }
+    this.fetched++;
+    if (item.retry) rec.retries = (rec.retries || 0) + item.retry;
     let reqRes;
     try {
       // 429 / 503 : le serveur demande de ralentir. On attend (Retry-After, 30 s max) et on réessaie deux fois
@@ -695,13 +902,21 @@ export class Crawler extends EventEmitter {
         rec.retries = attempt + 1;
       }
     } catch (e) {
-      const r = this.errorRecord(item, e);
-      this.pages.set(item.url, r);
-      this.emit('page', r);
+      // Coupure réseau ou délai : une nouvelle tentative différée avant de conclure (sur 200 000 URL, les incidents
+      // passagers sont certains).
+      if (this.deferRetry(item)) return;
+      this.settle(item, this.errorRecord(item, e));
       return;
     }
     const { res, ttfb, timer } = reqRes;
     try {
+      if (RETRY_STATUS.has(res.status) && !item.retry && !this.stopped) {
+        await res.body?.cancel();
+        clearTimeout(timer);
+        this.fetched--;
+        this.deferRetry(item);
+        return;
+      }
       rec.status = res.status;
       // Toujours freinée après les nouvelles tentatives : artefact du crawl, pas une erreur du site.
       if (res.status === 429 || (res.status === 503 && rec.retries)) rec.rateLimited = true;
@@ -723,49 +938,42 @@ export class Crawler extends EventEmitter {
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
           if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
-          // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
-          if (!this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
-            const ex = this.externals.get(rec.redirectUrl) || { url: rec.redirectUrl, status: null, statusText: '', inlinks: 0, pages: new Set() };
-            ex.pages.add(item.url);
-            this.externals.set(rec.redirectUrl, ex);
-          }
         } else {
           // Un 3xx sans en-tête Location ne mène nulle part : navigateurs et Google affichent une page d'erreur.
           rec.error = 'Redirect without Location';
         }
-        this.pages.set(item.url, rec);
-        this.emit('page', rec);
+        this.settle(item, rec);
         return;
       }
       rec.isHtml = HTML_TYPES.test(rec.contentType);
       if (!rec.isHtml) {
         rec.size = Number(res.headers.get('content-length')) || 0;
         await res.body?.cancel();
-        this.pages.set(item.url, rec);
-        this.emit('page', rec);
+        this.settle(item, rec);
         return;
       }
       const maxBytes = this.opts.maxPageSizeKb * 1024;
-      if (Number(res.headers.get('content-length')) > maxBytes) {
-        await res.body?.cancel();
-        rec.size = Number(res.headers.get('content-length'));
+      // Corps lu en flux et abandonné au-delà de la limite, Content-Length présent ou non.
+      const body = Number(res.headers.get('content-length')) > maxBytes ? { tooLarge: true, size: Number(res.headers.get('content-length')) } : await readBodyLimited(res, maxBytes);
+      if (body.tooLarge) {
+        rec.size = body.size;
         rec.tooLarge = true;
         this.skip('pageSize');
-        this.pages.set(item.url, rec);
-        this.emit('page', rec);
+        this.settle(item, rec);
         return;
       }
-      const buf = new Uint8Array(await res.arrayBuffer());
+      const buf = body.buf;
       rec.downloadTime = Math.round(performance.now() - reqRes.t0);
       rec.size = buf.byteLength;
       const html = decodeBody(buf, rec.contentType);
-      const popts = { extractors: this.opts.extractors };
+      const popts = { extractors: this.opts.extractors, skipExtractors: this.asyncExtractorTypes() };
       let data = parseHtml(html, item.url, popts);
+      await this.extractAsync(data, html, item.url);
       if (this.searchRe) rec.searchMatches = (html.match(this.searchRe) || []).length;
       if (this.renderer && res.status === 200) {
         const raw = data;
         try {
-          const r = await this.withRenderSlot(() => this.renderer.render(item.url));
+          const r = await this.withRenderSlot(() => this.renderSafe(item.url));
           // La page rendue est une autre URL : redirection JavaScript (location.href…) ou meta refresh. Google la traite
           // comme une redirection : la page n'est pas indexée et la cible est explorée. On garde le HTML brut.
           const landed = this.normalize(r.finalUrl);
@@ -777,6 +985,7 @@ export class Crawler extends EventEmitter {
             throw new Error(`JS redirect → ${r.finalUrl}`);
           }
           data = parseHtml(r.html, item.url, popts);
+          await this.extractAsync(data, r.html, item.url, r.extracted);
           const rawLinks = new Set(raw.links.map((l) => l.to));
           rec.js = {
             rendered: true,
@@ -798,70 +1007,178 @@ export class Crawler extends EventEmitter {
           rec.js = { rendered: false, error: e.message.slice(0, 200) };
         }
       }
-      const { links, images, ...fields } = data;
-      Object.assign(rec, fields);
-      rec.internalOutlinks = 0;
-      rec.externalOutlinks = 0;
-      rec.imagesCount = images.length;
-      // alt absent = problème ; alt="" = image déclarée décorative (valide pour Google et l'accessibilité).
-      rec.imagesMissingAlt = images.filter((i) => i.alt === null).length;
-      rec.imagesEmptyAlt = images.filter((i) => i.alt === '').length;
-      if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null).slice(0, 30).map((i) => i.src);
-      rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
-      rec.imagesResponsive = images.filter((i) => i.responsive).length;
-      rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
-      rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
-      rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
-
-      const followAll = !robotsFlags(rec.metaRobots, rec.xRobotsTag).nofollow;
-      const follow = this.opts.mode !== 'list';
-      if (links.length > this.opts.maxLinksPerPage) {
-        rec.linksTruncated = links.length;
-        links.length = this.opts.maxLinksPerPage;
-      }
-      for (const l of links) {
-        const to = this.normalize(l.to) || l.to;
-        const internal = this.isInternal(to);
-        this.links.push({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, ...(l.code && { code: true }) });
-        if (internal) {
-          rec.internalOutlinks++;
-          if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
-        } else {
-          rec.externalOutlinks++;
-          const ex = this.externals.get(to) || { url: to, status: null, statusText: '', inlinks: 0, pages: new Set() };
-          ex.inlinks++;
-          ex.pages.add(item.url);
-          this.externals.set(to, ex);
-        }
-      }
-      for (const img of images) {
-        const im = this.images.get(img.src) || newImage(img.src);
-        Object.assign(im, { role: 'src', of: '' });
-        if (img.alt === null) im.missingAlt = true;
-        else if (img.alt === '') im.emptyAlt = true;
-        else im.alts.add(img.alt);
-        im.pages.add(item.url);
-        if (img.responsive) im.responsive = true;
-        if (img.picture) im.picture = true;
-        im.variantCount = Math.max(im.variantCount, img.variants.length);
-        this.images.set(img.src, im);
-        // Chaque fichier de srcset / <picture> est un fichier distinct à contrôler (poids, statut).
-        for (const v of img.variants) {
-          const vm = this.images.get(v.url) || Object.assign(newImage(v.url), { role: v.role, of: img.src, descriptor: v.descriptor, type: v.type || '', media: v.media || '' });
-          vm.pages.add(item.url);
-          this.images.set(v.url, vm);
-        }
-      }
-      if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
-      // Versions linguistiques déclarées en hreflang : explorées pour vérifier qu'elles répondent 200, sont indexables et renvoient le lien.
-      if (follow && this.opts.crawlCanonicals) for (const h of rec.hreflang || []) this.enqueue(h.href, item.depth + 1, 'hreflang');
-      if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
-      if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
-      this.pages.set(item.url, rec);
-      this.emit('page', rec);
+      this.settle(item, rec, data);
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // 500 / 502 / 504 ou coupure réseau : une seule nouvelle tentative, repoussée en fin de file après quelques secondes.
+  deferRetry(item) {
+    if (item.retry || this.stopped) return false;
+    const again = { ...item, retry: 1, notBefore: Date.now() + RETRY_DELAY_MS };
+    this.queue.push(again);
+    this.jlog({ t: 'q', u: item.url, d: item.depth, v: item.via, h: item.hops, r: 1 });
+    return true;
+  }
+
+  // Types d'extraction traités hors du parse : regex (Worker avec délai) et xpath (jsdom ou Chrome).
+  asyncExtractorTypes() {
+    const types = new Set();
+    for (const e of this.opts.extractors || []) if (e.type === 'regex' || e.type === 'xpath') types.add(e.type);
+    return types;
+  }
+  async extractAsync(data, html, url, rendered = null) {
+    const ex = this.opts.extractors || [];
+    const regex = ex.filter((e) => e.type === 'regex');
+    const xpath = ex.filter((e) => e.type === 'xpath');
+    if (!regex.length && !xpath.length) return;
+    data.extracted ||= {};
+    if (regex.length) {
+      this.regexRunner ||= new RegexRunner({ onTimeout: (rules) => this.regexWarned || ((this.regexWarned = true), this.warn('warn.regexTimeout', { name: rules.map((r) => r.name).join(', ') })) });
+      Object.assign(data.extracted, await this.regexRunner.run(html, regex));
+    }
+    if (xpath.length) {
+      // En rendu JavaScript, Chrome a déjà évalué les XPath ; sinon jsdom, sur le HTML brut.
+      if (rendered) Object.assign(data.extracted, rendered);
+      else {
+        const r = await xpathExtract(html, url, xpath);
+        if (!this.xpathWarned && Object.values(r).some((v) => /^⚠ xpath/.test(v[0]))) {
+          this.xpathWarned = true;
+          this.warn('warn.xpathUnavailable');
+        }
+        Object.assign(data.extracted, r);
+      }
+    }
+  }
+
+  // Rendu avec filet : si Chrome meurt, il est relancé une fois (signalé) ; relancé aussi toutes les N pages pour
+  // borner sa mémoire. Sans Chrome, la page garde son HTML brut et rendered: false, mais l'utilisateur est prévenu.
+  async renderSafe(url) {
+    const r = this.renderer;
+    if (!r) throw new Error('Renderer unavailable');
+    if (this.opts.renderRestartEvery && this.rendered > 0 && this.rendered % this.opts.renderRestartEvery === 0 && !r.restarting) await r.restart();
+    try {
+      this.rendered++;
+      return await r.render(url, { xpath: (this.opts.extractors || []).filter((e) => e.type === 'xpath') });
+    } catch (e) {
+      if (!r.dead && !/disconnected|Target closed|Session closed|Protocol error|Connection closed/i.test(e.message)) throw e;
+      if (this.rendererRestarts >= 1) {
+        if (this.renderer) {
+          this.renderer = null;
+          this.warn('warn.renderLost', { error: e.message.slice(0, 120) });
+        }
+        throw e;
+      }
+      this.rendererRestarts++;
+      this.warn('warn.renderRestart', { error: e.message.slice(0, 120) });
+      await r.restart();
+      return r.render(url, { xpath: (this.opts.extractors || []).filter((e) => e.type === 'xpath') });
+    }
+  }
+
+  // Mode liste depuis un sitemap : les URL de pages d'un sitemap ou d'un index (parcours en largeur, 500 fichiers au plus).
+  async sitemapUrlsFrom(urls) {
+    const toFetch = [...urls];
+    const done = new Set();
+    const out = [];
+    const seen = new Set();
+    while (toFetch.length && done.size < 500 && !this.stopped) {
+      const sm = toFetch.shift();
+      if (done.has(sm)) continue;
+      done.add(sm);
+      const xml = await this.fetchText(sm);
+      if (!xml || !/<(urlset|sitemapindex)/i.test(xml)) continue;
+      const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) => decodeXml(m[1]).trim());
+      if (/<sitemapindex/i.test(xml)) for (const l of locs) toFetch.push(l);
+      else for (const l of locs) {
+        const n = this.normalize(l);
+        if (n && /^https?:/.test(n) && !seen.has(n)) {
+          seen.add(n);
+          out.push(n);
+        }
+      }
+    }
+    return out;
+  }
+
+  // Page terminée : enregistrée, journalisée, annoncée. data (liens, images, champs HTML) est absent pour les pages
+  // sans HTML (erreur, redirection, fichier). En reprise (replay), rien n'est journalisé ni annoncé.
+  settle(item, rec, data = null, replay = false) {
+    if (data) this.ingest(item, rec, data, replay);
+    // Redirection vers un autre site : sa cible est vérifiée avec les liens externes.
+    if (rec.redirectUrl && !this.isInternal(rec.redirectUrl) && /^https?:/.test(rec.redirectUrl)) {
+      const ex = this.externals.get(rec.redirectUrl) || newExternal(rec.redirectUrl);
+      seenOn(ex, item.url);
+      this.externals.set(rec.redirectUrl, ex);
+    }
+    this.pages.set(item.url, rec);
+    if (replay) return;
+    this.jlog({ t: 'p', rec, d: data ? { links: data.links, images: data.images } : null });
+    this.emit('page', rec);
+  }
+
+  // Ce que la page apporte au crawl : champs HTML, liens (file, liens externes, graphe), images.
+  ingest(item, rec, data, replay = false) {
+    const { links, images, ...fields } = data;
+    Object.assign(rec, fields);
+    rec.internalOutlinks = 0;
+    rec.externalOutlinks = 0;
+    rec.imagesCount = images.length;
+    // alt absent = problème ; alt="" = image déclarée décorative (valide pour Google et l'accessibilité).
+    rec.imagesMissingAlt = images.filter((i) => i.alt === null).length;
+    rec.imagesEmptyAlt = images.filter((i) => i.alt === '').length;
+    if (rec.imagesMissingAlt) rec.imagesMissingAltSrc = images.filter((i) => i.alt === null).slice(0, 30).map((i) => i.src);
+    rec.imagesNoDimensions = images.filter((i) => !i.hasDimensions).length;
+    rec.imagesResponsive = images.filter((i) => i.responsive).length;
+    rec.imagesNoSizes = images.filter((i) => i.noSizes).length;
+    rec.imagesLegacyOnly = images.filter((i) => i.formats.length && i.formats.every((f) => LEGACY_FORMATS.has(f))).length;
+    rec.imageVariants = images.reduce((n, i) => n + i.variants.length, 0);
+
+    const followAll = !robotsFlags(rec.metaRobots, rec.xRobotsTag).nofollow;
+    const follow = this.opts.mode !== 'list' && !replay; // en reprise, la file vient des lignes q du journal
+    if (links.length > this.opts.maxLinksPerPage) {
+      rec.linksTruncated = links.length;
+      links.length = this.opts.maxLinksPerPage;
+    }
+    for (const l of links) {
+      const to = this.normalize(l.to) || l.to;
+      const internal = this.isInternal(to);
+      this.links.add({ from: item.url, to, anchor: l.anchor, nofollow: l.nofollow, internal, imageLink: l.imageLink, pos: l.pos, code: l.code });
+      if (internal) {
+        rec.internalOutlinks++;
+        if (follow && followAll && !l.nofollow) this.enqueue(to, item.depth + 1, 'link');
+      } else {
+        rec.externalOutlinks++;
+        const ex = this.externals.get(to) || newExternal(to);
+        ex.inlinks++;
+        seenOn(ex, item.url);
+        this.externals.set(to, ex);
+      }
+    }
+    for (const img of images) {
+      const im = this.images.get(img.src) || newImage(img.src);
+      Object.assign(im, { role: 'src', of: '' });
+      if (img.alt === null) im.missingAlt = true;
+      else if (img.alt === '') im.emptyAlt = true;
+      else if (im.alts.length < MAX_ALTS && !im.alts.includes(img.alt)) im.alts.push(img.alt);
+      seenOn(im, item.url);
+      if (img.responsive) im.responsive = true;
+      if (img.picture) im.picture = true;
+      im.variantCount = Math.max(im.variantCount, img.variants.length);
+      this.images.set(img.src, im);
+      // Chaque fichier de srcset / <picture> est un fichier distinct à contrôler (poids, statut).
+      for (const v of img.variants) {
+        const vm = this.images.get(v.url) || Object.assign(newImage(v.url), { role: v.role, of: img.src, descriptor: v.descriptor, type: v.type || '', media: v.media || '' });
+        seenOn(vm, item.url);
+        this.images.set(v.url, vm);
+      }
+    }
+    if (follow && this.opts.crawlCanonicals && rec.canonical && rec.canonical !== item.url) this.enqueue(rec.canonical, item.depth + 1, 'canonical');
+    // Versions linguistiques déclarées en hreflang : explorées pour vérifier qu'elles répondent 200, sont indexables et renvoient le lien.
+    if (follow && this.opts.crawlCanonicals) for (const h of rec.hreflang || []) this.enqueue(h.href, item.depth + 1, 'hreflang');
+    if (follow && rec.relNext) this.enqueue(rec.relNext, item.depth + 1, 'pagination');
+    if (follow && rec.metaRefreshUrl) this.enqueue(rec.metaRefreshUrl, item.depth, 'redirect', (item.hops || 0) + 1);
   }
 
   async pool(items, fn, concurrency) {
@@ -928,7 +1245,8 @@ export class Crawler extends EventEmitter {
     this.setPhase('psi');
     const html = [...this.pages.values()].filter((p) => p.isHtml && p.status === 200 && !robotsFlags(p.metaRobots, p.xRobotsTag).noindex);
     const inl = new Map();
-    for (const l of this.links) if (l.internal && l.from !== l.to) inl.set(l.to, (inl.get(l.to) || 0) + 1);
+    const { from, to, flags } = this.links.columns();
+    for (let i = 0; i < this.links.n; i++) if (flags[i] & FLAG.internal && from[i] !== to[i]) inl.set(this.urls.values[to[i]], (inl.get(this.urls.values[to[i]]) || 0) + 1);
     const clicks = new Map((this.gsc?.rows || []).map((r) => [r.url, r.clicks || 0]));
     const home = this.finalStart || this.startUrl;
     const ranked = html.sort((a, b) => (b.url === home) - (a.url === home) || (clicks.get(b.url) || 0) - (clicks.get(a.url) || 0) || (inl.get(b.url) || 0) - (inl.get(a.url) || 0)).slice(0, this.opts.psiMax);

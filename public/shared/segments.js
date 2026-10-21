@@ -10,6 +10,7 @@
 // - segmentStats() donne la vue d'ensemble : une ligne par segment avec son score, ses erreurs et ses moyennes.
 //
 // Partagé par le moteur (src/), la CLI, les outils agents (MCP / REST) et l'interface : un seul calcul partout.
+import { forEachLink, linkUrls } from './links.js';
 import { issuePoints, computePillars, scoredPages, issueShare, OUTSIDE_CRAWL } from './pillars.js';
 
 export const NONE = '__none';
@@ -185,7 +186,9 @@ const LVL_W = { high: 3, medium: 2, low: 1 };
 const html200 = (pages) => pages.filter((p) => p.isHtml && p.status === 200);
 
 // Résumé (score, piliers, compteurs) recalculé à partir des pages et des problèmes : même méthode que src/analyze.mjs.
-export function computeSummary(R) {
+// linkStats (optionnel) : compteurs de liens déjà calculés pour ce périmètre (segmentStats les calcule en un seul passage
+// pour tous les segments, au lieu de parcourir toutes les arêtes pour chacun).
+export function computeSummary(R, linkStats = null) {
   const pages = R.pages || [];
   const issues = R.issues || [];
   const h200 = html200(pages);
@@ -217,18 +220,22 @@ export function computeSummary(R) {
   }
   const rt = h200.map((p) => p.responseTime).filter((x) => x != null).sort((a, b) => a - b);
   // Liens : ceux qui partent des pages du périmètre.
-  const inScope = new Set(pages.map((p) => p.url));
   let internalLinks = 0;
   let externalLinks = 0;
-  const ext = new Set();
-  const { urls = [], edges = [] } = R.links || {};
-  for (const [f, to, , flags] of edges) {
-    if (!inScope.has(urls[f])) continue;
-    if (flags & 2) internalLinks++;
-    else {
-      externalLinks++;
-      ext.add(urls[to]);
-    }
+  let ext = new Set();
+  // linkStats vient de linkStatsBySegment (ext = Set) ou du serveur, en nombres (uniqueExternal).
+  if (linkStats) ({ internalLinks = 0, externalLinks = 0, ext = { size: linkStats.uniqueExternal || 0 } } = linkStats);
+  else {
+    const inScope = new Set(pages.map((p) => p.url));
+    const urls = linkUrls(R);
+    forEachLink(R, (f, to, _a, flags) => {
+      if (!inScope.has(urls[f])) return;
+      if (flags & 2) internalLinks++;
+      else {
+        externalLinks++;
+        ext.add(urls[to]);
+      }
+    });
   }
   const sum = (sev) => issues.filter((i) => i.severity === sev).reduce((a, i) => a + i.count, 0);
   return {
@@ -275,7 +282,30 @@ const segOf = (p) => p.segment || NONE;
 
 // Crawl découpé sur un segment. `R` doit déjà porter p.segment (assignSegments). Le résultat partage les objets
 // page du crawl complet (pas de copie) : il est léger même sur 100 000 URL.
-export function sliceResult(R, segId, segments = R.meta?.segments || []) {
+// Compteurs de liens par segment, en un seul passage sur les arêtes : segment de chaque URL (par indice, pas par chaîne),
+// puis un compteur par segment. Mesuré : ~1 s par segment et par passage sur 20 millions de liens, jusqu'à 50 segments.
+export function linkStatsBySegment(R, segments = R.meta?.segments || []) {
+  const ids = [...segments.map((s) => s.id), NONE];
+  const index = new Map(ids.map((id, i) => [id, i]));
+  const segByUrl = new Map();
+  for (const p of R.pages || []) segByUrl.set(p.url, index.get(segOf(p)) ?? ids.length - 1);
+  const urls = linkUrls(R);
+  const segByIdx = new Int32Array(urls.length).fill(-1);
+  for (let i = 0; i < urls.length; i++) segByIdx[i] = segByUrl.get(urls[i]) ?? -1;
+  const stats = ids.map(() => ({ internalLinks: 0, externalLinks: 0, ext: new Set() }));
+  forEachLink(R, (f, to, _a, flags) => {
+    const s = segByIdx[f];
+    if (s < 0) return;
+    if (flags & 2) stats[s].internalLinks++;
+    else {
+      stats[s].externalLinks++;
+      stats[s].ext.add(urls[to]);
+    }
+  });
+  return new Map(ids.map((id, i) => [id, stats[i]]));
+}
+
+export function sliceResult(R, segId, segments = R.meta?.segments || [], { linkStats = R.linkStats?.[segId] ?? null } = {}) {
   if (!segId) return R;
   const def = segId === NONE ? { id: NONE, name: '', color: NONE_COLOR } : segments.find((s) => s.id === segId);
   if (!def) return R;
@@ -300,7 +330,7 @@ export function sliceResult(R, segId, segments = R.meta?.segments || []) {
     ga4Only,
     meta: { ...R.meta, segment: { id: def.id, name: def.name, color: def.color, pages: pages.length, total: R.pages.length } },
   };
-  S.summary = computeSummary(S);
+  S.summary = computeSummary(S, linkStats);
   return S;
 }
 
@@ -310,8 +340,9 @@ const round = (x, d = 0) => (x == null ? null : Math.round(x * 10 ** d) / 10 ** 
 // Vue d'ensemble : une ligne par segment (dans l'ordre défini), puis « Sans segment » s'il reste des pages.
 export function segmentStats(R, segments = R.meta?.segments || [], { topIssues = 3 } = {}) {
   if (!segments.length) return [];
+  const linkStats = linkStatsBySegment(R, segments);
   const rows = [...segments, { id: NONE, name: '', color: NONE_COLOR }].map((s) => {
-    const S = sliceResult(R, s.id, segments);
+    const S = sliceResult(R, s.id, segments, { linkStats: linkStats.get(s.id) });
     const pages = S.pages;
     if (s.id === NONE && !pages.length) return null;
     const h = html200(pages);

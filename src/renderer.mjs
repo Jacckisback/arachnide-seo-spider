@@ -64,6 +64,28 @@ const VITALS = `
   } catch (e) {}
 `;
 
+// Même contrat que src/xpath.mjs, exécuté dans Chrome.
+const XPATH_IN_PAGE = (rules) => {
+  const out = {};
+  for (const ex of rules) {
+    const values = [];
+    try {
+      const r = document.evaluate(ex.selector, document, null, 7, null);
+      if (ex.target === 'count') values.push(r.snapshotLength);
+      else
+        for (let i = 0; i < Math.min(50, r.snapshotLength); i++) {
+          const n = r.snapshotItem(i);
+          const v = ex.target === 'html' ? n.outerHTML ?? n.textContent : ex.target === 'attr' ? (n.getAttribute ? n.getAttribute(ex.attr || 'href') : n.nodeValue) ?? '' : (n.textContent || n.nodeValue || '').replace(/\s+/g, ' ').trim();
+          values.push(String(v ?? '').slice(0, 500));
+        }
+    } catch {
+      values.push('⚠ invalid');
+    }
+    out[ex.name] = values;
+  }
+  return out;
+};
+
 export class Renderer {
   constructor({ userAgent, timeoutMs = 30000, executablePath, headers = {}, isInternal = () => false } = {}) {
     this.userAgent = userAgent;
@@ -81,9 +103,27 @@ export class Renderer {
       headless: true,
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--no-first-run', '--mute-audio'],
     });
+    this.dead = false;
+    // Chrome peut mourir en plein crawl (mémoire, plantage) : le crawler le voit et le relance, au lieu d'enregistrer
+    // chaque page suivante « rendered: false » en silence.
+    this.browser.on('disconnected', () => {
+      this.dead = true;
+    });
   }
 
-  async render(url) {
+  async restart() {
+    if (this.restarting) return this.restarting;
+    this.restarting = (async () => {
+      await this.browser?.close().catch(() => {});
+      await this.start();
+    })().finally(() => {
+      this.restarting = null;
+    });
+    return this.restarting;
+  }
+
+  async render(url, { xpath = [] } = {}) {
+    if (this.dead || !this.browser) throw new Error('Chrome disconnected');
     const page = await this.browser.newPage();
     const consoleErrors = [];
     let requests = 0;
@@ -117,8 +157,11 @@ export class Renderer {
       const loadTime = Date.now() - t0;
       await new Promise((r) => setTimeout(r, 300));
       const [html, vitals] = await Promise.all([page.content(), page.evaluate(() => window.__arachnide || null)]);
+      // Extraction XPath dans la page rendue : document.evaluate, sans dépendance.
+      const extracted = xpath.length ? await page.evaluate(XPATH_IN_PAGE, xpath).catch(() => null) : null;
       return {
         html,
+        extracted,
         finalUrl: page.url(),
         loadTime,
         lcp: vitals?.lcp ? Math.round(vitals.lcp) : null,

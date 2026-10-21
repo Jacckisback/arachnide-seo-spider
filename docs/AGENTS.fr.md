@@ -52,7 +52,7 @@ Avec l’API Agents / Responses d’OpenAI, pointez un outil MCP hébergé vers 
 | Outil | Ce qu’il fait | Écrit ? |
 |---|---|---|
 | `arachnide_detect_site` | CMS, framework, CDN et le connecteur adapté | non |
-| `arachnide_crawl` | Crawl + ~95 contrôles SEO/GEO, attend le résultat | non |
+| `arachnide_crawl` | Crawl + ~95 contrôles SEO/GEO, attend le résultat ; `mode: "list"` avec `urls` ou `sitemap_url` crawle exactement ces URL | non |
 | `arachnide_start_crawl` / `arachnide_crawl_status` | Le même crawl en arrière-plan, **en direct dans l’app**, suivi par identifiant de tâche | non |
 | `arachnide_list_crawls` | Crawls enregistrés ; `current` en tête quand l’app en a un d’ouvert | non |
 | `arachnide_get_summary` | Score, note, piliers, principaux problèmes | non |

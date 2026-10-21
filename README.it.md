@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Versione 3.13.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Versione 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -24,11 +24,35 @@
 - un piano d’azione ordinato per impatto e impegno;
 - un **report PDF white label** per i tuoi clienti, in 6 lingue.
 
-Nessun account, nessun cloud e nessun limite di pagine. I tuoi dati restano sul tuo computer.
+Nessun account, nessun cloud. I tuoi dati restano sul tuo computer. Testato su un sito sintetico di 200 000 pagine (`npm run bench -- --pages 200000`); il budget predefinito è di 500 pagine, da alzare nelle opzioni.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Panoramica: punteggio di salute SEO in quattro anelli (tecnica, contenuto, linking, prestazioni), priorità, indicatori chiave e punti di forza" width="100%">
 </p>
+
+## 🛡️ Novità della 3.21: protezioni del crawl, XPath, modalità lista da sitemap e un benchmark riproducibile a 200 000 pagine
+
+Il budget di pagine conta ora le pagine davvero scaricate (gli URL bloccati da robots.txt non lo consumano più), i parametri URL sono ordinati e quelli di tracciamento (`utm_*`, `gclid`, `fbclid`…) rimossi per impostazione predefinita, le trappole a faccette sono segnalate, un robots.txt irraggiungibile vieta tutto come richiede la RFC 9309 (con un’uscita esplicita), robots.txt è letto per host in modalità lista, i 5xx e le interruzioni di rete hanno un nuovo tentativo differito, i corpi delle risposte sono letti in streaming e limitati, un Chrome che muore viene riavviato e segnalato, e un’estrazione regex impazzita viene interrotta in un worker. L’**estrazione XPath** si aggiunge a CSS e regex (Chrome in rendering, jsdom opzionale sull’HTML grezzo); la CLI guadagna i target `attr:` / `html:` / `count:` / `xpath:` con una colonna CSV per regola, **`--sitemap URL`** esplora esattamente una sitemap, la modalità lista sale a 500 000 URL e anche gli agenti IA hanno la modalità lista. `npm run bench -- --pages 200000` esplora un sito sintetico locale e mostra durata, memoria massima e dimensione del file.
+
+## 🖥️ Novità della 3.20: scalabilità, passo 5 — il browser non riceve più mai l’intero crawl
+
+Il server conserva il crawl e il suo grafo dei link; il browser riceve un **risultato leggero in streaming** (pagine ridotte a ciò che mostrano le tabelle, senza link) e chiede il resto su richiesta: i link di una pagina **paginati** nel pannello di dettaglio (niente più taglio silenzioso a 1 000), la scheda completa al clic, gli archi della mappa solo per i nodi mostrati, e il confronto con il crawl precedente come piccolo diff calcolato lato server. Aprire un crawl salvato o importare un file non fa più andare e tornare il crawl; le esportazioni partono dal server in streaming. I conteggi delle schede sono calcolati una volta per risultato.
+
+## 🔬 Novità della 3.19: scalabilità, passo 4 — un’analisi che scala
+
+**Tutte le pagine sono ora confrontate per i quasi duplicati**: il vecchio controllo si fermava alle prime 5 000 pagine senza dirlo. La ricerca è esatta per bande sull’impronta a 64 bit (due pagine a 5 bit di distanza condividono sempre una banda), quindi un sito di 200 000 pagine si confronta in pochi secondi; un sito molto templatizzato viene segnalato invece che troncato in silenzio. La **cannibalizzazione** si calcola in tempo lineare con un indice invertito, e le espressioni condivise da più di 500 pagine sono segnalate come template del sito. I **segmenti** contano i loro link in un solo passaggio invece di uno per segmento (475 ms contro ~16 s per 10 segmenti su 20 milioni di link), e le regole di correzione leggono il grafo compatto.
+
+## 💾 Novità della 3.18: scalabilità, passo 3 — un crawl scritto man mano
+
+Un crawl non passa più mai per una sola stringa. I risultati sono salvati in **NDJSON gzip** (un oggetto JSON per riga, i link a pacchetti), scritti e riletti in streaming, in modo atomico; la cronologia legge solo la prima riga. Durante il crawl un **diario di ripresa** annota ogni URL messo in coda e ogni pagina fatta: dopo un crash o un Ctrl+C, `--resume` (o `POST /api/crawl { resume }`) riprende il crawl da dove si era fermato, perdendo solo gli ultimi secondi. I crawl salvati arrivano al browser riga per riga, i segmenti modificati dopo vanno in un piccolo file accanto, e la riga di comando scrive JSON, CSV e report ciascuno in streaming e in modo indipendente. I vecchi crawl `.json` si aprono ancora. Passo successivo: pagine più leggere e link su richiesta nel browser.
+
+## 🧮 Novità della 3.17: scalabilità, passo 2 — un grafo dei link compatto
+
+Un link era un oggetto JavaScript con sette proprietà e due stringhe URL; l’analisi lo copiava poi in Map di Set e in un array di tuple. I link vivono ora in **colonne di interi** (URL e testi di ancoraggio memorizzati una volta, 14 byte per link) e l’analisi lavora su un **grafo CSR**: link in entrata, profondità di clic, PageRank e controlli dei link leggono le stesse colonne, senza alcun oggetto per link. Misurato su 50 000 pagine × 100 link: memoria dei link 690 MB → 55 MB, analisi 29 s / 2,5 GB → 5,5 s / 647 MB, stessi risultati. Un crawl di 200 000 pagine e 20 milioni di link ora supera l’analisi. Il blocco `links` salvato è a colonne; i vecchi file si aprono ancora. Passo successivo: scrivere il file e i dati del browser in streaming.
+
+## 🏗️ Novità della 3.16: scalabilità, passo 1 — i siti grandi non si bloccano più alla fine
+
+Una revisione tecnica su un crawl di 200 000 pagine ha mostrato che il motore regge, ma alcune righe di gestione dei dati no: un `Math.min(...)` su un valore per URL faceva fallire l’analisi oltre ~125 000 URL (dopo ore di crawl), e diversi cicli erano quadratici. **Quattordici piccole correzioni**: niente più spread su array grandi quanto il sito, indici costruiti una sola volta (redirect, link in uscita, URL più vicina a un 404 cercando prima nella cartella padre), esempi per l’IA presi dalla stessa cartella, ordinamento delle tabelle 20× più veloce (un solo `Intl.Collator`), conteggio delle cartelle della mappa 5× più veloce, job di crawl terminati ridotti a un riepilogo, e **scritture atomiche**: un arresto durante il salvataggio non lascia mai più un crawl troncato. I passi successivi compatteranno la memorizzazione dei link e invieranno il file e i dati del browser in streaming.
 
 ## 📊 Novità della 3.15: Google Analytics 4 — pagine orfane con traffico
 
@@ -345,7 +369,10 @@ Passa dal **2D** al **3D** e viceversa, colora in base all’indicizzabilità, a
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang it
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

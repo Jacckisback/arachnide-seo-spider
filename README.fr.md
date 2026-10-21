@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Version 3.13.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Version 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -24,11 +24,35 @@
 - un plan d’action classé par impact et par effort ;
 - un **rapport PDF en marque blanche** pour vos clients, en 6 langues.
 
-Pas de compte, pas de cloud, pas de limite de pages : vos données restent sur votre machine.
+Pas de compte, pas de cloud : vos données restent sur votre machine. Testé sur un site synthétique de 200 000 pages (`npm run bench -- --pages 200000`) ; le budget par défaut est de 500 pages, à relever dans les options.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🛡️ Nouveau en 3.21 : garde-fous de crawl, XPath, mode liste par sitemap, et un benchmark reproductible à 200 000 pages
+
+Le budget de pages compte désormais les pages réellement téléchargées (les URL bloquées par robots.txt ne le consomment plus), les paramètres d’URL sont triés et les paramètres de suivi (`utm_*`, `gclid`, `fbclid`…) retirés par défaut, les pièges à facettes sont signalés, un robots.txt injoignable interdit tout comme l’exige la RFC 9309 (avec une sortie explicite), robots.txt est lu par hôte en mode liste, les 5xx et coupures réseau ont une nouvelle tentative différée, les corps de réponse sont lus en flux et bornés, un Chrome qui meurt est relancé et signalé, et une extraction regex emballée est interrompue dans un worker. L’**extraction XPath** rejoint CSS et regex (Chrome en rendu, jsdom facultatif sur le HTML brut) ; la CLI gagne les cibles `attr:` / `html:` / `count:` / `xpath:` avec une colonne CSV par règle, **`--sitemap URL`** crawle exactement un sitemap, le mode liste monte à 500 000 URL et les agents IA ont aussi le mode liste. `npm run bench -- --pages 200000` crawle un site synthétique local et affiche durée, mémoire maximale et taille du fichier.
+
+## 🖥️ Nouveau en 3.20 : passage à l’échelle, étape 5 — le navigateur ne reçoit plus jamais le crawl entier
+
+Le serveur garde le crawl et son graphe de liens ; le navigateur reçoit un **résultat léger en flux** (pages réduites à ce que les tableaux affichent, sans les liens) et demande le reste à la demande : les liens d’une page **paginés** dans le panneau de détail (plus de coupure silencieuse à 1 000), la fiche complète au clic, les arêtes de la carte pour les seuls nœuds affichés, et la comparaison avec le crawl précédent sous forme d’un petit diff calculé côté serveur. Ouvrir un crawl enregistré ou importer un fichier ne fait plus d’aller-retour du crawl ; les exports partent du serveur en flux. Les comptes des onglets sont calculés une fois par résultat.
+
+## 🔬 Nouveau en 3.19 : passage à l’échelle, étape 4 — une analyse qui passe à l’échelle
+
+**Toutes les pages sont désormais comparées pour les quasi-doublons** : l’ancien contrôle s’arrêtait aux 5 000 premières pages sans le dire. La recherche est exacte par bandes sur l’empreinte de 64 bits (deux pages à 5 bits d’écart partagent toujours une bande) : un site de 200 000 pages est comparé en quelques secondes, et un site très gabarité est signalé plutôt que tronqué en silence. La **cannibalisation** se calcule en temps linéaire avec un index inversé, et les expressions partagées par plus de 500 pages sont signalées comme gabarit du site. Les **segments** comptent leurs liens en un seul passage au lieu d’un par segment (475 ms contre ~16 s pour 10 segments sur 20 millions de liens), et les règles de correction lisent le graphe compact.
+
+## 💾 Nouveau en 3.18 : passage à l’échelle, étape 3 — un crawl écrit au fil de l’eau
+
+Un crawl ne passe plus jamais par une seule chaîne. Les résultats sont enregistrés en **NDJSON gzip** (un objet JSON par ligne, les liens par paquets), écrits et relus en flux, de façon atomique ; l’historique ne lit que la première ligne. Pendant le crawl, un **journal de reprise** note chaque URL mise en file et chaque page traitée : après un plantage ou un Ctrl+C, `--resume` (ou `POST /api/crawl { resume }`) reprend le crawl là où il s’est arrêté, en ne perdant que les dernières secondes. Les crawls enregistrés sont envoyés au navigateur ligne par ligne, les segments modifiés après coup vont dans un petit fichier voisin, et la ligne de commande écrit JSON, CSV et rapport chacun en flux et indépendamment. Les anciens crawls `.json` s’ouvrent toujours. Étape suivante : des pages allégées et des liens à la demande dans le navigateur.
+
+## 🧮 Nouveau en 3.17 : passage à l’échelle, étape 2 — un graphe de liens compact
+
+Un lien était un objet JavaScript de sept propriétés avec deux chaînes d’URL ; l’analyse le recopiait ensuite dans des Map de Set puis dans un tableau de tuples. Les liens vivent désormais en **colonnes d’entiers** (URL et textes d’ancre stockés une fois, 14 octets par lien) et l’analyse travaille sur un **graphe CSR** : liens entrants, profondeur de clic, PageRank et contrôles de liens lisent les mêmes colonnes, sans aucun objet par lien. Mesuré sur 50 000 pages × 100 liens : stockage des liens 690 Mo → 55 Mo, analyse 29 s / 2,5 Go → 5,5 s / 647 Mo, résultats identiques. Un crawl de 200 000 pages et 20 millions de liens passe maintenant l’analyse. Le bloc `links` enregistré est en colonnes ; les anciens fichiers s’ouvrent toujours. Étape suivante : écrire le fichier et les données du navigateur en flux.
+
+## 🏗️ Nouveau en 3.16 : passage à l’échelle, étape 1 — les gros sites ne plantent plus à la fin
+
+Une revue technique sur un crawl de 200 000 pages a montré que le moteur tient la charge, mais pas quelques lignes de traitement des données : un `Math.min(...)` sur une valeur par URL faisait planter l’analyse au-delà de ~125 000 URL (après des heures de crawl), et plusieurs boucles étaient quadratiques. **Quatorze correctifs** : plus de spread sur des tableaux à la taille du site, index construits une fois (redirections, liens sortants, URL la plus proche d’une 404 en cherchant d’abord dans le dossier parent), exemples donnés à l’IA pris dans le même dossier, tri des tableaux 20× plus rapide (un seul `Intl.Collator`), comptage des dossiers de la carte 5× plus rapide, tâches de crawl terminées réduites à un condensé, et **écritures atomiques** : un arrêt pendant la sauvegarde ne laisse plus jamais un crawl tronqué. Les étapes suivantes compacteront le stockage des liens et écriront le fichier et les données du navigateur en flux.
 
 ## 📊 Nouveau en 3.15 : Google Analytics 4 — les pages orphelines qui font du trafic
 
@@ -358,7 +382,10 @@ Basculez entre **2D** et **3D**, colorez selon l’indexabilité, les problèmes
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang fr
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

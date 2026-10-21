@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.13.0-3d5f17" alt="Version 3.13.0">
+  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Version 3.21.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -24,11 +24,35 @@
 - an action plan ranked by impact and effort;
 - a **white-label PDF report** for your clients, in 6 languages.
 
-There is no account, no cloud and no page limit, and your data stays on your machine.
+There is no account and no cloud, and your data stays on your machine. Tested on a 200 000-page synthetic site (`npm run bench -- --pages 200000`); the default budget is 500 pages, raise it in the options.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🛡️ New in 3.21: crawl guard-rails, XPath, sitemap list mode, and a reproducible 200 000-page benchmark
+
+The page budget now counts pages actually downloaded (URLs blocked by robots.txt no longer eat it), URL parameters are sorted and tracking parameters (`utm_*`, `gclid`, `fbclid`…) removed by default, facet traps are reported, an unreachable robots.txt disallows everything as RFC 9309 requires (with an explicit way out), robots.txt is read per host in list mode, 5xx and network cuts get a deferred retry, response bodies are read as streams and bounded, a Chrome that dies is restarted and reported, and a runaway regex extraction is interrupted in a worker. **XPath extraction** joins CSS and regex (Chrome in rendering mode, optional jsdom on raw HTML); the CLI gets `attr:` / `html:` / `count:` / `xpath:` targets with one CSV column per rule, **`--sitemap URL`** crawls exactly a sitemap, list mode goes up to 500 000 URLs and AI agents get list mode too. `npm run bench -- --pages 200000` crawls a local synthetic site and prints duration, peak memory and file size.
+
+## 🖥️ New in 3.20: scale, step 5 — the browser never receives the whole crawl again
+
+The server keeps the crawl and its link graph; the browser receives a **light result as a stream** (pages reduced to what the tables show, no links) and asks for the rest on demand: a page's links **paginated** in the detail panel (no more silent cut at 1 000), the full page record on click, the site-map edges for the displayed nodes only, and the comparison with the previous crawl as a small diff computed server-side. Opening a saved crawl or importing a file no longer sends the crawl back and forth; exports stream from the server. Tab counts are computed once per result.
+
+## 🔬 New in 3.19: scale, step 4 — an analysis that scales
+
+**Every page is now compared for near duplicates**: the old check stopped at the first 5 000 pages without saying so. The search is exact by bands on the 64-bit fingerprint (two pages within 5 bits always share a band), so a 200 000-page site is compared in seconds; a very templated site is reported rather than silently truncated. **Cannibalization** runs in linear time with an inverted index, and expressions shared by more than 500 pages are reported as the site template. **Segments** count their links in a single pass instead of one per segment (475 ms versus ~16 s for 10 segments on 20 million links), and the fix rules read the compact graph.
+
+## 💾 New in 3.18: scale, step 3 — a crawl written as it goes
+
+A crawl never passes through a single string any more. Results are saved as **gzipped NDJSON** (one JSON object per line, links by chunks), written and read as streams, atomically; the history reads only the first line. During the crawl a **resume journal** records every URL queued and every page done: after a crash or Ctrl+C, `--resume` (or `POST /api/crawl { resume }`) picks the crawl up where it stopped, losing only the last seconds. Saved crawls are streamed to the browser line by line, segments edited afterwards go to a small side file, and the CLI writes JSON, CSV and report each in a stream and independently. Old `.json` crawls still open. Next step: lighter pages and on-demand links in the browser.
+
+## 🧮 New in 3.17: scale, step 2 — a compact link graph
+
+A link used to be a JavaScript object with seven properties and two URL strings; the analysis then copied it into maps of sets and into an array of tuples. Links now live in **columns of integers** (URLs and anchor texts stored once, 14 bytes per link) and the analysis runs on a **CSR graph**: inlinks, click depth, PageRank and the link checks read the same columns, with no object per link. Measured on 50 000 pages × 100 links: link storage 690 MB → 55 MB, analysis 29 s / 2.5 GB → 5.5 s / 647 MB, same results. A 200 000-page / 20-million-link crawl now gets through the analysis. The saved `links` block is columnar; old crawl files still open. Next step: streaming the saved file and the data sent to the browser.
+
+## 🏗️ New in 3.16: scale, step 1 — large sites no longer crash at the end
+
+A technical review on a 200 000-page crawl found that the engine scales but a few data-handling lines did not: a `Math.min(...)` on one value per URL crashed the analysis beyond ~125 000 URLs (after hours of crawl), and several loops were quadratic. **Fourteen small fixes**: no more spread on site-sized arrays, indexes built once (redirects, outgoing links, closest URL for 404s with the parent folder searched first), AI examples taken from the same folder, table sort 20× faster (one `Intl.Collator`), site-map folder counts 5× faster, finished crawl jobs keep only a digest, and **atomic writes** so a stop during saving never leaves a truncated crawl. Next steps will compact link storage and stream the saved file and the data sent to the browser.
 
 ## 📊 New in 3.15: Google Analytics 4 — orphan pages that get traffic
 
@@ -358,7 +382,10 @@ Switch between **2D** and **3D**, colour by indexability, issues or depth, choos
 node src/cli.mjs https://www.example.com --max 2000 --csv --report --lang en
 node src/cli.mjs https://www.example.com --render --ua googlebotMobile --report --client "ACME" --author "Your name"
 node src/cli.mjs --list urls.txt --lang de --csv
-node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
+node src/cli.mjs --sitemap https://www.example.com/sitemap.xml --extract "price=.price" --extract "sku=xpath://meta[@itemprop='sku']/@content" --csv
+npm run bench -- --pages 200000
+node src/cli.mjs https://www.example.com --report --compare crawls/previous.jsonl.gz
+node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"

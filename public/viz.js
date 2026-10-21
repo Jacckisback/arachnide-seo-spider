@@ -754,7 +754,9 @@ async function create3d(el, { data, style, t, onHover, onClick, onReady, reduced
     if (readyDone) return;
     readyDone = true;
     // Vue de départ légèrement inclinée : la profondeur se lit sans tourner la scène.
-    const r = Math.max(200, ...data.nodes.map((x) => Math.hypot(x.x || 0, x.y || 0, x.z || 0))) * 1.9;
+    let far = 200;
+    for (const x of data.nodes) far = Math.max(far, Math.hypot(x.x || 0, x.y || 0, x.z || 0)); // sans spread : la branche « isoler » n'a pas de plafond
+    const r = far * 1.9;
     g.cameraPosition({ x: 0, y: -r * 0.32, z: r * 0.95 }, { x: 0, y: 0, z: 0 }, 0);
     schedule();
     onReady?.();
