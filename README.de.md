@@ -15,6 +15,8 @@
   <a href="https://github.com/Jacckisback/arachnide-seo-spider/actions"><img src="https://github.com/Jacckisback/arachnide-seo-spider/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
 </p>
 
+<p align="center">🌐 Website und Dokumentation: <a href="https://arachnide-seo.com"><b>arachnide-seo.com</b></a></p>
+
 ---
 
 **Arachnide** ist ein kostenloser Crawler für technisches SEO, der auf Ihrem eigenen Computer läuft, ähnlich wie Screaming Frog SEO Spider. Er durchsucht eine Website so wie der Googlebot, **rendert auf Wunsch JavaScript** und macht aus dem Crawl ein priorisiertes Audit:
@@ -435,6 +437,17 @@ Vorschläge und Pull Requests sind willkommen. Siehe [CONTRIBUTING.md](CONTRIBUT
 Crawlen Sie nur Websites, die Ihnen gehören oder die Sie prüfen dürfen. Bleiben Sie bei Kunden-Websites bei 2 bis 5 gleichzeitigen Anfragen und fügen Sie bei Shared Hosting eine Pause ein. Die Oberfläche ist nur auf Ihrem Computer erreichbar (`127.0.0.1`).
 
 ---
+
+## 🙏 Danksagung
+
+Arachnide wäre nicht, was es ist, ohne die Menschen, die sich die Zeit genommen haben, es zu testen, herauszufordern und anzufeuern, die meisten davon auf X:
+
+- [@Loran750](https://x.com/Loran750), für eine unglaubliche Hilfe, weit über alles hinaus, was ich mir selbst in meinen kühnsten Träumen hätte erhoffen können, und für die ständige Motivation.
+- [@mrgris](https://x.com/mrgris), für die Empfehlungen zu den Bildprüfungen und für so viel Motivation in diesem Projekt.
+- [@Mar1e](https://x.com/Mar1e), für die Empfehlung, Google Analytics 4 zu integrieren.
+- [@effi_10](https://x.com/effi_10), für die Empfehlungen zur Segmentierung.
+- [@EmelineRoblot](https://x.com/EmelineRoblot), für die Herausforderung, die sie mir gestellt hat: mehr als eine Million Seiten zu crawlen, ohne dass etwas abstürzt.
+- Und natürlich meine Kinder Oliver und Alberto, mit Abstand meine schönste Schöpfung und mein größter Stolz.
 
 ## 👤 Autor
 
