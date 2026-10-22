@@ -20,7 +20,7 @@ function loadScript(src) {
 }
 
 // Ressources (images, PDF, CSS, JS…) : ce ne sont pas des pages, elles n'ont pas leur place dans les graphes.
-const RESOURCE_EXT = /\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|mp4|webm|mov|mp3|wav|css|js|mjs|json|xml|txt|woff2?|ttf|eot|otf|docx?|xlsx?|pptx?|csv)$/i;
+export const RESOURCE_EXT = /\.(jpe?g|png|gif|webp|avif|svg|ico|bmp|tiff?|pdf|zip|rar|7z|gz|mp4|webm|mov|mp3|wav|css|js|mjs|json|xml|txt|woff2?|ttf|eot|otf|docx?|xlsx?|pptx?|csv)$/i;
 export function isPageNode(p) {
   if (!p.url.startsWith('http')) return false;
   if (p.isHtml) return true;

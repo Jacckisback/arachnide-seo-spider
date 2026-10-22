@@ -2,7 +2,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXT, isNdjson, writeResult, readResult, readHead } from './ndjson.mjs';
+import { EXT, isNdjson, writeResult, readResult, readHead, writeRecords, readRecords } from './ndjson.mjs';
+import { aggregatorRecords, aggregatorFromRecords, applyLogs } from './logs/analyze.mjs';
 import { applySegments } from '../public/shared/segments.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -10,7 +11,7 @@ export const CRAWLS = process.env.ARACHNIDE_CRAWLS || path.join(ROOT, 'crawls');
 const INDEX = path.join(CRAWLS, '_index.json');
 
 // Fichiers de crawl : NDJSON gzip (.jsonl.gz, depuis la 3.18) ou JSON d'un bloc (.json, versions antérieures, toujours lisible).
-export const safeName = (n) => (/^[\w.-]+\.(json|jsonl\.gz)$/.test(n) && n !== '_index.json' && !n.endsWith('.segments.json') ? n : null);
+export const safeName = (n) => (/^[\w.-]+\.(json|jsonl\.gz)$/.test(n) && n !== '_index.json' && !n.endsWith('.segments.json') && !n.endsWith('.logs.jsonl.gz') ? n : null);
 export const crawlId = (file) => file.replace(/\.(jsonl\.gz|json)$/, '');
 // Fichier d'un identifiant de crawl (nom sans extension, ou nom complet).
 export async function crawlFileOf(id) {
@@ -119,10 +120,33 @@ export async function loadCrawl(file) {
   const name = safeName(file);
   if (!name) throw Object.assign(new Error('Invalid crawl file name: ' + file), { status: 400 });
   const R = await readResultFile(path.join(CRAWLS, name));
+  // Journaux d'accès importés après le crawl : fichier voisin (agrégat), rattaché à l'ouverture.
+  const agg = await readLogs(name);
+  if (agg) applyLogs(R, agg);
   // Segments modifiés après le crawl : fichier voisin, appliqué à l'ouverture (le crawl n'est jamais réécrit).
   const segs = await readSegments(name);
   if (segs) applySegments(R, segs);
   return R;
+}
+
+// Agrégat des journaux d'accès d'un crawl : <nom>.logs.jsonl.gz à côté du fichier, écrit en flux.
+const logsFile = (name) => path.join(CRAWLS, crawlId(name) + '.logs.jsonl.gz');
+export async function saveLogs(name, agg) {
+  if (!safeName(name)) return;
+  await writeRecords(aggregatorRecords(agg), logsFile(name));
+}
+export async function readLogs(name) {
+  try {
+    await fs.access(logsFile(name));
+  } catch {
+    return null;
+  }
+  const recs = [];
+  for await (const r of readRecords(logsFile(name))) recs.push(r);
+  return aggregatorFromRecords(recs);
+}
+export async function deleteLogs(name) {
+  if (safeName(name)) await fs.unlink(logsFile(name)).catch(() => {});
 }
 
 // Segments d'un crawl enregistré : <nom>.segments.json à côté du fichier, plutôt que de réécrire tout le crawl.
@@ -142,6 +166,7 @@ export async function readSegments(name) {
 export async function deleteCrawl(name) {
   await fs.unlink(path.join(CRAWLS, name));
   await fs.unlink(segmentsFile(name)).catch(() => {});
+  await fs.unlink(logsFile(name)).catch(() => {});
   const index = await readIndex();
   delete index[name];
   await fs.writeFile(INDEX, JSON.stringify(index)).catch(() => {});

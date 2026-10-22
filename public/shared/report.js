@@ -160,6 +160,31 @@ export function buildReport(R, opts, t) {
     </div>
   </section>`;
 
+  // Logs serveur (3.22) : ce que les robots demandent vraiment, sur la période importée.
+  const L = R.meta.logs;
+  const logsSec = L ? (() => {
+    const fam = L.families || {};
+    const kpi = (v, l) => `<div class="kpi"><b>${esc(String(v))}</b><span>${esc(l)}</span></div>`;
+    const logIssues = issues.filter((i) => i.id.startsWith('log-'));
+    const period = L.period ? t('logs.periodLine', { start: t.date(L.period.start, { dateStyle: 'medium' }), end: t.date(L.period.end, { dateStyle: 'medium' }), days: L.period.days, files: L.files?.length || 0, format: L.format }) : '';
+    const V = L.verification;
+    const verif = V?.enabled ? t('logs.verified', { ok: t.num(V.verified), spoofed: t.num(V.spoofed) }) : t('logs.notVerified');
+    return `<section class="page">
+    <h2><span class="n">${String(sec++).padStart(2, '0')}</span>${esc(t('report.logs'))}</h2>
+    <p class="intro">${esc(t('report.logsIntro'))}</p>
+    <p class="small">${esc(period)}${period ? ' · ' : ''}${esc(verif)}</p>
+    <div class="kpis">
+      ${kpi(t.num(L.events), t('logs.events'))}${kpi(t.num(fam.search || 0), t('logs.series.search'))}${kpi(t.num(L.googlebotHits), 'Googlebot')}
+      ${kpi(t.num(fam.ai || 0), t('logs.series.ai'))}${kpi(t.num(L.outsidePages), t('logs.outsidePages'))}${kpi(t.num(L.statuses?.s5 || 0), t('logs.s5'))}
+    </div>
+    <div class="two">
+      <div><h3>${esc(t('logs.bots'))}</h3><table class="mini"><thead><tr><th>${esc(t('logs.bot'))}</th><th class="r">${esc(t('logs.hits'))}</th>${V?.enabled ? `<th class="r">${esc(t('logs.spoofedCol'))}</th>` : ''}</tr></thead><tbody>${(L.bots || []).slice(0, 12).map((b) => `<tr><td>${esc(b.name)} <small>${esc(t('logs.fam.' + b.family))}</small></td><td class="r">${t.num(b.hits)}</td>${V?.enabled ? `<td class="r">${b.spoofed ? t.num(b.spoofed) : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+      <div><h3>${esc(t('logs.dir'))}</h3><table class="mini"><thead><tr><th>${esc(t('logs.dir'))}</th><th class="r">${esc(t('logs.searchHits'))}</th><th class="r">${esc(t('logs.hits'))}</th></tr></thead><tbody>${(L.dirs || []).slice(0, 12).map((d) => `<tr><td class="u">${esc(d.dir)}</td><td class="r">${t.num(d.search)}</td><td class="r">${t.num(d.hits)}</td></tr>`).join('')}</tbody></table></div>
+    </div>
+    ${logIssues.length ? `<h3>${esc(t('nav.issues'))}</h3><ul class="findings">${logIssues.map((i) => `<li>${chip(i.severity)} ${esc(label(i))} <small>· ${t.num(i.count)}</small></li>`).join('')}</ul>` : `<p class="small">${esc(t('report.logsNoIssue'))}</p>`}
+  </section>`;
+  })() : '';
+
   const method = `<section class="page">
     <h2><span class="n">${String(sec++).padStart(2, '0')}</span>${esc(t('report.methodology'))}</h2>
     <p>${esc(t('report.methodologyText'))}</p>
@@ -290,7 +315,7 @@ table.mini td { padding: 5px 6px; }
 </head>
 <body>
 <div class="toolbar"><button class="p" onclick="window.print()">${esc(t('report.print'))}</button><button id="dl">${esc(t('report.downloadHtml'))}</button></div>
-${cover}${summary}${evolution}${segments}${plan}${details}${tech}${method}
+${cover}${summary}${evolution}${segments}${plan}${details}${tech}${logsSec}${method}
 <script>
 document.getElementById('dl').onclick = function () {
   var doc = document.documentElement.cloneNode(true);

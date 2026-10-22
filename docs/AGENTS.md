@@ -4,7 +4,7 @@ Arachnide 3.13 is built to be driven by an AI agent — yours, or any assistant 
 
 Everything runs on your machine (or your server). Nothing is sent to a third party except what your agent's own model receives.
 
-## Three doors, one set of 25 tools
+## Three doors, one set of 26 tools
 
 | Door | For | URL | Auth |
 |---|---|---|---|
@@ -62,6 +62,7 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 | `arachnide_get_page` | Everything about one URL | no |
 | `arachnide_geo_readiness` | AI crawlers access, llms.txt, structured data coverage, content depth, hygiene → 0-100 GEO score + recommendations | no |
 | `arachnide_segments` | Site sections (product pages, categories, blog…): get the score, errors and averages per segment, suggest one per directory, or set them (no recrawl). Then pass `segment` to the reading tools | no (saves the segments on the crawl) |
+| `arachnide_logs` | Server access logs imported into the crawl (Logs tab or CLI `--logs`): crawl frequency per bot and per day, URLs Googlebot requests that are not in the crawl, indexable pages it never visits, crawl budget wasted, 5xx served to bots, spoofed Googlebot IPs, slow pages for bots (`section`: summary, bots, timeline, directories, top_urls, orphans, not_crawled, waste, errors, spoofed, slow) | no |
 | `arachnide_fetch_page` | Read a live page (tags, headings, images, text excerpt) | no |
 | `arachnide_suggest_fixes` | Fixable fields per page with current values and constraints | no |
 | `arachnide_compare_crawls` | Before/after between two crawls | no |
@@ -73,6 +74,8 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 Every reading tool (`arachnide_get_summary`, `arachnide_list_issues`, `arachnide_get_issue`, `arachnide_action_plan`, `arachnide_search_pages`, `arachnide_geo_readiness`) accepts `segment`: the scores, issues and pages are recomputed for that section of the site.
 
 Google Analytics 4: pass `ga4_key_file` (and `ga4_property`) or `ga4_csv` to `arachnide_crawl` / `arachnide_start_crawl` to add sessions per page and find orphan pages that get traffic (`ga4-orphan`); `arachnide_search_pages` can sort by `sessions`.
+
+Server logs (3.22): once access logs are imported into a crawl (Logs tab or CLI `--logs`), `arachnide_logs` reads them, `arachnide_search_pages` can sort by `log_hits` / `googlebot_hits` and returns `last_crawled_by_googlebot`, and `arachnide_get_summary` carries a `server_logs` block. See [LOGS.md](LOGS.md).
 
 `GET /api/agent/tools` returns the same list with the JSON Schema of each input.
 

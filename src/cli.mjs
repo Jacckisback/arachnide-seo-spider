@@ -22,7 +22,7 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['resume', 'sitemap', 'robots-unavailable', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
+const VALUE_FLAGS = new Set(['logs', 'logs-format', 'logs-custom', 'resume', 'sitemap', 'robots-unavailable', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -56,6 +56,9 @@ Usage : node src/cli.mjs <url> [options]
   --extract N=SEL     Custom extraction (repeatable): N=SEL (CSS, text), N=/regex/, N=xpath:EXPR,
                       N=attr:href:SEL, N=html:SEL, N=count:SEL — one column per rule in pages.csv
   --sitemap URL       List mode from a sitemap or sitemap index: crawl exactly the URLs it lists
+  --logs FILE         Server access log to analyse with the crawl (repeatable; .gz accepted; Apache/Nginx combined,
+                      common, W3C/IIS, JSON lines, or --logs-format custom with --logs-custom "<nginx log_format>")
+  --logs-verify       Verify Googlebot / Bingbot IPs by reverse DNS (needs network)
   --keep-params       Keep URL parameters as they are (by default: sorted, tracking params utm_*/gclid/fbclid… removed)
   --robots-unavailable allow|disallow   robots.txt in 5xx or unreachable: disallow all (RFC 9309, default) or allow
   --psi N             PageSpeed Insights + Core Web Vitals (CrUX) for the N most important pages
@@ -223,11 +226,44 @@ const output = async (label, fn) => {
     console.error(`✖ ${label}: ${e.message}`);
   }
 };
+// Le fichier de crawl s'écrit avant le rattachement des journaux d'accès : les logs vivent dans un fichier voisin
+// (<crawl>.logs.jsonl.gz), relu à l'ouverture et retirable sans toucher au crawl.
 await output('json', async () => {
   const file = path.join(outDir, base + EXT);
   await writeResult(full, file);
   console.log(`\n${t('cli.saved')} ${file}`);
 });
+// Journaux d'accès : rattachés au résultat avant les sorties (et enregistrés à côté du crawl).
+const logFiles = vals('logs');
+let logAgg = null;
+if (logFiles.length) {
+  const { parseLog } = await import('./logs/parse.mjs');
+  const { LogAggregator, applyLogs } = await import('./logs/analyze.mjs');
+  logAgg = new LogAggregator({ origin: new URL(full.meta.finalStart || full.meta.startUrl).origin, options: full.meta.options || {} });
+  for (const f of logFiles) {
+    try {
+      const st = await parseLog(path.resolve(f), { format: val('logs-format', 'auto'), custom: val('logs-custom', ''), onEvent: (e) => logAgg.add(e) });
+      logAgg.files.push({ name: path.basename(f), ...st });
+      logAgg.format ||= st.format;
+      logAgg.lines += st.lines;
+      logAgg.parsed += st.parsed;
+      logAgg.skipped += st.skipped;
+      console.log(`📜 ${path.basename(f)} : ${st.format}, ${st.parsed} ${t('logs.events').toLowerCase()}`);
+    } catch (e) {
+      console.error(`✖ ${f}: ${e.message}`);
+    }
+  }
+  if (flag('logs-verify')) await logAgg.verify();
+  const L = applyLogs(full, logAgg);
+  if (segId && segId !== NONE) Object.assign(r, sliceResult(full, segId));
+  console.log(`📜 ${t('logs.title')} : ${L.events} ${t('logs.events').toLowerCase()} · Googlebot ${L.googlebotHits} · ${L.outsidePages} ${t('logs.outsidePages').toLowerCase()}`);
+  await output('logs', async () => {
+    const { writeRecords } = await import('./ndjson.mjs');
+    const { aggregatorRecords } = await import('./logs/analyze.mjs');
+    await writeRecords(aggregatorRecords(logAgg), path.join(outDir, base + '.logs.jsonl.gz'));
+  });
+}
+
 if (crawler.stopped && crawler.journalFile) console.log(`↻ ${t('cli.resumeHint')} node src/cli.mjs --resume "${crawler.journalFile}"`);
 
 // Alerte e-mail (pour une tâche cron) : comparaison avec le crawl précédent du même site dans le dossier de sortie.
@@ -262,10 +298,10 @@ if (flag('csv')) await output('csv', async () => {
   };
   const segName = (id) => (!id ? '' : id === NONE ? t('seg.none') : segs.find((s) => s.id === id)?.name || id);
   const exNames = (full.meta.options?.extractors || []).map((x) => x.name);
-  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')], ...(full.meta.ga4 ? [['ga4Sessions', t('col.sessions')], ['ga4Views', t('col.views')]] : []), ...exNames.map((n) => ['ex:' + n, n])];
+  const pageCols = [['url', 'URL'], ...(segs.length ? [['segmentName', t('col.segment')]] : []), ['status', t('col.status')], ['indexable', t('col.indexability')], ['indexabilityReason', ''], ['depth', t('col.depth')], ['linkScore', t('col.linkScore')], ['title', t('col.title')], ['titleLength', t('col.chars')], ['titlePx', t('col.pixels')], ['metaDescription', t('col.metaDescription')], ['metaDescriptionLength', t('col.chars')], ['h1', 'H1'], ['h1Count', 'H1 #'], ['h2Count', 'H2 #'], ['wordCount', t('col.words')], ['focusKeyword', t('col.focusKeyword')], ['canonical', t('col.canonical')], ['metaRobots', t('col.metaRobots')], ['uniqueInlinks', t('col.inlinks')], ['internalOutlinks', t('col.outlinks')], ['externalOutlinks', t('col.extOutlinks')], ['responseTime', t('col.responseTime')], ['size', t('col.size')], ['inSitemap', t('col.inSitemap')], ['redirectUrl', t('col.redirectsTo')], ...(full.meta.ga4 ? [['ga4Sessions', t('col.sessions')], ['ga4Views', t('col.views')]] : []), ...(full.meta.logs ? [['logHits', t('col.logHits')], ['logGooglebot', t('col.logGooglebot')], ['logLast', t('col.logLast')]] : []), ...exNames.map((n) => ['ex:' + n, n])];
   function* pageRows() {
     for (const p of r.pages) {
-      const row = { ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' };
+      const row = { ...p, segmentName: segName(p.segment), ga4Sessions: p.ga4?.sessions ?? '', ga4Views: p.ga4?.views ?? '', logHits: p.log?.hits ?? '', logGooglebot: p.log?.googlebot ?? '', logLast: p.log?.last ? p.log.last.slice(0, 10) : '', indexabilityReason: p.indexabilityReason ? t('idx.' + p.indexabilityReason) : '' };
       for (const n of exNames) row['ex:' + n] = (p.extracted?.[n] || []).join(' | ');
       yield row;
     }

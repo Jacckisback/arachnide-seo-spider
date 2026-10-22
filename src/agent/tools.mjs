@@ -108,6 +108,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     top_issues: R.issues.slice(0, 15).map((i) => ({ id: i.id, severity: i.severity, category: i.category, urls: i.count, label: issueLabel(i) })),
     skipped: R.meta.skipped,
     search_console: R.meta.gsc || undefined,
+    server_logs: R.meta.logs ? { period: R.meta.logs.period, events: R.meta.logs.events, googlebot_hits: R.meta.logs.googlebotHits, bot_hits: R.meta.logs.botHits, urls_outside_crawl: R.meta.logs.outsidePages, verification: R.meta.logs.verification } : undefined,
     google_analytics: R.meta.ga4 || undefined,
     pagespeed: R.meta.psi ? { tested: R.meta.psi.tested, strategy: R.meta.psi.strategy, origin_core_web_vitals: R.meta.psi.origin } : undefined,
     crawl_warnings: R.meta.warnings?.length ? R.meta.warnings : undefined,
@@ -332,7 +333,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
       depth_min: z.number().int().min(0).optional(),
       depth_max: z.number().int().min(0).optional(),
       issue_id: z.string().optional().describe('Only pages affected by this issue'),
-      sort: z.enum(['link_score', 'depth', 'inlinks', 'words', 'url', 'sessions']).default('link_score').describe('"sessions" needs Google Analytics 4 data in the crawl'),
+      sort: z.enum(['link_score', 'depth', 'inlinks', 'words', 'url', 'sessions', 'log_hits', 'googlebot_hits']).default('link_score').describe('"sessions" needs Google Analytics 4 data; "log_hits" / "googlebot_hits" need imported server logs'),
       limit: z.number().int().min(1).max(500).default(50),
       offset: z.number().int().min(0).default(0),
     },
@@ -353,11 +354,11 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
         if (affected && !affected.has(p.url)) return false;
         return true;
       });
-      const by = { link_score: (x, y) => (y.linkScore || 0) - (x.linkScore || 0), depth: (x, y) => (x.depth ?? 99) - (y.depth ?? 99), inlinks: (x, y) => (y.uniqueInlinks || 0) - (x.uniqueInlinks || 0), words: (x, y) => (y.wordCount || 0) - (x.wordCount || 0), sessions: (x, y) => (y.ga4?.sessions || 0) - (x.ga4?.sessions || 0), url: (x, y) => x.url.localeCompare(y.url) };
+      const by = { link_score: (x, y) => (y.linkScore || 0) - (x.linkScore || 0), depth: (x, y) => (x.depth ?? 99) - (y.depth ?? 99), inlinks: (x, y) => (y.uniqueInlinks || 0) - (x.uniqueInlinks || 0), words: (x, y) => (y.wordCount || 0) - (x.wordCount || 0), sessions: (x, y) => (y.ga4?.sessions || 0) - (x.ga4?.sessions || 0), log_hits: (x, y) => (y.log?.hits || 0) - (x.log?.hits || 0), googlebot_hits: (x, y) => (y.log?.googlebot || 0) - (x.log?.googlebot || 0), url: (x, y) => x.url.localeCompare(y.url) };
       rows.sort(by[a.sort]);
       const issuesOf = new Map();
       for (const i of R.issues) for (const it of i.items) issuesOf.set(it.url, (issuesOf.get(it.url) || 0) + 1);
-      return { crawl_id: id, total: rows.length, offset: a.offset, has_more: a.offset + a.limit < rows.length, pages: rows.slice(a.offset, a.offset + a.limit).map((p) => ({ url: p.url, status: p.status, indexable: p.indexable, depth: p.depth, title: p.title, link_score: p.linkScore, inlinks: p.uniqueInlinks, words: p.wordCount, sessions: p.ga4?.sessions, segment: p.segment, issues: issuesOf.get(p.url) || 0 })) };
+      return { crawl_id: id, total: rows.length, offset: a.offset, has_more: a.offset + a.limit < rows.length, pages: rows.slice(a.offset, a.offset + a.limit).map((p) => ({ url: p.url, status: p.status, indexable: p.indexable, depth: p.depth, title: p.title, link_score: p.linkScore, inlinks: p.uniqueInlinks, words: p.wordCount, sessions: p.ga4?.sessions, log_hits: p.log?.hits, googlebot_hits: p.log?.googlebot, last_crawled_by_googlebot: p.log?.googlebot ? p.log.last : undefined, segment: p.segment, issues: issuesOf.get(p.url) || 0 })) };
     },
   });
 
@@ -372,6 +373,38 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
       if (!p) throw err(`${url} is not in crawl ${id}.`, 'not_found', 'Use arachnide_search_pages to find the exact URL.');
       const { headers, contentHash, ...page } = p;
       return { crawl_id: id, ...page, issues: R.issues.filter((i) => i.items.some((it) => it.url === p.url)).map((i) => ({ id: i.id, severity: i.severity, label: issueLabel(i), fix: issueFix(i) })) };
+    },
+  });
+
+  def('arachnide_logs', {
+    title: 'Server log analysis (what search and AI bots really request)',
+    description: 'Reads the server access logs imported into a crawl (Arachnide → Logs tab, or CLI --logs): crawl frequency per bot and per day, URLs requested by Googlebot that are not in the crawl (orphans), indexable pages Googlebot never visits, crawl budget wasted on redirects / errors / non-indexable URLs, server errors served to bots, spoofed bots (fake Googlebot IPs), slow pages for bots. Section "summary" first.',
+    shape: {
+      crawl_id: crawlRef,
+      segment: segRef,
+      section: z.enum(['summary', 'bots', 'timeline', 'directories', 'top_urls', 'orphans', 'not_crawled', 'waste', 'errors', 'spoofed', 'slow']).default('summary'),
+      bot: z.enum(['search', 'googlebot', 'bingbot', 'ai', 'all']).default('search').describe('Which hits to rank top_urls by'),
+      limit: z.number().int().min(1).max(500).default(50),
+      offset: z.number().int().min(0).default(0),
+    },
+    annotations: LOCAL,
+    handler: async ({ crawl_id, segment, section, bot, limit, offset }) => {
+      const { id, R } = await resolveCrawl(crawl_id, segment);
+      const L = R.meta.logs;
+      if (!L) throw err(`No server logs in ${id}. Import access logs in Arachnide (Logs tab) or with the CLI option --logs, then try again.`, 'not_found');
+      const page = (rows) => ({ crawl_id: id, total: rows.length, offset, has_more: offset + limit < rows.length, items: rows.slice(offset, offset + limit) });
+      const issueRows = (iid) => (R.issues.find((i) => i.id === iid)?.items || []).map((it) => ({ url: it.url, detail: detailText(it.detail, t) }));
+      if (section === 'summary') return { crawl_id: id, period: L.period, files: L.files?.map((f) => f.name), format: L.format, events: L.events, bot_hits: L.botHits, human_hits: L.human, googlebot_hits: L.googlebotHits, bingbot_hits: L.bingbotHits, families: L.families, statuses: L.statuses, urls_seen: L.urls, urls_matched_to_crawl: L.matched, urls_outside_crawl: L.outside, pages_outside_crawl: L.outsidePages, verification: L.verification, top_bots: L.bots.slice(0, 10), issues: R.issues.filter((i) => i.id.startsWith('log-')).map((i) => ({ id: i.id, severity: i.severity, urls: i.count, label: issueLabel(i) })) };
+      if (section === 'bots') return page(L.bots);
+      if (section === 'timeline') return page(L.timeline);
+      if (section === 'directories') return page(L.dirs);
+      if (section === 'top_urls') {
+        const key = bot === 'all' ? 'hits' : bot;
+        const rows = [...R.pages.filter((p) => p.log?.[key] > 0).map((p) => ({ url: p.url, in_crawl: true, status: p.status, indexable: p.indexable, hits: p.log.hits, search: p.log.search, googlebot: p.log.googlebot, bingbot: p.log.bingbot, ai: p.log.ai, last: p.log.last })), ...(R.logOnly || []).filter((x) => x[key] > 0).map((x) => ({ url: x.url, in_crawl: false, resource: x.resource, status: x.status, hits: x.hits, search: x.search, googlebot: x.googlebot, bingbot: x.bingbot, ai: x.ai, last: x.last }))].sort((a, b) => b[key] - a[key]);
+        return page(rows);
+      }
+      const map = { orphans: 'log-orphan', not_crawled: 'log-not-crawled', waste: 'log-crawl-waste', errors: 'log-bot-errors', spoofed: 'log-spoofed', slow: 'log-slow' };
+      return page(issueRows(map[section]));
     },
   });
 

@@ -17,7 +17,7 @@ export const scoredPages = (pages) => pages.filter((p) => p.isHtml || p.status >
 
 // Problèmes dont les URL sont hors du crawl (pages orphelines vues par Search Console ou GA4) : ce sont bien des
 // pages, comptées comme telles dans la part des pages touchées.
-export const OUTSIDE_CRAWL = new Set(['gsc-orphan', 'ga4-orphan']);
+export const OUTSIDE_CRAWL = new Set(['gsc-orphan', 'ga4-orphan', 'log-orphan']);
 
 export function issueShare(is, scoredSet, N) {
   if (is.scope === 'site') return 1;

@@ -23,6 +23,10 @@ import { handleFixRoutes } from './fix/routes.mjs';
 import { createAgentGateway } from './agent/http.mjs';
 import { digestOf } from './agent/tools.mjs';
 import { applySegments } from '../public/shared/segments.js';
+import { isTrustedRequest } from './fix/routes.mjs';
+import { parseLog, maybeGunzip } from './logs/parse.mjs';
+import { LogAggregator, applyLogs, removeLogs } from './logs/analyze.mjs';
+import { saveLogs, deleteLogs } from './store.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -89,6 +93,10 @@ async function readBody(req) {
 
 // Crawls lancés depuis l'interface ou par un agent : un seul à la fois, visible en direct dans l'interface.
 const jobs = new Map();
+// Journaux d'accès en cours d'import pour le crawl ouvert : agrégat en mémoire tant que l'utilisateur n'a pas appliqué.
+let logAgg = null; // { R, agg }
+const pendingLogs = () => (logAgg && logAgg.R === lastResult ? logAgg.agg : null);
+const logStats = (agg) => ({ files: agg.files, format: agg.format, lines: agg.lines, parsed: agg.parsed, skipped: agg.skipped, events: agg.totals.events, bots: agg.totals.bots, human: agg.totals.human, urls: agg.urls.size, otherHost: agg.totals.otherHost, period: agg.period.end >= agg.period.start ? { start: new Date(agg.period.start).toISOString(), end: new Date(agg.period.end).toISOString() } : null });
 async function startCrawl(body) {
   // { resume: <id> } : reprise d'un crawl interrompu depuis son journal (GET /api/pending les liste).
   if (body.resume) return launchCrawl(null, {}, 'ui', { resume: String(body.resume) });
@@ -243,6 +251,58 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true });
     }
     // Segments du crawl ouvert : appliqués sans recrawler, enregistrés avec le crawl (visibles des agents IA / MCP).
+    // ---- Journaux d'accès (analyse de logs) : import en flux, vérification des robots, rattachement au crawl ouvert ----
+    if (p.startsWith('/api/logs')) {
+      if (!isTrustedRequest(req, { binary: p === '/api/logs/import' })) return send(res, 403, { error: 'Forbidden' });
+      if (p === '/api/logs' && req.method === 'GET') {
+        const agg = pendingLogs();
+        return send(res, 200, { pending: agg ? logStats(agg) : null, applied: lastResult?.meta?.logs || null, hasResult: !!lastResult });
+      }
+      if (!lastResult) return send(res, 404, { error: 'No crawl loaded', key: 'toast.noCrawl' });
+      if (p === '/api/logs/import' && req.method === 'POST') {
+        // Le corps est le fichier lui-même (gzip reconnu aux octets magiques), lu ligne par ligne sans jamais le garder.
+        const q = url.searchParams;
+        const name = (q.get('name') || 'log').slice(0, 200);
+        if (!pendingLogs()) logAgg = { R: lastResult, agg: new LogAggregator({ origin: new URL(lastResult.meta.finalStart || lastResult.meta.startUrl).origin, options: lastResult.meta.options || {} }) };
+        const agg = logAgg.agg;
+        try {
+          const st = await parseLog(maybeGunzip(req), { format: q.get('format') || 'auto', custom: q.get('custom') || '', onEvent: (e) => agg.add(e), onProgress: (x) => broadcast('logs', { phase: 'parsing', name, ...x }) });
+          agg.files.push({ name, format: st.format, lines: st.lines, parsed: st.parsed, skipped: st.skipped });
+          agg.format ||= st.format;
+          agg.lines += st.lines;
+          agg.parsed += st.parsed;
+          agg.skipped += st.skipped;
+          return send(res, 200, { file: { name, ...st }, pending: logStats(agg) });
+        } catch (e) {
+          if (e.code === 'unknown_format') return send(res, 400, { error: e.message, key: 'logs.unknownFormat', sample: e.sample });
+          return send(res, 400, { error: e.message });
+        }
+      }
+      if (p === '/api/logs/apply' && req.method === 'POST') {
+        const agg = pendingLogs();
+        if (!agg || !agg.totals.events) return send(res, 400, { error: 'No log imported', key: 'logs.nothingToApply' });
+        const body = await readBody(req);
+        if (body.verify) await agg.verify({ onProgress: (x) => broadcast('logs', { phase: 'verifying', ...x }) });
+        const R = lastResult;
+        const logs = applyLogs(R, agg);
+        if (lastFile) await saveLogs(lastFile, agg).catch((e) => console.error('Enregistrement des logs impossible :', e.message));
+        logAgg = null;
+        broadcast('logs', { phase: 'applied', events: logs.events, urls: logs.urls });
+        return send(res, 200, { logs });
+      }
+      if (p === '/api/logs/reset' && req.method === 'POST') {
+        logAgg = null;
+        return send(res, 200, { ok: true });
+      }
+      if (p === '/api/logs' && req.method === 'DELETE') {
+        logAgg = null;
+        if (lastResult.meta.logs) removeLogs(lastResult);
+        if (lastFile) await deleteLogs(lastFile);
+        broadcast('logs', { phase: 'removed' });
+        return send(res, 200, { ok: true });
+      }
+      return send(res, 404, { error: 'Route inconnue' });
+    }
     if (p === '/api/segments' && req.method === 'GET') return send(res, 200, { segments: lastResult?.meta?.segments || [], stats: lastResult?.summary?.segments || [], linkStats: lastResult ? linkStatsOf(lastResult) : {} });
     if (p === '/api/segments' && req.method === 'POST') {
       if (!lastResult) return send(res, 404, { error: 'No crawl loaded', key: 'toast.noCrawl' });

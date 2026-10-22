@@ -46,6 +46,7 @@ const P = {
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
   arrowUp: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  upload: '<path d="M12 16V4m0 0 4 4m-4-4-4 4M4 20h16"/>',
   trend: '<path d="m3 17 6-6 4 4 8-8M15 7h6v6"/>',
 };
 

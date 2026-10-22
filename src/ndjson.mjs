@@ -69,6 +69,26 @@ export async function readHead(file) {
   }
 }
 
+// Enregistrements quelconques (un objet par ligne), en gzip : sert aux fichiers voisins d'un crawl (journaux d'accès).
+export async function writeRecords(records, file) {
+  const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  async function* gen() {
+    for (const r of records) yield JSON.stringify(r) + '\n';
+  }
+  try {
+    await pipeline(Readable.from(gen()), createGzip({ level: 1 }), createWriteStream(tmp));
+    await fs.rename(tmp, file);
+  } catch (e) {
+    await fs.unlink(tmp).catch(() => {});
+    throw e;
+  }
+}
+export async function* readRecords(file) {
+  const { rl, state } = await readLines(file);
+  for await (const line of rl) if (line) yield JSON.parse(line);
+  if (state.failed) throw state.failed;
+}
+
 // Flux NDJSON décompressé (pour l'envoyer tel quel au navigateur, qui l'assemble ligne par ligne).
 export function ndjsonStream(file) {
   const src = createReadStream(file);

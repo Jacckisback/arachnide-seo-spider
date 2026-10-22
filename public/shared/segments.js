@@ -49,6 +49,9 @@ export const FIELDS = {
   responseTime: { type: 'number', get: (p) => p.responseTime },
   gscClicks: { type: 'number', get: (p) => p.gsc?.clicks },
   ga4Sessions: { type: 'number', get: (p) => p.ga4?.sessions },
+  logHits: { type: 'number', get: (p) => p.log?.hits },
+  logSearchHits: { type: 'number', get: (p) => p.log?.search },
+  logGooglebotHits: { type: 'number', get: (p) => p.log?.googlebot },
   indexable: { type: 'bool', get: (p) => !!p.indexable },
   inSitemap: { type: 'bool', get: (p) => !!p.inSitemap },
   isHtml: { type: 'bool', get: (p) => !!p.isHtml },
@@ -174,6 +177,7 @@ export function assignSegments(R, segments) {
   }
   for (const g of R.gscOnly || []) g.segment = segments?.length ? of({ url: g.url, gsc: g }) : undefined;
   for (const g of R.ga4Only || []) g.segment = segments?.length ? of({ url: g.url, ga4: g }) : undefined;
+  for (const g of R.logOnly || []) g.segment = segments?.length ? of({ url: g.url, log: g }) : undefined;
   return counts;
 }
 
@@ -312,8 +316,9 @@ export function sliceResult(R, segId, segments = R.meta?.segments || [], { linkS
   const pages = R.pages.filter((p) => segOf(p) === segId);
   const gscOnly = (R.gscOnly || []).filter((g) => (g.segment || NONE) === segId);
   const ga4Only = (R.ga4Only || []).filter((g) => (g.segment || NONE) === segId);
+  const logOnly = (R.logOnly || []).filter((g) => (g.segment || NONE) === segId);
   // URL du segment : ses pages, plus les orphelines Search Console / GA4 qui lui appartiennent.
-  const urlSet = new Set([...pages, ...gscOnly, ...ga4Only].map((p) => p.url));
+  const urlSet = new Set([...pages, ...gscOnly, ...ga4Only, ...logOnly].map((p) => p.url));
   const pageSet = new Set(R.pages.map((p) => p.url));
   const inSeg = (u) => urlSet.has(u);
   const S = {
@@ -328,6 +333,7 @@ export function sliceResult(R, segId, segments = R.meta?.segments || [], { linkS
     externals: (R.externals || []).filter((e) => inSeg(e.firstPage)),
     gscOnly,
     ga4Only,
+    logOnly,
     meta: { ...R.meta, segment: { id: def.id, name: def.name, color: def.color, pages: pages.length, total: R.pages.length } },
   };
   S.summary = computeSummary(S, linkStats);
@@ -370,6 +376,8 @@ export function segmentStats(R, segments = R.meta?.segments || [], { topIssues =
       inSitemap: pages.filter((p) => p.inSitemap).length,
       clicks: pages.some((p) => p.gsc) ? pages.reduce((a, p) => a + (p.gsc?.clicks || 0), 0) : null,
       sessions: R.meta?.ga4 || pages.some((p) => p.ga4) ? pages.reduce((a, p) => a + (p.ga4?.sessions || 0), 0) + S.ga4Only.reduce((a, g) => a + (g.sessions || 0), 0) : null,
+      logHits: R.meta?.logs ? pages.reduce((a, p) => a + (p.log?.hits || 0), 0) + (S.logOnly || []).reduce((a, g) => a + (g.hits || 0), 0) : null,
+      googlebotHits: R.meta?.logs ? pages.reduce((a, p) => a + (p.log?.googlebot || 0), 0) + (S.logOnly || []).reduce((a, g) => a + (g.googlebot || 0), 0) : null,
       pillars: S.summary.pillars.map((p) => ({ id: p.id, score: p.score })),
       topIssues: top,
     };

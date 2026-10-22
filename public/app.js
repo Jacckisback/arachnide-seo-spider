@@ -12,6 +12,7 @@ import { createMap, paletteOf } from './viz.js';
 import { LazySet, buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
 import { readNdjson } from './shared/ndjson.js';
+import { initLogs, renderLogsHead, logsCardHtml, wireLogsCard } from './logs.js';
 import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants, COLORS as MAP_COLORS } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 import { sliceResult, applySegments, assignSegments, segmentStats, issueBySegment, suggestFromFolders, NONE, NONE_COLOR } from './shared/segments.js';
@@ -29,6 +30,7 @@ const collatorFor = (locale) => {
   return collators.get(locale);
 };
 const agentListeners = [];
+const logsListeners = [];
 const store = {
   get(k, d = null) {
     try { const v = localStorage.getItem('arachnide.' + k); return v === null ? d : JSON.parse(v); } catch { return d; }
@@ -238,6 +240,10 @@ const TABS = [
   { id: 'cwv', icon: 'bolt', show: (R) => !!R.meta.psi, rows: (R) => html200(R).filter((p) => p.psi),
     cols: [C.url, { k: 'psiScore', l: 'col.psiScore', num: true, v: (r) => r.psi.score ?? '', html: (r) => scoreCell(r.psi.score) }, ...['lcp', 'inp', 'cls', 'fcp', 'ttfb'].map((m) => ({ k: 'f_' + m, l: 'col.' + m, num: true, v: (r) => r.psi.field?.[m]?.p75 ?? '', html: (r) => cwvCell(r.psi.field?.[m], m) })), { k: 'fieldSrc', l: 'col.fieldData', v: (r) => (r.psi.field ? t('ui.yes') : t('cwv.noField')) }, { k: 'labLcp', l: 'col.labLcp', num: true, v: (r) => (r.psi.lab?.lcp ? Math.round(r.psi.lab.lcp) : ''), html: (r) => (r.psi.lab?.lcp ? `${dec(r.psi.lab.lcp / 1000, 1)} s` : '') }, { k: 'tbt', l: 'col.tbt', num: true, v: (r) => (r.psi.lab?.tbt != null ? Math.round(r.psi.lab.tbt) : '') }],
     filters: { all: () => true, poor: (p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field?.[k]?.cat === 'poor'), needsImprovement: (p) => ['lcp', 'inp', 'cls'].some((k) => p.psi.field?.[k]?.cat === 'ni'), good: (p) => p.psi.field && ['lcp', 'inp', 'cls'].every((k) => !p.psi.field[k] || p.psi.field[k].cat === 'good'), noField: (p) => !p.psi.field } },
+  { group: 'grp.logs' },
+  { id: 'logs', icon: 'upload', rows: (R) => (R.meta.logs ? [...R.pages.filter((p) => p.log), ...(R.logOnly || []).map((x) => ({ url: x.url, logOnly: true, resource: x.resource, log: x, status: x.status }))] : []),
+    cols: [C.url, { k: 'logHits', l: 'col.logHits', num: true, v: (r) => r.log?.hits ?? '' }, { k: 'logSearch', l: 'col.logSearch', num: true, v: (r) => r.log?.search ?? '' }, { k: 'logGooglebot', l: 'col.logGooglebot', num: true, v: (r) => r.log?.googlebot ?? '' }, { k: 'logBingbot', l: 'col.logBingbot', num: true, v: (r) => r.log?.bingbot ?? '' }, { k: 'logAi', l: 'col.logAi', num: true, v: (r) => r.log?.ai ?? '' }, { k: 'logHuman', l: 'col.logHuman', num: true, v: (r) => r.log?.human ?? '' }, { k: 'logLast', l: 'col.logLast', v: (r) => (r.log?.last ? r.log.last.slice(0, 10) : '') }, { k: 'logStatus', l: 'col.logStatus', num: true, v: (r) => r.log?.status ?? '', html: (r) => (r.log?.status ? `<span class="${statusCls(r.log.status)}">${r.log.status}</span>${r.log.s5 ? ` <span class="chip error">5xx ×${num(r.log.s5)}</span>` : ''}` : '') }, { k: 'logTime', l: 'col.logTime', num: true, v: (r) => r.log?.avgTime ?? '' }, { k: 'logSpoofed', l: 'col.logSpoofed', num: true, v: (r) => r.log?.spoofed ?? '', html: (r) => (r.log?.spoofed ? `<span class="chip warning">${num(r.log.spoofed)}</span>` : '') }, { k: 'inCrawl', l: 'col.inCrawl', v: (r) => (r.logOnly ? t('ui.no') : t('ui.yes')), html: (r) => (r.logOnly ? `<span class="chip warning">${t('ui.no')}</span>` : t('ui.yes')) }, { ...C.indexability, html: (r) => (r.logOnly ? '' : C.indexability.html(r)) }, C.depth, C.linkScore],
+    filters: { withHits: (r) => r.log?.hits > 0, logOrphans: (r) => r.logOnly && !r.resource && r.log.search > 0 && r.log.s2 > 0 && !r.url.includes('?'), notCrawled: (r) => !r.logOnly && r.isHtml && r.status === 200 && r.indexable && !r.log?.googlebot, crawlWaste: (r) => r.log?.search > 0 && (r.logOnly ? !r.resource && (r.log.s3 > 0 || r.log.s4 > 0 || r.url.includes('?')) : r.status >= 300 || (r.isHtml && !r.indexable)), botErrors: (r) => r.log?.s5 > 0, spoofed: (r) => r.log?.spoofed > 0, resources: (r) => r.logOnly && r.resource, noHits: (r) => !r.logOnly && r.isHtml && r.status === 200 && !r.log?.hits } },
   { group: 'grp.architecture' },
   { id: 'linking', icon: 'sitemap', rows: html200, cols: [C.url, C.linkScore, C.depth, C.inlinks, C.contentInlinks, C.outlinks, C.extOut, C.indexability],
     filters: { all: () => true, lowInlinks: (p) => (p.uniqueInlinks || 0) <= 1, noContentInlinks: (p) => !p.contentInlinks, deep: (p) => p.depth >= (TH().deepLevel || 4), unreachable: (p) => p.depth === null } },
@@ -258,7 +264,7 @@ const visibleTabs = () => {
 // Pilotage et exploration en tête ; toutes les autres analyses restent accessibles dans « Plus d'analyses ».
 const NAV = [
   { group: 'grp.pilot', items: ['dashboard', 'issues', 'plan', 'viz', 'graph', 'fix', 'fixHistory'] },
-  { group: 'grp.explore', items: ['internal', 'linking', 'content', 'images', 'directives'] },
+  { group: 'grp.explore', items: ['internal', 'linking', 'content', 'images', 'directives', 'logs'] },
 ];
 const NAV_IDS = new Set(NAV.flatMap((g) => g.items));
 const SUB_ITEMS = new Set(['fixHistory']); // affiché en retrait sous « Corrections »
@@ -345,6 +351,10 @@ function render() {
   if (state.tab === 'plan') return renderPlan(view);
   if (state.tab === 'robots') return renderRobots(view);
   if (isMap) return renderViz(view);
+  if (state.tab === 'logs') {
+    const box = renderLogsHead(view, state.R);
+    return box ? renderTable(box, TAB_BY_ID.logs, TAB_BY_ID.logs.rows(state.R), { title: t('logs.urls'), help: '' }) : undefined;
+  }
   if (state.tab === 'fix') return renderFixTab(view);
   if (state.tab === 'fixHistory') return renderFixHistory(view);
   let tab = TAB_BY_ID[state.tab];
@@ -509,6 +519,8 @@ function renderDashboard(view) {
   view.innerHTML = overviewHtml(R, { t, esc, icon, num, prevDelta }, { pillars, actions: topActions(R), good: strengths(R), partial: isPartial(R), from });
   view.querySelector('.ov-grid')?.insertAdjacentHTML('afterend', segDashboardHtml());
   wireSegCard(view);
+  (view.querySelector('.seg-card') || view.querySelector('.ov-grid'))?.insertAdjacentHTML('afterend', logsCardHtml(R));
+  wireLogsCard(view);
   playOverview(view, num, { animate });
   wireHighlight(view);
   state.ovShown = key;
@@ -1518,6 +1530,7 @@ function detailKv(p) {
     ['col.inSitemap', p.inSitemap ? t('ui.yes') : t('ui.no')],
     ['col.responseTime', p.responseTime != null ? p.responseTime + ' ms' : ''], ['col.size', kb(p.size)],
     ['col.compression', p.headers?.encoding], ['detail.lastModified', p.lastModified], ['detail.via', p.via ? t('via.' + p.via) : ''], ['detail.error', p.error],
+    ...(p.log ? [['col.logHits', `${num(p.log.hits)} · Googlebot ${num(p.log.googlebot)} · Bingbot ${num(p.log.bingbot)} · ${t('col.logAi')} ${num(p.log.ai)}`], ['col.logLast', p.log.last ? t.date(p.log.last) : t('logs.never')], ['col.logStatus', p.log.status ? `${p.log.status}${p.log.s5 ? ` · 5xx ×${num(p.log.s5)}` : ''}` : '']] : []),
   ].filter(([, v]) => v !== undefined && v !== null && v !== '');
   return `<div class="kv">${rows.map(([k, v]) => `<div>${esc(t(k))}</div><div>${esc(v)}</div>`).join('')}</div>`;
 }
@@ -1673,6 +1686,7 @@ async function loadResult(R, { file = null } = {}) {
   state.linkPage = {};
   state.mapGraph = null;
   state.counts = null;
+  state.logsImport = false;
   const savedSeg = store.get('seg:' + host, '');
   state.segId = savedSeg && (savedSeg === NONE || (R.meta.segments || []).some((s) => s.id === savedSeg)) ? savedSeg : '';
   applyView();
@@ -2128,6 +2142,7 @@ function connect() {
     render();
     if (d.via === 'agent') toast(t('seg.saved', { n: segDefs().length }), 'info');
   });
+  es.addEventListener('logs', (e) => { const d = JSON.parse(e.data || '{}'); logsListeners.forEach((fn) => fn(d)); });
   es.addEventListener('pages', (e) => { for (const r of JSON.parse(e.data)) state.live.push(r); throttledRender(); });
   es.addEventListener('done', async () => {
     setRunning(false);
@@ -2197,6 +2212,7 @@ document.addEventListener('keydown', (e) => {
   await setLang(detectLang(store.get('lang')));
   initFix({ t: () => t, esc, icon, toast, getResult: () => state.R, rerender: () => { renderTabs(); render(); } }).catch(() => {});
   initAgents({ t: () => t, esc, toast, onAgentEvent: (fn) => agentListeners.push(fn) }).catch(() => {});
+  initLogs({ t: () => t, esc, icon, num, toast, state: () => state, render, goTab, openIssue, fetchLight, loadResult, onLogsEvent: (fn) => logsListeners.push(fn) });
   connect();
   try {
     const s = await fetch('/api/state').then((r) => r.json());

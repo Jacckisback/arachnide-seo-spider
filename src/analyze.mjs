@@ -30,15 +30,15 @@ export const THRESHOLDS = {
 };
 
 export const SEVERITIES = ['error', 'warning', 'notice'];
-const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
+export const SEV_ORDER = { error: 0, warning: 1, notice: 2 };
 // /index.html, /home, /accueil… → / : simple alias de l'accueil, pas une page supprimée.
 const HOME_ALIAS = /^\/((index|default|home|accueil|inicio|start|startseite)(\.(html?|php|aspx?))?\/?)?$/i;
 const UNVERIFIABLE = new Set([0, 401, 403, 429, 999]);
 // Score : plafond de points retirés par problème, poids par page touchée, facteur d'impact.
 // Paliers largement au-dessus du score brut (≤ ~200 même sur 100 000 pages) : la gravité départage toujours en premier.
-const PRIO_FLOOR = { error: 1000, warning: 500, notice: 0 };
-const SEV_W = { error: 3, warning: 2, notice: 1 };
-const LVL_W = { high: 3, medium: 2, low: 1 };
+export const PRIO_FLOOR = { error: 1000, warning: 500, notice: 0 };
+export const SEV_W = { error: 3, warning: 2, notice: 1 };
+export const LVL_W = { high: 3, medium: 2, low: 1 };
 
 export const GENERIC_ANCHORS = new Set([
   'cliquez ici', 'ici', 'en savoir plus', 'lire la suite', 'voir plus', 'plus', 'lien', 'cliquer ici', 'suite', 'découvrir',
@@ -812,6 +812,7 @@ export function analyze(crawler) {
     images: imgs.map((i) => ({ src: i.src, role: i.role, of: i.of || undefined, descriptor: i.descriptor || undefined, media: i.media || undefined, format: (i.type || i.contentType).replace(/^image\//, '').replace('jpeg', 'jpg').replace('svg+xml', 'svg') || imageFormat(i.src), responsive: i.responsive || undefined, picture: i.picture || undefined, variants: i.variantCount || undefined, alt: i.alts.join(' | '), missingAlt: i.missingAlt, emptyAlt: i.emptyAlt || undefined, pages: i.pages, firstPage: i.firstPage, status: i.status, size: i.size })),
     gscOnly,
     ga4Only,
+    logOnly: [],
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages, firstPage: e.firstPage })),
     links: linksOut,
   };
