@@ -13,9 +13,10 @@ import { Renderer } from './renderer.mjs';
 import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4Csv } from './google.mjs';
 import { Interner, LinkStore, FLAG } from './graph.mjs';
 import { RegexRunner } from './regex-runner.mjs';
+import { normalizeUrl, compileParamPatterns } from './urlnorm.mjs';
 import { xpathExtract } from './xpath.mjs';
 
-export const VERSION = '3.21.0';
+export const VERSION = '3.22.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -23,8 +24,6 @@ const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
 // page vue suffisent à compter les pages distinctes, sans Set par image (il y en a des centaines de milliers).
 const MAX_ALTS = 5;
 const newImage = (src) => ({ src, role: 'src', of: '', descriptor: '', type: '', media: '', alts: [], missingAlt: false, pages: 0, firstPage: '', lastPage: '', status: null, size: null, contentType: '', responsive: false, picture: false, variantCount: 0 });
-// Paramètres de suivi retirés par défaut : ils ne changent pas la page (RFC 3986 ne les distingue pas, Google les ignore).
-const TRACKING_PARAMS = /^(utm_[a-z0-9_]+|gclid|gclsrc|dclid|gbraid|wbraid|fbclid|msclkid|mc_cid|mc_eid|yclid|twclid|ttclid|igshid|srsltid|_hsenc|_hsmi|hsctatracking|mkt_tok|vero_id|s_kwcid|ef_id|zanpid|_ga|_gl|_gid|_ke|oly_enc_id|oly_anon_id|rb_clickid|trk_[a-z0-9_]+|ref_src|ref_url)$/i;
 // Facettes : au-delà de ce nombre de variantes de paramètres sur un même chemin, le site est probablement un piège à facettes.
 const FACET_WARN = 200;
 const FACET_PATHS_MAX = 20;
@@ -228,8 +227,7 @@ export class Crawler extends EventEmitter {
     }
     this.startUrl = fix(startUrl);
     if (options.respectRobots === false && !options.robotsMode) this.opts.robotsMode = 'ignore'; // compatibilité 2.0
-    this.removeParamRes = String(this.opts.removeParams || '').split(/[\s,]+/).filter(Boolean)
-      .map((p) => new RegExp('^' + p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i'));
+    this.removeParamRes = compileParamPatterns(this.opts.removeParams);
     this.pathLimits = (this.opts.pathLimits || [])
       .map((l) => { try { return { re: new RegExp(l.pattern, 'i'), max: Number(l.max), count: 0, pattern: l.pattern }; } catch { return null; } })
       .filter((l) => l && l.max >= 0);
@@ -292,49 +290,7 @@ export class Crawler extends EventEmitter {
   }
 
   normalize(url) {
-    try {
-      const u = new URL(url);
-      u.hash = '';
-      // %c3%a9 et %C3%A9 désignent la même ressource (RFC 3986) : forme canonique en majuscules.
-      const upperHex = (x) => x.replace(/%[0-9a-f]{2}/gi, (m) => m.toUpperCase());
-      u.pathname = upperHex(u.pathname);
-      if (this.opts.ignoreQuery) u.search = '';
-      else if (this.removeParamRes.length && u.search) {
-        // Suppression sur la chaîne brute : URLSearchParams réécrirait « ?b » en « ?b= » et « %20 » en « + ».
-        const kept = u.search
-          .slice(1)
-          .split('&')
-          .filter((kv) => {
-            let k = kv.split('=')[0];
-            try {
-              k = decodeURIComponent(k.replace(/\+/g, ' '));
-            } catch {
-              /* clé mal encodée : comparée telle quelle */
-            }
-            return kv && !this.removeParamRes.some((re) => re.test(k));
-          });
-        u.search = kept.length ? '?' + kept.join('&') : '';
-      }
-      if (u.search && this.opts.normalizeParams) {
-        // ?b=2&a=1 et ?a=1&b=2 sont la même page : paramètres triés par clé ; les paramètres de suivi sont retirés.
-        const pairs = u.search.slice(1).split('&').filter(Boolean);
-        const keyOf = (kv) => {
-          let k = kv.split('=')[0];
-          try {
-            k = decodeURIComponent(k.replace(/\+/g, ' '));
-          } catch {}
-          return k;
-        };
-        const kept = pairs.filter((kv) => !TRACKING_PARAMS.test(keyOf(kv)));
-        kept.sort((a, b) => (keyOf(a) < keyOf(b) ? -1 : keyOf(a) > keyOf(b) ? 1 : 0));
-        u.search = kept.length ? '?' + kept.join('&') : '';
-      }
-      if (u.search) u.search = upperHex(u.search);
-      // « /a? » (requête vide) est la même requête que « /a ».
-      return u.href.endsWith('?') ? u.href.slice(0, -1) : u.href;
-    } catch {
-      return null;
-    }
+    return normalizeUrl(url, { ignoreQuery: this.opts.ignoreQuery, removeParamRes: this.removeParamRes, normalizeParams: this.opts.normalizeParams });
   }
 
   isInternal(url) {

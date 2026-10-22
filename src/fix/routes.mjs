@@ -20,7 +20,9 @@ const siteOf = (R) => R.meta.finalStart || R.meta.startUrl;
 // Host local (contre le DNS rebinding), même Origin, et JSON obligatoire en POST (une page tierce ne peut pas
 // l'envoyer sans requête CORS préalable, que le serveur n'autorise pas).
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
-export function isTrustedRequest(req) {
+// Requête venue de l'interface locale : hôte local, origine cohérente, et un corps qu'un formulaire HTML ne peut pas
+// envoyer (JSON ; ou un fichier brut en application/octet-stream quand la route accepte un téléversement en flux).
+export function isTrustedRequest(req, { binary = false } = {}) {
   const host = req.headers.host || '';
   if (!LOCAL_HOST.test(host) && !(process.env.HOST && host.startsWith(process.env.HOST))) return false;
   const origin = req.headers.origin;
@@ -31,7 +33,8 @@ export function isTrustedRequest(req) {
       return false;
     }
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return false;
+  const ct = req.headers['content-type'] || '';
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'DELETE' && !/^application\/json\b/i.test(ct) && !(binary && /^application\/octet-stream\b/i.test(ct))) return false;
   return true;
 }
 

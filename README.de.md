@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Version 3.21.0">
+  <img src="https://img.shields.io/badge/version-3.22.0-3d5f17" alt="Version 3.22.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -31,6 +31,10 @@ Es gibt kein Konto und keine Cloud. Ihre Daten bleiben auf Ihrem Rechner. Getest
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 📜 Neu in 3.22: Logfile-Analyse — was Googlebot wirklich anfordert
+
+Ein Crawl zeigt, was Suchmaschinen erreichen *konnten*; die **Zugriffsprotokolle Ihres Servers** zeigen, was Googlebot, Bingbot und die KI-Bots *tatsächlich* anfordern, wie oft, mit welchem Status und wie schnell. Arachnide liest diese Logs jetzt (Apache / Nginx combined und common, W3C von IIS / CloudFront, JSON Lines von Nginx, Cloudflare Logpush, Caddy, Traefik oder ein beliebiges eigenes Nginx-`log_format`; `.gz` möglich, rotierte Dateien zusammen) und gleicht sie mit dem geöffneten Crawl ab, mit derselben URL-Normalisierung wie der Crawler. Neuer Tab **Server-Logs**: Anfragen pro Tag und Bot-Familie, gesehene Bots (mit ihren IPs), meistangefragte Ordner, jede in den Logs gesehene URL mit ihren Crawl-Daten und acht Filtern; eine Karte im Dashboard; Zähler in der Seitenansicht, in Segmenten und im Kundenbericht. **Sechs neue Prüfungen** zählen im Score: von Suchmaschinen gecrawlte, aber unverlinkte Seiten, indexierbare Seiten, die Googlebot nie besucht, Crawl-Budget, das in Weiterleitungen / Fehlern / nicht indexierbaren URLs verloren geht, an Bots ausgelieferte 5xx, **gefälschte Googlebot-Besuche** (Reverse-DNS-Prüfung, wie Google und Bing sie dokumentieren) und für Bots langsame Seiten. Alles bleibt auf Ihrem Rechner: Dateien werden Zeile für Zeile gestreamt, neben dem Crawl bleiben nur aggregierte Zähler. CLI `--logs DATEI` (wiederholbar), `--logs-format`, `--logs-custom`, `--logs-verify`; KI-Agenten erhalten `arachnide_logs`. Anleitung: **[docs/LOGS.md](docs/LOGS.md)** (Englisch).
 
 ## 🛡️ Neu in 3.21: Crawl-Leitplanken, XPath, Listenmodus per Sitemap und ein reproduzierbarer 200 000-Seiten-Benchmark
 
@@ -377,6 +381,7 @@ node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
+node src/cli.mjs https://www.example.com --logs access.log --logs access.log.1.gz --logs-verify --csv --report
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

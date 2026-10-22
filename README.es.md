@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licencia MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.21.0-3d5f17" alt="Versión 3.21.0">
+  <img src="https://img.shields.io/badge/version-3.22.0-3d5f17" alt="Versión 3.22.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o posterior">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -31,6 +31,10 @@ No hay cuenta ni nube, y tus datos se quedan en tu ordenador. Probado en un siti
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Resumen: puntuación de salud SEO en cuatro anillos (técnico, contenido, enlazado, rendimiento), prioridades, indicadores clave y puntos fuertes" width="100%">
 </p>
+
+## 📜 Novedades de la 3.22: análisis de logs — lo que Googlebot pide realmente
+
+Un rastreo muestra lo que los buscadores *podían* alcanzar; los **registros de acceso de su servidor** muestran lo que Googlebot, Bingbot y los bots de IA *piden realmente*, con qué frecuencia, con qué estado y en cuánto tiempo. Arachnide lee ahora esos logs (Apache / Nginx combined y common, W3C de IIS / CloudFront, JSON líneas de Nginx, Cloudflare Logpush, Caddy, Traefik, o cualquier `log_format` de Nginx personalizado; `.gz` aceptado, archivos rotados juntos) y los cruza con el rastreo abierto, con la misma normalización de URL que el rastreador. Nueva pestaña **Logs del servidor**: peticiones por día y por familia de bots, bots vistos (con sus IP distintas), carpetas más pedidas, cada URL vista en los logs con sus datos de rastreo y ocho filtros; una tarjeta en el panel; contadores en la ficha de página, los segmentos y el informe para el cliente. **Seis controles nuevos** cuentan en la puntuación: páginas rastreadas por los buscadores que nada enlaza, páginas indexables que Googlebot nunca visita, presupuesto de rastreo desperdiciado en redirecciones / errores / URL no indexables, 5xx servidos a bots, **visitas falsas de Googlebot** (verificación DNS inversa como documentan Google y Bing) y páginas lentas para los bots. Todo se queda en su equipo: los archivos se leen en flujo línea a línea y solo se guardan recuentos agregados junto al rastreo. CLI `--logs ARCHIVO` (repetible), `--logs-format`, `--logs-custom`, `--logs-verify`; los agentes de IA ganan `arachnide_logs`. Guía: **[docs/LOGS.md](docs/LOGS.md)** (en inglés).
 
 ## 🛡️ Novedades de la 3.21: salvaguardas de rastreo, XPath, modo lista por sitemap y un benchmark reproducible de 200 000 páginas
 
@@ -377,6 +381,7 @@ node src/cli.mjs https://www.example.com --report --compare crawls/previous.json
 node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.ndjson --csv
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
+node src/cli.mjs https://www.example.com --logs access.log --logs access.log.1.gz --logs-verify --csv --report
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

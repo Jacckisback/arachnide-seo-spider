@@ -1350,3 +1350,42 @@ button.link.accent { color: var(--accent); font-weight: 600; }
 .seg-top { max-width: 340px; }
 .seg-edit-head input[type=text], .seg-edit-head select, .seg-rule select, .seg-rule input { min-width: 0; width: 100%; }
 @media (max-width: 760px) { .seg-edit-head { grid-template-columns: 40px minmax(0, 1fr) auto; } .seg-rule { grid-template-columns: minmax(0, 1fr) 30px; } }
+
+/* ---------- Analyse de logs ---------- */
+.lg-head { display: grid; gap: 14px; margin-bottom: 14px; }
+.lg-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.lg-kpis.compact { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); margin-bottom: 8px; }
+.lg-kpi { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; display: grid; gap: 2px; }
+.lg-kpi b { font-size: var(--fs-xl, 20px); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.lg-kpi span { font-size: var(--fs-xs, 12px); color: var(--muted); }
+.lg-kpi.warn b { color: var(--warn); }
+.lg-kpi.err b { color: var(--err); }
+.lg-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; }
+.lg-card { position: relative; }
+.lg-chart { width: 100%; height: auto; display: block; }
+.lg-grid line.lg-grid, .lg-chart .lg-grid { stroke: var(--line); stroke-width: 1; }
+.lg-chart .lg-axis { fill: var(--muted); font-size: 10px; font-family: var(--font); }
+.lg-chart .lg-bar:hover rect { opacity: .85; }
+.lg-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: var(--fs-xs, 12px); color: var(--muted); }
+.lg-legend i, .lg-tip i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.lg-tip { position: absolute; right: 16px; top: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 10px; font-size: var(--fs-xs, 12px); pointer-events: none; box-shadow: var(--shadow); }
+.lg-table summary { cursor: pointer; color: var(--muted); font-size: var(--fs-xs, 12px); margin-top: 8px; }
+.lg-table table { margin-top: 6px; }
+.lg-dirs { margin-top: 12px; }
+.lg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lg-import { display: grid; gap: 12px; max-width: 820px; }
+.lg-drop { border: 2px dashed var(--line); border-radius: var(--r-lg); padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; display: flex; gap: 10px; align-items: center; justify-content: center; }
+.lg-drop:hover, .lg-drop.over, .lg-drop:focus-visible { border-color: var(--accent); color: var(--text); background: var(--accent-soft); outline: none; }
+.lg-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; align-items: end; }
+.lg-opts label { display: grid; gap: 4px; font-size: var(--fs-sm, 13px); }
+.lg-opts label.check { display: flex; align-items: center; gap: 8px; }
+.lg-opts .span2 { grid-column: 1 / -1; }
+.lg-progress { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.lg-progress .spin { display: inline-flex; animation: spin 1.2s linear infinite; }
+.lg-files { margin: 0; padding-left: 18px; color: var(--muted); font-size: var(--fs-xs, 12px); }
+.lg-dash .lg-chart { max-height: 120px; }
+.lg-issues { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.lg-issues .chip { margin-right: 6px; }
+@media (max-width: 900px) { .lg-grid, .lg-opts { grid-template-columns: minmax(0, 1fr); } }
+
+@keyframes spin { to { transform: rotate(360deg); } }
