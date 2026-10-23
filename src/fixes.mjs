@@ -38,7 +38,7 @@ const constraints = (T) => ({
 });
 
 // Page la plus proche (segments d'URL communs) pour proposer une cible de redirection.
-function closestPage(url, candidates) {
+export function closestPage(url, candidates) {
   const segs = (u) => new URL(u).pathname.split('/').filter(Boolean).map((s) => s.toLowerCase());
   const a = segs(url);
   const words = new Set(a.join('-').split(/[-_.]+/).filter((w) => w.length > 2));

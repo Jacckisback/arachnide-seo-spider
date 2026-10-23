@@ -13,6 +13,7 @@ import { LazySet, buildModel } from './map-model.js';
 import { remember as rememberPositions, clearLayoutCache } from './map-layout.js';
 import { readNdjson } from './shared/ndjson.js';
 import { initLogs, renderLogsHead, logsCardHtml, wireLogsCard } from './logs.js';
+import { initListOptions, listCrawlOptions, sitemapChangesCardHtml, wireSitemapChangesCard, sitemapChangesHeadHtml, decisionChip, ACTION_DECISIONS } from './smdiff.js';
 import { makeScene, treeOf, matchPages, matchIds, isolateSet, searchPages, nodeIdForUrl, ancestorsOf, legendItems, activeFilters, DEFAULT_FILTERS, folderOptions, pathTo, pathClicks, descendants, COLORS as MAP_COLORS } from './map-view.js';
 import { headHtml, toolbarHtml, filtersHtml, chipsHtml, tipHtml, inspectorHtml, listHtml as mapListHtml, dirsOf } from './map-ui.js';
 import { sliceResult, applySegments, assignSegments, segmentStats, issueBySegment, suggestFromFolders, NONE, NONE_COLOR } from './shared/segments.js';
@@ -249,6 +250,9 @@ const TABS = [
     filters: { all: () => true, lowInlinks: (p) => (p.uniqueInlinks || 0) <= 1, noContentInlinks: (p) => !p.contentInlinks, deep: (p) => p.depth >= (TH().deepLevel || 4), unreachable: (p) => p.depth === null } },
   { id: 'sitemap', icon: 'sitemap', rows: (R) => R.pages, cols: [C.url, C.status, C.inSitemap, C.indexability, C.inlinks, C.depth],
     filters: { inSitemap: (p) => p.inSitemap, orphans: (p) => p.inSitemap && !p.uniqueInlinks && p.depth !== 0, nonIndexableInSitemap: (p) => p.inSitemap && !p.indexable, indexableNotInSitemap: (p) => !p.inSitemap && p.indexable && p.isHtml } },
+  { id: 'sitemapChanges', icon: 'sitemap', show: (R) => !!R.meta.sitemapDiff, rows: (R) => R.sitemapChanges || [],
+    cols: [C.url, { k: 'change', l: 'col.change', v: (r) => t('smd.change.' + r.change), html: (r) => `<span class="chip ${r.change === 'removed' ? 'warning' : 'notice'}">${esc(t('smd.change.' + r.change))}</span>` }, { k: 'status', l: 'col.status', num: true, html: (r) => `<span class="${statusCls(r.status)}">${r.status || '—'}</span>` }, { k: 'decision', l: 'col.decision', v: (r) => t('smd.' + r.decision), html: (r) => decisionChip(r.decision) }, { k: 'suggest', l: 'col.suggestedTarget', cls: 'trunc', html: (r) => (r.suggest ? `${urlCell(r.suggest)} <span class="muted small">${r.score} %</span>` : '') }, { k: 'redirectUrl', l: 'col.redirectsTo', cls: 'trunc', html: (r) => (r.redirectUrl ? urlCell(r.finalUrl && r.finalUrl !== r.redirectUrl ? r.finalUrl : r.redirectUrl) : '') }, { k: 'finalStatus', l: 'col.finalStatus', num: true, html: (r) => (r.finalStatus != null ? `<span class="${statusCls(r.finalStatus)}">${r.finalStatus}</span>` : r.redirectUrl ? '—' : '') }, { k: 'hops', l: 'col.hops', num: true, v: (r) => r.hops || '' }, { k: 'indexabilityReason', l: 'col.indexability', v: (r) => (r.status >= 200 && r.status < 300 ? idxLabel(r) : ''), html: (r) => (r.status >= 200 && r.status < 300 ? (r.indexable ? `<span class="chip ok">${t('idx.indexable')}</span>` : `<span class="chip muted">${esc(idxLabel(r))}</span>`) : '') }],
+    filters: { actions: (r) => ACTION_DECISIONS.has(r.decision), all: () => true, smToRedirect: (r) => r.decision === 'redirect-suggested', smGone: (r) => r.decision === 'gone-410', smLive: (r) => r.decision === 'live', smBroken: (r) => r.decision === 'redirect-broken' || r.decision === 'error', smChain: (r) => r.decision === 'redirect-chain', smAddedBad: (r) => r.decision === 'added-bad', smRemoved: (r) => r.change === 'removed', smAdded: (r) => r.change === 'added', smOk: (r) => !ACTION_DECISIONS.has(r.decision) } },
   { id: 'viz', icon: 'sitemap' },
   { id: 'graph', icon: 'graph' },
   { id: 'robots', icon: 'robot' },
@@ -351,6 +355,11 @@ function render() {
   if (state.tab === 'plan') return renderPlan(view);
   if (state.tab === 'robots') return renderRobots(view);
   if (isMap) return renderViz(view);
+  if (state.tab === 'sitemapChanges') {
+    const out = renderTable(view, TAB_BY_ID.sitemapChanges, TAB_BY_ID.sitemapChanges.rows(state.R));
+    view.querySelector('.toolbar')?.insertAdjacentHTML('afterend', sitemapChangesHeadHtml(state.R));
+    return out;
+  }
   if (state.tab === 'logs') {
     const box = renderLogsHead(view, state.R);
     return box ? renderTable(box, TAB_BY_ID.logs, TAB_BY_ID.logs.rows(state.R), { title: t('logs.urls'), help: '' }) : undefined;
@@ -521,6 +530,10 @@ function renderDashboard(view) {
   wireSegCard(view);
   (view.querySelector('.seg-card') || view.querySelector('.ov-grid'))?.insertAdjacentHTML('afterend', logsCardHtml(R));
   wireLogsCard(view);
+  if (R.meta.sitemapDiff) {
+    (view.querySelector('.seg-card') || view.querySelector('.ov-grid'))?.insertAdjacentHTML('afterend', sitemapChangesCardHtml(R));
+    wireSitemapChangesCard(view);
+  }
   playOverview(view, num, { animate });
   wireHighlight(view);
   state.ovShown = key;
@@ -1530,6 +1543,7 @@ function detailKv(p) {
     ['col.inSitemap', p.inSitemap ? t('ui.yes') : t('ui.no')],
     ['col.responseTime', p.responseTime != null ? p.responseTime + ' ms' : ''], ['col.size', kb(p.size)],
     ['col.compression', p.headers?.encoding], ['detail.lastModified', p.lastModified], ['detail.via', p.via ? t('via.' + p.via) : ''], ['detail.error', p.error],
+    ...(p.sitemapChange ? [['col.change', t('smd.change.' + p.sitemapChange)]] : []),
     ...(p.log ? [['col.logHits', `${num(p.log.hits)} · Googlebot ${num(p.log.googlebot)} · Bingbot ${num(p.log.bingbot)} · ${t('col.logAi')} ${num(p.log.ai)}`], ['col.logLast', p.log.last ? t.date(p.log.last) : t('logs.never')], ['col.logStatus', p.log.status ? `${p.log.status}${p.log.s5 ? ` · 5xx ×${num(p.log.s5)}` : ''}` : '']] : []),
   ].filter(([, v]) => v !== undefined && v !== null && v !== '');
   return `<div class="kv">${rows.map(([k, v]) => `<div>${esc(t(k))}</div><div>${esc(v)}</div>`).join('')}</div>`;
@@ -1998,6 +2012,8 @@ function setMode(m) {
   $('#urlInput').hidden = m === 'list';
   $('#listInput').hidden = m !== 'list';
   $('#urlInput').required = m !== 'list';
+  $('#listOptsBtn').hidden = m !== 'list';
+  $('#listChip').hidden = m !== 'list' || !$('#listChip').textContent;
 }
 $$('#modeSeg button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
@@ -2009,7 +2025,8 @@ $('#crawlForm').addEventListener('submit', async (e) => {
   if (mode === 'list') {
     options.mode = 'list';
     options.urls = $('#listInput').value.split(/\s+/).map((x) => x.trim()).filter(Boolean);
-    if (!options.urls.length) return toast(t('toast.listEmpty'), 'error');
+    Object.assign(options, listCrawlOptions(options.urls));
+    if (!options.urls.length && !options.sitemapUrl) return toast(t('toast.listEmpty'), 'error');
   } else {
     body.url = $('#urlInput').value.trim();
     if (!body.url) return;
@@ -2212,6 +2229,7 @@ document.addEventListener('keydown', (e) => {
   await setLang(detectLang(store.get('lang')));
   initFix({ t: () => t, esc, icon, toast, getResult: () => state.R, rerender: () => { renderTabs(); render(); } }).catch(() => {});
   initAgents({ t: () => t, esc, toast, onAgentEvent: (fn) => agentListeners.push(fn) }).catch(() => {});
+  initListOptions({ t, esc, num, icon, store, toast, goTab, openIssue });
   initLogs({ t: () => t, esc, icon, num, toast, state: () => state, render, goTab, openIssue, fetchLight, loadResult, onLogsEvent: (fn) => logsListeners.push(fn) });
   connect();
   try {

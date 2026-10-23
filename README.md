@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.22.0-3d5f17" alt="Version 3.22.0">
+  <img src="https://img.shields.io/badge/version-3.23.0-3d5f17" alt="Version 3.23.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -31,6 +31,10 @@ There is no account and no cloud, and your data stays on your machine. Tested on
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Overview: SEO health score with four rings (technical, content, internal linking, performance), priorities, key indicators and strengths" width="100%">
 </p>
+
+## 🗂️ New in 3.23: sitemap changes — audit only the products that left, decide 301 or 410
+
+Products come and go on a shop every week; recrawling the whole site to learn what happened to the ones that left is slow and useless. Give Arachnide the current **sitemap or sitemap index** and a reference (a previous crawl from the history, the old sitemap, or a URL list): it crawls **only the URLs that left the sitemap** (or the ones added), **follows their redirects** and decides for each one — 301 to a suggested similar page (same folder, similar name, with a similarity score), return 410 when nothing replaces it, fix a broken redirect or a server error, shorten a chain, or put a still-live page back. New **Sitemap changes** tab with filters and CSV, a dashboard card, six new checks in the score and the report, a *List mode options* dialog in the app, `--sitemap-previous` / `--sitemap-changes` on the CLI and `arachnide_sitemap_changes` for AI agents. XPath extraction and the sitemap-driven list mode asked for in the same feedback have been in since 3.21. Guide: **[docs/SITEMAP-CHANGES.md](docs/SITEMAP-CHANGES.md)**.
 
 ## 📜 New in 3.22: log file analysis — what Googlebot really requests
 
@@ -395,6 +399,7 @@ node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.n
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://www.example.com --logs access.log --logs access.log.1.gz --logs-verify --csv --report
+node src/cli.mjs --sitemap https://www.example.com/sitemap_index.xml --sitemap-previous crawls/previous.jsonl.gz --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

@@ -35,7 +35,7 @@ export function linkStatsOf(R) {
 // Enregistrements NDJSON du résultat léger : même format que le fichier (public/shared/ndjson.js), pages allégées,
 // pas de liens, compteurs de liens par segment dans l'en-tête.
 export function* lightRecords(R) {
-  const { links, pages, ...rest } = R;
+  const { links, pages, sitemapUrls, ...rest } = R; // sitemapUrls : référence du prochain crawl de changements, inutile au navigateur
   const head = { t: 'head', version: 3, app_version: R.version, meta: R.meta, summary: R.summary, light: true, linkStats: linkStatsOf(R) };
   let first = true;
   for (const rec of resultRecords({ ...rest, pages: [] })) {

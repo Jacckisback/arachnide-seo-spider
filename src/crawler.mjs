@@ -14,9 +14,10 @@ import { runPsi, fetchGscPages, parseGscCsv, readGscKey, fetchGa4Pages, parseGa4
 import { Interner, LinkStore, FLAG } from './graph.mjs';
 import { RegexRunner } from './regex-runner.mjs';
 import { normalizeUrl, compileParamPatterns } from './urlnorm.mjs';
+import { diffUrls } from './sitemap-diff.mjs';
 import { xpathExtract } from './xpath.mjs';
 
-export const VERSION = '3.22.0';
+export const VERSION = '3.23.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -128,6 +129,9 @@ export const DEFAULT_OPTIONS = {
   robotsUnavailable: 'disallow', // robots.txt en 5xx ou injoignable : tout interdit (RFC 9309 § 2.3.1.4) ; 'allow' pour crawler quand même
   renderRestartEvery: 500, // Chrome relancé toutes les N pages rendues, pour borner sa mémoire
   sitemapUrl: '', // mode liste : URL d'un sitemap (ou index) qui fournit la liste
+  sitemapPrevious: null, // changements de sitemap : URL de référence (crawl précédent, ancien sitemap, liste) ; voir src/sitemap-diff.mjs
+  sitemapChanges: 'removed', // avec sitemapPrevious : crawler les URL 'removed' (retirées), 'added' (ajoutées) ou 'both'
+  followRedirects: null, // mode liste : suivre les redirections (null = oui quand sitemapPrevious est donné)
   pathLimits: [], // [{ pattern: '/blog/', max: 200 }]
   // Vitesse
   maxUrlPerSec: 0, // 0 = illimité ; plafond global de requêtes par seconde
@@ -716,6 +720,25 @@ export class Crawler extends EventEmitter {
       this.opts.maxPages = Math.max(this.opts.maxPages, this.listUrls.length);
       if (!this.listUrls.length) this.warn('warn.sitemapListEmpty', { url: this.opts.sitemapUrl });
     }
+    // Changements de sitemap : la liste (sitemap ou URL fournies) est comparée à la référence ; seules les URL retirées
+    // et/ou ajoutées sont crawlées, redirections suivies, pour trancher 301 / 410 / remise dans le sitemap.
+    if (this.listUrls && Array.isArray(this.opts.sitemapPrevious)) {
+      const prev = new Set();
+      for (const u of this.opts.sitemapPrevious) {
+        const n = this.normalize(u);
+        if (n) prev.add(n);
+      }
+      const cur = new Set(this.listUrls);
+      const { removed, added, kept } = diffUrls(cur, prev);
+      const which = ['removed', 'added', 'both'].includes(this.opts.sitemapChanges) ? this.opts.sitemapChanges : 'removed';
+      this.sitemapCurrent = cur;
+      this.sitemapRemoved = new Set(which === 'added' ? [] : removed);
+      this.sitemapAdded = new Set(which === 'removed' ? [] : added);
+      this.sitemapDiff = { sitemapUrl: this.opts.sitemapUrl || '', previous: prev.size, current: cur.size, removed: removed.length, added: added.length, kept, crawled: which, source: this.opts.sitemapPreviousSource || null };
+      this.listUrls = [...this.sitemapRemoved, ...this.sitemapAdded];
+      this.opts.maxPages = Math.max(this.opts.maxPages, this.listUrls.length);
+      if (!this.listUrls.length) this.warn('warn.sitemapNoChange', { removed: removed.length, added: added.length });
+    }
     if (this.listUrls) {
       for (const u of this.listUrls) this.enqueue(u, 0, 'list');
     } else {
@@ -893,7 +916,8 @@ export class Crawler extends EventEmitter {
         await res.body?.cancel();
         if (loc) {
           rec.redirectUrl = resolveUrl(loc, item.url) || loc;
-          if (this.opts.mode !== 'list') this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
+          // En mode liste les redirections ne sont pas suivies, sauf demande (changements de sitemap : il faut le code final).
+          if (this.opts.mode !== 'list' || this.opts.followRedirects || (this.opts.followRedirects == null && this.sitemapDiff)) this.enqueue(rec.redirectUrl, item.depth, 'redirect', (item.hops || 0) + 1);
         } else {
           // Un 3xx sans en-tête Location ne mène nulle part : navigateurs et Google affichent une page d'erreur.
           rec.error = 'Redirect without Location';

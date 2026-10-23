@@ -39,6 +39,14 @@ export function toCrawlerOptions(o = {}) {
     opts.mode = 'list';
     opts.urls = (Array.isArray(o.urls) ? o.urls : String(o.urls || '').split(/\s+/)).map(String).filter(Boolean).slice(0, 500000);
   }
+  // Changements de sitemap : référence déjà résolue en liste d'URL (le serveur, la CLI ou l'agent lisent le crawl précédent,
+  // l'ancien sitemap ou la liste) ; sitemapPreviousCrawl est résolu avant le lancement (resolveSitemapPrevious).
+  if (Array.isArray(o.sitemapPrevious)) opts.sitemapPrevious = o.sitemapPrevious.map(String).filter((u) => /^https?:\/\//i.test(u)).slice(0, 1000000);
+  if (o.sitemapPreviousCrawl) opts.sitemapPreviousCrawl = String(o.sitemapPreviousCrawl);
+  if (o.sitemapPreviousText) opts.sitemapPreviousText = String(o.sitemapPreviousText).slice(0, 50 * 1024 * 1024);
+  if (o.sitemapPreviousSource && typeof o.sitemapPreviousSource === 'object') opts.sitemapPreviousSource = { type: String(o.sitemapPreviousSource.type || ''), name: String(o.sitemapPreviousSource.name || '').slice(0, 200), date: String(o.sitemapPreviousSource.date || '') };
+  if (['removed', 'added', 'both'].includes(o.sitemapChanges)) opts.sitemapChanges = o.sitemapChanges;
+  if (o.followRedirects !== undefined && o.followRedirects !== null && o.followRedirects !== '') opts.followRedirects = !!o.followRedirects;
   opts.pathLimits = Array.isArray(o.pathLimits) ? o.pathLimits : parsePathLimits(o.pathLimits);
   opts.extractors = (Array.isArray(o.extractors) ? o.extractors : [])
     .filter((e) => e && e.name && e.selector)

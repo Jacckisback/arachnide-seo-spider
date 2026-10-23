@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.22.0-3d5f17" alt="Versão 3.22.0">
+  <img src="https://img.shields.io/badge/version-3.23.0-3d5f17" alt="Versão 3.23.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -31,6 +31,10 @@ Não há conta nem nuvem, e os seus dados ficam no seu computador. Testado num s
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Visão geral: pontuação de saúde SEO em quatro anéis (técnico, conteúdo, ligação interna, desempenho), prioridades, indicadores-chave e pontos fortes" width="100%">
 </p>
+
+## 🗂️ Novidades da 3.23: alterações do sitemap — auditar só os produtos retirados, decidir 301 ou 410
+
+Numa loja os produtos entram e saem todas as semanas; voltar a rastrear todo o site para saber o que aconteceu aos que saíram é lento e inútil. Dê ao Arachnide o **sitemap ou índice de sitemaps** atual e uma referência (um rastreio anterior do histórico, o sitemap antigo ou uma lista de URLs): rastreia **só os URLs que saíram do sitemap** (ou os adicionados), **segue os seus redirecionamentos** e decide para cada um — 301 para uma página semelhante proposta (mesma pasta, nome próximo, com uma pontuação de semelhança), 410 quando nada o substitui, reparar um redirecionamento quebrado ou um erro do servidor, encurtar uma cadeia, ou repor uma página ainda viva. Novo separador **Alterações do sitemap** com filtros e CSV, um cartão no painel, seis novas verificações na pontuação e no relatório, uma janela *Opções do modo lista* na aplicação, `--sitemap-previous` / `--sitemap-changes` na CLI e `arachnide_sitemap_changes` para os agentes de IA. A extração XPath e o modo lista a partir de um sitemap pedidos no mesmo comentário existem desde a 3.21. Guia: **[docs/SITEMAP-CHANGES.md](docs/SITEMAP-CHANGES.md)** (em inglês).
 
 ## 📜 Novidades da 3.22: análise de logs — o que o Googlebot pede realmente
 
@@ -382,6 +386,7 @@ node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.n
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://www.example.com --logs access.log --logs access.log.1.gz --logs-verify --csv --report
+node src/cli.mjs --sitemap https://www.example.com/sitemap_index.xml --sitemap-previous crawls/previous.jsonl.gz --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

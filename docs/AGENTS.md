@@ -4,7 +4,7 @@ Arachnide 3.13 is built to be driven by an AI agent — yours, or any assistant 
 
 Everything runs on your machine (or your server). Nothing is sent to a third party except what your agent's own model receives.
 
-## Three doors, one set of 26 tools
+## Three doors, one set of 27 tools
 
 | Door | For | URL | Auth |
 |---|---|---|---|
@@ -63,6 +63,7 @@ With the OpenAI Agents / Responses API, point a hosted MCP tool at `https://<you
 | `arachnide_geo_readiness` | AI crawlers access, llms.txt, structured data coverage, content depth, hygiene → 0-100 GEO score + recommendations | no |
 | `arachnide_segments` | Site sections (product pages, categories, blog…): get the score, errors and averages per segment, suggest one per directory, or set them (no recrawl). Then pass `segment` to the reading tools | no (saves the segments on the crawl) |
 | `arachnide_logs` | Server access logs imported into the crawl (Logs tab or CLI `--logs`): crawl frequency per bot and per day, URLs Googlebot requests that are not in the crawl, indexable pages it never visits, crawl budget wasted, 5xx served to bots, spoofed Googlebot IPs, slow pages for bots (`section`: summary, bots, timeline, directories, top_urls, orphans, not_crawled, waste, errors, spoofed, slow) | no |
+| `arachnide_sitemap_changes` | Decisions for the URLs removed from (or added to) a sitemap, after a crawl made with `sitemap_url` + `sitemap_previous_crawl` / `sitemap_previous_urls`: 301 to a suggested similar page, 410, fix a broken redirect or an error, put a live page back; filter by decision (`actions`) or change, with a plain *what_to_do* per URL | no |
 | `arachnide_fetch_page` | Read a live page (tags, headings, images, text excerpt) | no |
 | `arachnide_suggest_fixes` | Fixable fields per page with current values and constraints | no |
 | `arachnide_compare_crawls` | Before/after between two crawls | no |
@@ -76,6 +77,8 @@ Every reading tool (`arachnide_get_summary`, `arachnide_list_issues`, `arachnide
 Google Analytics 4: pass `ga4_key_file` (and `ga4_property`) or `ga4_csv` to `arachnide_crawl` / `arachnide_start_crawl` to add sessions per page and find orphan pages that get traffic (`ga4-orphan`); `arachnide_search_pages` can sort by `sessions`.
 
 Server logs (3.22): once access logs are imported into a crawl (Logs tab or CLI `--logs`), `arachnide_logs` reads them, `arachnide_search_pages` can sort by `log_hits` / `googlebot_hits` and returns `last_crawled_by_googlebot`, and `arachnide_get_summary` carries a `server_logs` block. See [LOGS.md](LOGS.md).
+
+Sitemap changes (3.23): `arachnide_crawl` / `arachnide_start_crawl` with `sitemap_url` and `sitemap_previous_crawl` (or `sitemap_previous_urls`) crawl only the URLs that left the sitemap (`sitemap_changes`: removed / added / both), redirects followed; `arachnide_sitemap_changes` returns the decision per URL. See [SITEMAP-CHANGES.md](SITEMAP-CHANGES.md).
 
 `GET /api/agent/tools` returns the same list with the JSON Schema of each input.
 

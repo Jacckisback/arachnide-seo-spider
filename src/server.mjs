@@ -27,6 +27,7 @@ import { isTrustedRequest } from './fix/routes.mjs';
 import { parseLog, maybeGunzip } from './logs/parse.mjs';
 import { LogAggregator, applyLogs, removeLogs } from './logs/analyze.mjs';
 import { saveLogs, deleteLogs } from './store.mjs';
+import { resolveSitemapPrevious } from './sitemap-diff.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -100,7 +101,9 @@ const logStats = (agg) => ({ files: agg.files, format: agg.format, lines: agg.li
 async function startCrawl(body) {
   // { resume: <id> } : reprise d'un crawl interrompu depuis son journal (GET /api/pending les liste).
   if (body.resume) return launchCrawl(null, {}, 'ui', { resume: String(body.resume) });
-  return launchCrawl(body.url, toCrawlerOptions(body.options || {}), 'ui');
+  // Changements de sitemap : la référence (crawl précédent de l'historique, ou texte collé) devient une liste d'URL.
+  const opts = await resolveSitemapPrevious(toCrawlerOptions(body.options || {}), { loadCrawl: (name) => (safeName(name) ? loadCrawl(safeName(name)).catch(() => null) : null) });
+  return launchCrawl(body.url, opts, 'ui');
 }
 async function launchCrawl(url, opts, via, { resume = null } = {}) {
   if (crawler && crawler.phase !== 'done') throw Object.assign(new Error('A crawl is already running.'), { status: 409, key: 'toast.busy' });

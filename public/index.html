@@ -32,6 +32,8 @@
         </div>
         <input id="urlInput" type="text" inputmode="url" data-i18n-ph="ui.urlPlaceholder" placeholder="https://www.example.com" required aria-label="URL">
         <textarea id="listInput" rows="1" data-i18n-ph="ui.listPlaceholder" hidden></textarea>
+        <span id="listChip" class="chip small" hidden></span>
+        <button id="listOptsBtn" class="btn icon ghost" type="button" data-icon="sitemap" data-i18n-title="smd.listOptions" hidden></button>
         <span id="crawlStatus" class="crawl-status" role="status"></span>
       </div>
     </form>
@@ -246,6 +248,11 @@
   <dialog id="historyDialog">
     <form method="dialog" class="dialog-head"><h2 data-i18n="ui.history">History</h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
     <div id="historyList" class="dialog-body"></div>
+  </dialog>
+
+  <dialog id="listDialog">
+    <form method="dialog" class="dialog-head"><h2 data-icon="sitemap"><span data-i18n="smd.listOptions">List mode options</span></h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
+    <div id="listBody" class="dialog-body"></div>
   </dialog>
 
   <dialog id="scheduleDialog" class="wide">
