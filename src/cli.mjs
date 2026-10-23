@@ -2,6 +2,7 @@
 // Crawl en ligne de commande : node src/cli.mjs https://exemple.fr --max 1000 --csv --report --lang fr
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { getT, detailText, LANGS } from '../public/shared/i18n.js';
@@ -22,7 +23,7 @@ const val = (name, def) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : def;
 };
 const vals = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
-const VALUE_FLAGS = new Set(['logs', 'logs-format', 'logs-custom', 'resume', 'sitemap', 'robots-unavailable', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
+const VALUE_FLAGS = new Set(['sitemap-previous', 'sitemap-changes', 'logs', 'logs-format', 'logs-custom', 'resume', 'sitemap', 'robots-unavailable', 'rate', 'robots', 'custom-robots', 'remove-params', 'auth', 'header', 'extract', 'path-limit', 'per-depth', 'folder-depth', 'max-params', 'max-redirects', 'max', 'depth', 'concurrency', 'delay', 'ua', 'include', 'exclude', 'out', 'lang', 'list', 'search', 'report-title', 'client', 'author', 'company', 'contact', 'website', 'color', 'compare', 'report-file', 'psi', 'psi-key', 'psi-strategy', 'gsc-key', 'gsc-property', 'gsc-days', 'gsc-csv', 'ga4-key', 'ga4-property', 'ga4-days', 'ga4-csv', 'alert-email', 'alert-score-drop', 'segments', 'segment']);
 const url = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.has(args[i - 1].slice(2))))[0];
 const lang = val('lang', (process.env.LANG || 'en').slice(0, 2));
 const t = await getT(LANGS.some((l) => l.code === lang) ? lang : 'en');
@@ -56,6 +57,11 @@ Usage : node src/cli.mjs <url> [options]
   --extract N=SEL     Custom extraction (repeatable): N=SEL (CSS, text), N=/regex/, N=xpath:EXPR,
                       N=attr:href:SEL, N=html:SEL, N=count:SEL — one column per rule in pages.csv
   --sitemap URL       List mode from a sitemap or sitemap index: crawl exactly the URLs it lists
+  --sitemap-previous SRC  Sitemap changes: reference to compare the sitemap (or list) with — a saved crawl
+                      (.jsonl.gz / .json), an old sitemap or index (file, .gz or URL) or a text list of URLs.
+                      Only the changed URLs are crawled, redirects followed, and each removed URL gets a
+                      decision: 301 to a suggested page, 410, keep, fix. Needs --sitemap or --list.
+  --sitemap-changes removed|added|both  Which changed URLs to crawl (removed)
   --logs FILE         Server access log to analyse with the crawl (repeatable; .gz accepted; Apache/Nginx combined,
                       common, W3C/IIS, JSON lines, or --logs-format custom with --logs-custom "<nginx log_format>")
   --logs-verify       Verify Googlebot / Bingbot IPs by reverse DNS (needs network)
@@ -139,6 +145,27 @@ if (flag('list')) {
   opts.urls = (await fs.readFile(val('list'), 'utf8')).split(/\s+/).filter((x) => /^https?:\/\//i.test(x));
 }
 if (val('sitemap')) opts.mode = 'list';
+if (val('sitemap-previous')) {
+  if (opts.mode !== 'list') {
+    console.error('✖ --sitemap-previous needs --sitemap URL or --list FILE');
+    process.exit(2);
+  }
+  const { resolveSitemapPrevious, parseUrlList, previousUrlsOf } = await import('./sitemap-diff.mjs');
+  const src = val('sitemap-previous');
+  const gunzipMaybe = (buf) => (buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf);
+  if (/^https?:\/\//i.test(src)) {
+    opts.sitemapPreviousUrl = src;
+  } else if (/\.(jsonl\.gz|json)$/i.test(src)) {
+    const R = await readResultFile(path.resolve(src));
+    opts.sitemapPrevious = previousUrlsOf(R);
+    opts.sitemapPreviousSource = { type: 'crawl', name: path.basename(src), date: R.meta?.finishedAt || '' };
+  } else {
+    opts.sitemapPrevious = parseUrlList(gunzipMaybe(await fs.readFile(path.resolve(src))).toString('utf8'));
+    opts.sitemapPreviousSource = { type: /\.xml(\.gz)?$/i.test(src) ? 'sitemap' : 'text', name: path.basename(src), date: '' };
+  }
+  opts.sitemapChanges = val('sitemap-changes', 'removed');
+  await resolveSitemapPrevious(opts, { fetchText: async (u) => { try { const r = await fetch(u, { headers: { 'user-agent': opts.userAgent || 'Arachnide' } }); return r.ok ? gunzipMaybe(Buffer.from(await r.arrayBuffer())).toString('utf8') : null; } catch { return null; } } });
+}
 
 // --extract N=SEL · N=/re/ · N=xpath:EXPR · N=attr:NAME:SEL · N=html:SEL · N=count:SEL
 function parseExtractArg(e) {
@@ -213,6 +240,14 @@ if (segRows.length) {
   console.log(`\n${t('seg.cardTitle')} :`);
   const w = Math.max(...segRows.map((g) => (g.id === NONE ? t('seg.none') : g.name).length));
   for (const g of segRows) console.log(`  ${(g.id === NONE ? t('seg.none') : g.name).padEnd(w)}  ${String(g.pages).padStart(6)} ${t('seg.col.pages').toLowerCase()} · ${g.score ?? '—'}/100 · ${icon.error} ${g.errors} · ${icon.warning} ${g.warnings}`);
+}
+
+// Changements de sitemap : résumé des décisions.
+if (full.meta.sitemapDiff) {
+  const D = full.meta.sitemapDiff;
+  const c = D.counts || {};
+  console.log(`\n🗺️ ${t('smd.title')} : ${t('smd.metaLine', { previous: D.previous, current: D.current, removed: D.removed, added: D.added, kept: D.kept })}`);
+  for (const d of ['redirect-suggested', 'gone-410', 'redirect-broken', 'error', 'live', 'added-bad', 'redirect-chain', 'redirect-ok', 'gone-ok', 'noindex', 'added-ok']) if (c[d]) console.log(`  ${String(c[d]).padStart(5)}  ${t('smd.' + d)}`);
 }
 
 const base = `${new URL(r.meta.startUrl).hostname}_${r.meta.finishedAt.replace(/[:]/g, '-').replace(/\..+$/, '')}`;
@@ -311,6 +346,7 @@ if (flag('csv')) await output('csv', async () => {
   function* issueRows() {
     for (const i of r.issues) for (const it of i.items) yield { sev: t('sev.' + i.severity), cat: t('cat.' + i.category), issue: t('issue.' + i.id + '.label', i.params), url: it.url, segment: segName(segOfUrl.get(it.url)), detail: detailText(it.detail, t), fix: t('issue.' + i.id + '.fix', i.params) };
   }
+  if (full.sitemapChanges?.length) await writeCsv(path.join(outDir, base + '_sitemap-changes.csv'), full.sitemapChanges.map((r) => ({ ...r, hops: r.hops || '', score: r.score || '', finalStatus: r.finalStatus ?? '', indexabilityReason: r.status >= 200 && r.status < 300 ? r.indexabilityReason : '' })), [['url', 'URL'], ['change', t('col.change')], ['status', t('col.status')], ['indexabilityReason', t('col.indexability')], ['redirectUrl', t('col.redirectsTo')], ['finalUrl', t('col.finalUrl')], ['finalStatus', t('col.finalStatus')], ['hops', t('col.hops')], ['decision', t('col.decision')], ['suggest', t('col.suggestedTarget')], ['score', t('col.similarity')]]);
   await writeCsv(path.join(outDir, base + '_issues.csv'), issueRows(), [['sev', t('col.severity')], ['cat', t('col.category')], ['issue', t('col.issue')], ['url', 'URL'], ...(segs.length ? [['segment', t('col.segment')]] : []), ['detail', t('col.detail')], ['fix', t('col.fix')]]);
   console.log(`CSV : ${base}_pages.csv, ${base}_issues.csv`);
 });

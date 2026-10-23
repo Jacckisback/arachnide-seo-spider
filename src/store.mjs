@@ -67,6 +67,7 @@ const summaryOf = (r) => ({
   score: r.summary.score,
   grade: r.summary.grade,
   totalUrls: r.summary.totalUrls,
+  mode: r.meta.mode,
 });
 
 export async function listCrawls() {

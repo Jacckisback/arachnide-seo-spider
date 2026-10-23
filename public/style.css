@@ -1389,3 +1389,13 @@ button.link.accent { color: var(--accent); font-weight: 600; }
 @media (max-width: 900px) { .lg-grid, .lg-opts { grid-template-columns: minmax(0, 1fr); } }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Changements de sitemap (3.23) */
+#listChip { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#listDialog .field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 12.5px; color: var(--muted); }
+#listDialog .field > input, #listDialog .field > select { width: 100%; }
+#listDialog .field .check { color: var(--text); font-size: 12.5px; }
+#listDialog .field .seg { align-self: flex-start; }
+#listDialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.smd-head { margin: -6px 0 10px; }
+.chip.small { font-size: 10px; padding: 0 6px; }

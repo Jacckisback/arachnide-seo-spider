@@ -7,6 +7,7 @@
 // l'utilisateur regarde dans l'interface, et la façon de lancer un crawl (visible dans l'interface quand c'est elle).
 import { z } from 'zod';
 import { Crawler } from '../crawler.mjs';
+import { resolveSitemapPrevious, DECISIONS, ACTION_DECISIONS } from '../sitemap-diff.mjs';
 import { toCrawlerOptions } from '../options.mjs';
 import { listCrawls, loadCrawl, saveResult, crawlId, crawlFileOf } from '../store.mjs';
 import { detectSite } from '../detect.mjs';
@@ -127,9 +128,14 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     match: z.enum(['all', 'any']).default('all').describe('all = every rule must match (AND), any = at least one (OR)'),
     rules: z.array(ruleSchema).min(1).max(20),
   });
+  const loadCrawlRef = async (id) => {
+    const file = await crawlFileOf(id);
+    return file ? loadCrawl(file) : null;
+  };
   const crawlOptions = (a) => toCrawlerOptions({
     maxPages: a.max_pages, maxDepth: a.max_depth, render: a.render, checkImages: a.check_images, checkExternal: a.check_external, userAgent: a.user_agent, robotsMode: a.robots,
     mode: a.mode === 'list' || a.sitemap_url ? 'list' : undefined, urls: a.urls, sitemapUrl: a.sitemap_url || '',
+    sitemapPreviousCrawl: a.sitemap_previous_crawl || '', sitemapPrevious: a.sitemap_previous_urls, sitemapChanges: a.sitemap_changes, followRedirects: a.follow_redirects,
     include: a.include || '', exclude: a.exclude || '', stayInFolder: !!a.stay_in_folder, concurrency: a.concurrency, psiMax: a.psi_pages, psiStrategy: a.psi_strategy,
     gscKeyFile: a.gsc_key_file || '', gscProperty: a.gsc_property || '', gscCsv: a.gsc_csv || '', ga4KeyFile: a.ga4_key_file || '', ga4Property: a.ga4_property || '', ga4Csv: a.ga4_csv || '', segments: a.segments,
   });
@@ -138,6 +144,10 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     mode: z.enum(['spider', 'list']).default('spider').describe('spider: follow links from the start URL; list: crawl exactly the given urls (or the sitemap_url), without following links'),
     urls: z.array(z.string().url()).max(200000).optional().describe('List mode: the URLs to crawl'),
     sitemap_url: z.string().url().optional().describe('List mode: crawl exactly the URLs of this sitemap or sitemap index'),
+    sitemap_previous_crawl: z.string().optional().describe('Sitemap changes: compare the sitemap_url (or urls) with this saved crawl (its sitemap URLs, or its list), crawl only what changed and decide 301 / 410 / keep for each removed URL. Use arachnide_list_crawls to pick it.'),
+    sitemap_previous_urls: z.array(z.string().url()).max(200000).optional().describe('Sitemap changes: the reference URLs themselves (an old sitemap), instead of sitemap_previous_crawl'),
+    sitemap_changes: z.enum(['removed', 'added', 'both']).default('removed').describe('With a sitemap reference: crawl the URLs removed from the sitemap (default), the ones added, or both'),
+    follow_redirects: z.boolean().optional().describe('List mode: also fetch redirect targets (on by default for sitemap changes)'),
     max_pages: z.number().int().min(1).max(200000).default(500).describe('Maximum number of pages to download (URLs blocked by robots.txt do not count)'),
     max_depth: z.number().int().min(0).max(50).optional().describe('Maximum click depth'),
     render: z.boolean().default(false).describe('Render JavaScript with the installed Chrome/Edge (slower; for JS-built sites)'),
@@ -188,7 +198,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (a, extra) => {
       if (!a.url && a.mode !== 'list' && !a.sitemap_url) throw err('url is required unless mode is "list" (with urls or sitemap_url).', 'invalid');
-      const c = new Crawler(a.url || '', crawlOptions(a));
+      const c = new Crawler(a.url || '', await resolveSitemapPrevious(crawlOptions(a), { loadCrawl: loadCrawlRef }));
       const token = extra?._meta?.progressToken;
       let last = 0;
       if (token !== undefined && extra?.sendNotification) {
@@ -212,7 +222,7 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     handler: async (a) => {
       if (!a.url && a.mode !== 'list' && !a.sitemap_url) throw err('url is required unless mode is "list" (with urls or sitemap_url).', 'invalid');
-      const job = await ctx.startCrawl(a.url || '', crawlOptions(a));
+      const job = await ctx.startCrawl(a.url || '', await resolveSitemapPrevious(crawlOptions(a), { loadCrawl: loadCrawlRef }));
       return { job_id: job.id, state: 'running', next: 'Call arachnide_crawl_status with this job_id.' };
     },
   });
@@ -373,6 +383,29 @@ export async function buildTools(ctx = standaloneContext(), { lang = process.env
       if (!p) throw err(`${url} is not in crawl ${id}.`, 'not_found', 'Use arachnide_search_pages to find the exact URL.');
       const { headers, contentHash, ...page } = p;
       return { crawl_id: id, ...page, issues: R.issues.filter((i) => i.items.some((it) => it.url === p.url)).map((i) => ({ id: i.id, severity: i.severity, label: issueLabel(i), fix: issueFix(i) })) };
+    },
+  });
+
+  def('arachnide_sitemap_changes', {
+    title: 'Sitemap changes: decisions for removed / added URLs',
+    description: 'Reads a crawl made with a sitemap reference (arachnide_crawl with sitemap_previous_crawl or sitemap_previous_urls): for every URL removed from the sitemap (e.g. products taken off an e-commerce feed), what it answers now and what to do — redirect-suggested (404: 301 to the suggested similar page), gone-410 (404 with no similar page: return 410), redirect-broken (redirect to an error or a loop), error (5xx, timeout, 401/403), live (still 200 and indexable: put it back in the sitemap or retire it), redirect-chain, and the harmless redirect-ok / gone-ok / noindex; for added URLs: added-ok / added-bad. Filter by decision or change; paginated.',
+    shape: {
+      crawl_id: crawlRef,
+      decision: z.enum(['actions', ...DECISIONS]).optional().describe('Only this decision; "actions" = everything that needs work'),
+      change: z.enum(['removed', 'added']).optional(),
+      limit: z.number().int().min(1).max(500).default(100),
+      offset: z.number().int().min(0).default(0),
+    },
+    handler: async ({ crawl_id, decision, change, limit, offset }) => {
+      const { id, R } = await resolveCrawl(crawl_id);
+      const D = R.meta.sitemapDiff;
+      if (!D) throw err(`Crawl ${id} was not made with a sitemap reference. Run arachnide_crawl with sitemap_url and sitemap_previous_crawl (or sitemap_previous_urls).`, 'not_found');
+      let rows = R.sitemapChanges || [];
+      if (change) rows = rows.filter((r) => r.change === change);
+      if (decision === 'actions') rows = rows.filter((r) => ACTION_DECISIONS.has(r.decision));
+      else if (decision) rows = rows.filter((r) => r.decision === decision);
+      const items = rows.slice(offset, offset + limit).map((r) => ({ url: r.url, change: r.change, status: r.status, indexable: r.indexable, redirects_to: r.redirectUrl || undefined, final_url: r.finalUrl || undefined, final_status: r.finalStatus ?? undefined, hops: r.hops || undefined, decision: r.decision, what_to_do: t('smd.' + r.decision + '.do'), suggested_target: r.suggest || undefined, similarity: r.score || undefined }));
+      return { crawl_id: id, sitemap_url: D.sitemapUrl, reference: D.source, previous_urls: D.previous, current_urls: D.current, removed: D.removed, added: D.added, kept: D.kept, crawled: D.crawled, counts: D.counts, total: rows.length, offset, has_more: offset + limit < rows.length, items };
     },
   });
 

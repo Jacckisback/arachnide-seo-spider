@@ -185,6 +185,25 @@ export function buildReport(R, opts, t) {
   </section>`;
   })() : '';
 
+  // Changements de sitemap (3.23) : décisions pour les URL retirées / ajoutées.
+  const SD = R.meta.sitemapDiff;
+  const smdSec = SD ? (() => {
+    const c = SD.counts || {};
+    const kpi = (v, l) => `<div class="kpi"><b>${esc(String(v))}</b><span>${esc(l)}</span></div>`;
+    const rows = (R.sitemapChanges || []).filter((r) => ['redirect-suggested', 'gone-410', 'redirect-broken', 'error', 'live', 'added-bad', 'redirect-chain'].includes(r.decision));
+    const lim = Math.max(maxUrls * 5, 25);
+    return `<section class="page">
+    <h2><span class="n">${String(sec++).padStart(2, '0')}</span>${esc(t('report.sitemapChanges'))}</h2>
+    <p class="intro">${esc(t('report.sitemapChangesIntro'))}</p>
+    <p class="small">${esc(t('smd.metaLine', { previous: t.num(SD.previous), current: t.num(SD.current), removed: t.num(SD.removed), added: t.num(SD.added), kept: t.num(SD.kept) }))}</p>
+    <div class="kpis">
+      ${kpi(t.num(c['redirect-suggested'] || 0), t('smd.redirect-suggested'))}${kpi(t.num(c['gone-410'] || 0), t('smd.gone-410'))}${kpi(t.num((c['redirect-broken'] || 0) + (c.error || 0)), t('smd.redirect-broken'))}
+      ${kpi(t.num(c.live || 0), t('smd.live'))}${kpi(t.num(c['added-bad'] || 0), t('smd.added-bad'))}${kpi(t.num((c['redirect-ok'] || 0) + (c['gone-ok'] || 0) + (c.noindex || 0) + (c['added-ok'] || 0)), t('smd.redirect-ok'))}
+    </div>
+    ${rows.length ? `<table class="urls"><thead><tr><th>URL</th><th>${esc(t('col.status'))}</th><th>${esc(t('col.decision'))}</th><th>${esc(t('col.suggestedTarget'))}</th></tr></thead><tbody>${rows.slice(0, lim).map((r) => `<tr><td class="u">${esc(r.url)}</td><td class="r">${r.status || '—'}${r.finalStatus != null ? ` → ${r.finalStatus}` : ''}</td><td>${esc(t('smd.' + r.decision))}</td><td class="u">${esc(r.suggest || r.finalUrl || '')}</td></tr>`).join('')}</tbody></table>${rows.length > lim ? `<p class="more">+ ${t.num(rows.length - lim)}</p>` : ''}` : `<p class="small">${esc(t('smd.nothingToDo'))}</p>`}
+  </section>`;
+  })() : '';
+
   const method = `<section class="page">
     <h2><span class="n">${String(sec++).padStart(2, '0')}</span>${esc(t('report.methodology'))}</h2>
     <p>${esc(t('report.methodologyText'))}</p>
@@ -315,7 +334,7 @@ table.mini td { padding: 5px 6px; }
 </head>
 <body>
 <div class="toolbar"><button class="p" onclick="window.print()">${esc(t('report.print'))}</button><button id="dl">${esc(t('report.downloadHtml'))}</button></div>
-${cover}${summary}${evolution}${segments}${plan}${details}${tech}${logsSec}${method}
+${cover}${summary}${evolution}${segments}${plan}${details}${tech}${logsSec}${smdSec}${method}
 <script>
 document.getElementById('dl').onclick = function () {
   var doc = document.documentElement.cloneNode(true);

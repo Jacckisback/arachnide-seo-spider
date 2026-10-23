@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.22.0-3d5f17" alt="Version 3.22.0">
+  <img src="https://img.shields.io/badge/version-3.23.0-3d5f17" alt="Version 3.23.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -31,6 +31,10 @@ Es gibt kein Konto und keine Cloud. Ihre Daten bleiben auf Ihrem Rechner. Getest
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Übersicht: SEO Health Score mit vier Ringen (Technik, Inhalt, Verlinkung, Performance), Prioritäten, Kennzahlen und Stärken" width="100%">
 </p>
+
+## 🗂️ Neu in 3.23: Sitemap-Änderungen — nur die entfernten Produkte prüfen, 301 oder 410 entscheiden
+
+In einem Shop kommen und gehen Produkte jede Woche; die ganze Website erneut zu crawlen, um zu erfahren, was aus den entfernten wurde, ist langsam und nutzlos. Geben Sie Arachnide die aktuelle **Sitemap oder den Sitemap-Index** und eine Referenz (einen früheren Crawl aus der Historie, die alte Sitemap oder eine URL-Liste): Es crawlt **nur die URLs, die die Sitemap verlassen haben** (oder die hinzugekommenen), **folgt ihren Weiterleitungen** und entscheidet für jede — 301 auf eine vorgeschlagene ähnliche Seite (gleicher Ordner, ähnlicher Name, mit Ähnlichkeitswert), 410, wenn nichts sie ersetzt, eine defekte Weiterleitung oder einen Serverfehler beheben, eine Kette verkürzen oder eine noch lebende Seite zurücknehmen. Neuer Tab **Sitemap-Änderungen** mit Filtern und CSV, eine Dashboard-Karte, sechs neue Prüfungen in Score und Bericht, ein Dialog *Optionen des Listenmodus* in der App, `--sitemap-previous` / `--sitemap-changes` in der CLI und `arachnide_sitemap_changes` für KI-Agenten. XPath-Extraktion und der Listenmodus aus einer Sitemap, die im selben Feedback gewünscht wurden, gibt es seit 3.21. Anleitung: **[docs/SITEMAP-CHANGES.md](docs/SITEMAP-CHANGES.md)** (Englisch).
 
 ## 📜 Neu in 3.22: Logfile-Analyse — was Googlebot wirklich anfordert
 
@@ -382,6 +386,7 @@ node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.n
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://www.example.com --logs access.log --logs access.log.1.gz --logs-verify --csv --report
+node src/cli.mjs --sitemap https://www.example.com/sitemap_index.xml --sitemap-previous crawls/previous.jsonl.gz --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```

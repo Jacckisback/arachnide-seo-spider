@@ -1,5 +1,6 @@
 // Post-traitement : indexabilité, graphe de liens, profondeur, PageRank interne, doublons,
 // redirections et liste des problèmes SEO. Les textes sont des clés de traduction (public/i18n).
+import { buildSitemapChanges } from './sitemap-diff.mjs';
 import { titlePixels, descPixels } from './pixel.mjs';
 import { similarity, nearPairs, maxDistFor } from './text.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
@@ -634,6 +635,23 @@ export function analyze(crawler) {
   add('gsc-non-indexable-traffic', 'warning', 'directives', 'high', 'low', u(html200.filter((p) => !p.indexable && p.gsc?.clicks > 0), (p) => D('d.gsc', { clicks: p.gsc.clicks, impressions: p.gsc.impressions })));
   add('sitemap-non-indexable', 'warning', 'sitemap', 'medium', 'low', u(pages.filter((p) => p.inSitemap && !p.indexable && !p.rateLimited), (p) => D('idx.' + p.indexabilityReason)));
   add('not-in-sitemap', 'notice', 'sitemap', 'low', 'low', hasSitemap && !crawler.sitemapsTruncated ? u(indexableHtml.filter((p) => !p.inSitemap)) : []);
+  // Changements de sitemap (3.23) : une décision par URL retirée / ajoutée ; voir src/sitemap-diff.mjs.
+  let sitemapChanges = null;
+  if (crawler.sitemapDiff) {
+    sitemapChanges = buildSitemapChanges(crawler, pages);
+    const smByUrl = new Map(pages.map((p) => [p.url, p]));
+    const rowsOf = (...ds) => sitemapChanges.rows.filter((r) => ds.includes(r.decision));
+    for (const r of sitemapChanges.rows) {
+      const p = smByUrl.get(r.url);
+      if (p) p.sitemapChange = r.change;
+    }
+    add('sitemap-removed-404', 'error', 'sitemap', 'high', 'low', rowsOf('redirect-suggested', 'gone-410').map((r) => ({ url: r.url, detail: r.suggest ? D('d.smRedirectTo', { url: r.suggest, score: r.score }) : D('d.smGone') })));
+    add('sitemap-removed-redirect-broken', 'error', 'redirects', 'high', 'low', rowsOf('redirect-broken').map((r) => ({ url: r.url, detail: D('d.smFinal', { url: r.finalUrl, status: r.finalStatus ?? '—', hops: r.hops }) })));
+    add('sitemap-removed-error', 'error', 'codes', 'high', 'medium', rowsOf('error').map((r) => ({ url: r.url, detail: D('d.smStatus', { status: r.status || '—' }) })));
+    add('sitemap-removed-live', 'warning', 'sitemap', 'medium', 'low', rowsOf('live').map((r) => ({ url: r.url })));
+    add('sitemap-added-not-indexable', 'error', 'sitemap', 'high', 'low', rowsOf('added-bad').map((r) => ({ url: r.url, detail: r.status >= 200 && r.status < 300 ? D('idx.' + r.indexabilityReason) : D('d.smStatus', { status: r.status || '—' }) })));
+    add('sitemap-removed-redirect-chain', 'notice', 'redirects', 'low', 'low', rowsOf('redirect-chain').map((r) => ({ url: r.url, detail: D('d.smFinal', { url: r.finalUrl, status: r.finalStatus ?? '—', hops: r.hops }) })));
+  }
 
   // Architecture
   add('deep', 'notice', 'architecture', 'medium', 'medium', spider ? u(indexableHtml.filter((p) => p.depth !== null && p.depth >= T.deepLevel), (p) => D('d.depth', { n: p.depth })) : [], { min: T.deepLevel });
@@ -766,7 +784,7 @@ export function analyze(crawler) {
       finishedAt: crawler.finishedAt,
       stopped: crawler.stopped,
       rendered: !!crawler.renderer,
-      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '', psiKey: crawler.opts.psiKey ? '••••' : '', gscCsv: crawler.opts.gscCsv ? true : undefined, ga4Csv: crawler.opts.ga4Csv ? true : undefined, googleFetch: undefined },
+      options: { ...crawler.opts, urls: crawler.listUrls ? crawler.listUrls.length : undefined, sitemapPrevious: crawler.opts.sitemapPrevious ? crawler.opts.sitemapPrevious.length : undefined, httpPass: crawler.opts.httpPass ? '••••' : '', customHeaders: crawler.opts.customHeaders ? '••••' : '', psiKey: crawler.opts.psiKey ? '••••' : '', gscCsv: crawler.opts.gscCsv ? true : undefined, ga4Csv: crawler.opts.ga4Csv ? true : undefined, googleFetch: undefined },
       gsc: gscMeta,
       ga4: ga4Meta,
       psi: psiMeta,
@@ -775,6 +793,7 @@ export function analyze(crawler) {
       botAccess: crawler.botAccess,
       sitemapFiles: crawler.sitemapFiles,
       sitemapUrlCount: crawler.sitemapUrls.size,
+      sitemapDiff: crawler.sitemapDiff ? { ...crawler.sitemapDiff, counts: sitemapChanges?.counts || null } : undefined,
       warnings: crawler.warnings,
       uaFallback: !!crawler.uaFallback,
       skipped: crawler.skipped,
@@ -813,6 +832,9 @@ export function analyze(crawler) {
     gscOnly,
     ga4Only,
     logOnly: [],
+    sitemapChanges: sitemapChanges ? sitemapChanges.rows : [],
+    // Les URL du sitemap actuel d'un crawl de changements : référence du prochain crawl (il ne contient pas tout le sitemap).
+    sitemapUrls: crawler.sitemapDiff ? [...crawler.sitemapCurrent] : [],
     externals: [...crawler.externals.values()].map((e) => ({ url: e.url, status: e.status, statusText: e.statusText || '', inlinks: e.inlinks, pages: e.pages, firstPage: e.firstPage })),
     links: linksOut,
   };

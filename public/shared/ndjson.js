@@ -14,7 +14,7 @@
 export const CHUNK = 100_000;
 export const NDJSON_VERSION = 3;
 // Collections écrites un élément par ligne.
-export const ITEM_KEYS = ['issues', 'pages', 'redirects', 'brokenLinks', 'nearDuplicates', 'cannibalization', 'images', 'gscOnly', 'ga4Only', 'logOnly', 'externals'];
+export const ITEM_KEYS = ['issues', 'pages', 'redirects', 'brokenLinks', 'nearDuplicates', 'cannibalization', 'images', 'gscOnly', 'ga4Only', 'logOnly', 'sitemapChanges', 'sitemapUrls', 'externals'];
 const ITEM_TAG = { issues: 'issue', pages: 'page' };
 const TAG_KEY = Object.fromEntries(ITEM_KEYS.map((k) => [ITEM_TAG[k] || k, k]));
 const COLS = ['from', 'to', 'anchor', 'flags', 'pos'];

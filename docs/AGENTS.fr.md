@@ -4,7 +4,7 @@ Arachnide 3.13 est conçu pour être piloté par un agent IA — le vôtre, ou t
 
 Tout tourne sur votre machine (ou votre serveur). Rien n’est envoyé à un tiers, hormis ce que reçoit le modèle de votre propre agent.
 
-## Trois portes, un seul jeu de 26 outils
+## Trois portes, un seul jeu de 27 outils
 
 | Porte | Pour | URL | Authentification |
 |---|---|---|---|
@@ -63,6 +63,7 @@ Avec l’API Agents / Responses d’OpenAI, pointez un outil MCP hébergé vers 
 | `arachnide_geo_readiness` | Accès des robots IA, llms.txt, couverture des données structurées, profondeur du contenu, hygiène → score GEO 0-100 + recommandations | non |
 | `arachnide_segments` | Sections du site (fiches produit, catégories, blog…) : score, erreurs et moyennes par segment, proposition d’un segment par répertoire, ou enregistrement des segments (sans recrawler). Passez ensuite `segment` aux outils de lecture | non (enregistre les segments avec le crawl) |
 | `arachnide_logs` | Journaux d’accès importés dans le crawl (onglet Logs ou CLI `--logs`) : fréquence de crawl par robot et par jour, URL demandées par Googlebot absentes du crawl, pages indexables jamais visitées, budget de crawl gaspillé, 5xx servies aux robots, IP Googlebot usurpées, pages lentes pour les robots (`section` : summary, bots, timeline, directories, top_urls, orphans, not_crawled, waste, errors, spoofed, slow) | non |
+| `arachnide_sitemap_changes` | Décisions pour les URL retirées d’un sitemap (ou ajoutées), après un crawl fait avec `sitemap_url` + `sitemap_previous_crawl` / `sitemap_previous_urls` : 301 vers une page similaire proposée, 410, réparer une redirection cassée ou une erreur, remettre une page vivante ; filtre par décision (`actions`) ou changement, avec un *what_to_do* en clair par URL | non |
 | `arachnide_fetch_page` | Lire une page en ligne (balises, titres, images, extrait du texte) | non |
 | `arachnide_suggest_fixes` | Champs corrigeables par page, valeurs actuelles et contraintes | non |
 | `arachnide_compare_crawls` | Avant/après entre deux crawls | non |
@@ -76,6 +77,8 @@ Tous les outils de lecture (`arachnide_get_summary`, `arachnide_list_issues`, `a
 Google Analytics 4 : passez `ga4_key_file` (et `ga4_property`) ou `ga4_csv` à `arachnide_crawl` / `arachnide_start_crawl` pour ajouter les sessions par page et repérer les pages orphelines qui reçoivent du trafic (`ga4-orphan`) ; `arachnide_search_pages` peut trier par `sessions`.
 
 Logs serveur (3.22) : une fois des journaux d’accès importés dans un crawl (onglet Logs ou CLI `--logs`), `arachnide_logs` les lit, `arachnide_search_pages` peut trier par `log_hits` / `googlebot_hits` et renvoie `last_crawled_by_googlebot`, et `arachnide_get_summary` porte un bloc `server_logs`. Voir [LOGS.fr.md](LOGS.fr.md).
+
+Changements de sitemap (3.23) : `arachnide_crawl` / `arachnide_start_crawl` avec `sitemap_url` et `sitemap_previous_crawl` (ou `sitemap_previous_urls`) ne crawlent que les URL sorties du sitemap (`sitemap_changes` : removed / added / both), redirections suivies ; `arachnide_sitemap_changes` renvoie la décision par URL. Voir [SITEMAP-CHANGES.fr.md](SITEMAP-CHANGES.fr.md).
 
 `GET /api/agent/tools` renvoie la même liste avec le JSON Schema de chaque entrée.
 

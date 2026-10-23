@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.22.0-3d5f17" alt="Version 3.22.0">
+  <img src="https://img.shields.io/badge/version-3.23.0-3d5f17" alt="Version 3.23.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -31,6 +31,10 @@ Pas de compte, pas de cloud : vos données restent sur votre machine. Testé sur
 <p align="center">
   <img src="docs/screenshots/dashboard.png" alt="Vue d’ensemble : score de santé SEO en quatre anneaux (technique, contenu, maillage, performance), priorités, indicateurs clés et points forts" width="100%">
 </p>
+
+## 🗂️ Nouveau en 3.23 : changements de sitemap — n’auditer que les produits sortis, trancher 301 ou 410
+
+Sur une boutique, des produits entrent et sortent chaque semaine ; recrawler tout le site pour savoir ce que sont devenus ceux qui sont partis est lent et inutile. Donnez à Arachnide le **sitemap ou l’index de sitemaps** actuel et une référence (un crawl précédent de l’historique, l’ancien sitemap, ou une liste d’URL) : il ne crawle **que les URL sorties du sitemap** (ou celles ajoutées), **suit leurs redirections** et tranche pour chacune — 301 vers une page similaire proposée (même dossier, nom proche, avec un score de similarité), 410 quand rien ne la remplace, réparer une redirection cassée ou une erreur serveur, raccourcir une chaîne, ou remettre une page encore en ligne. Nouvel onglet **Changements de sitemap** avec filtres et CSV, une carte sur le tableau de bord, six nouveaux contrôles dans le score et le rapport, une fenêtre *Options du mode liste* dans l’application, `--sitemap-previous` / `--sitemap-changes` en ligne de commande et `arachnide_sitemap_changes` pour les agents IA. L’extraction XPath et le mode liste depuis un sitemap demandés dans le même retour existent depuis la 3.21. Guide : **[docs/SITEMAP-CHANGES.fr.md](docs/SITEMAP-CHANGES.fr.md)**.
 
 ## 📜 Nouveau en 3.22 : analyse de logs — ce que Googlebot demande vraiment
 
@@ -395,6 +399,7 @@ node src/cli.mjs --resume crawls/.en-cours/www.example.com_2026-10-21T09-00-00.n
 node src/cli.mjs https://www.example.com --max 20000 --segments segments.json --csv --report
 node src/cli.mjs https://www.example.com --ga4-key ga4-key.json --ga4-property 123456789 --csv
 node src/cli.mjs https://www.example.com --logs access.log --logs access.log.1.gz --logs-verify --csv --report
+node src/cli.mjs --sitemap https://www.example.com/sitemap_index.xml --sitemap-previous crawls/previous.jsonl.gz --csv
 node src/cli.mjs https://staging.example.com --auth user:pass --rate 2 --robots report --path-limit "/blog/=200" --extract "price=.price" --remove-params "utm_*,gclid"
 node src/cli.mjs --help
 ```
