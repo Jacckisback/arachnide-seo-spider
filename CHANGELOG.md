@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.23.2 — 2026-10-28
+
+### Cloudflare email protection: no more false broken links, real addresses in the content
+On a site behind Cloudflare with *Email Address Obfuscation* on, every `mailto:` becomes `<a href="/cdn-cgi/l/email-protection#HEX">[email protected]</a>` (and `<span data-cfemail="HEX">`). Arachnide followed that link, got Cloudflare's 403 and reported a broken internal link on every page with a contact address.
+- **Decoding** (`decodeCfEmail` in `src/parse.mjs`): the hex payload (first byte = XOR key) is decoded to the address, UTF-8 included; the link becomes `mailto:address` and the `[email protected]` placeholder becomes the address, so the content, the word count and the custom extractors see the real e-mail. An undecodable payload simply drops the link.
+- **`/cdn-cgi/` is never a page of the site**: those links (email protection, challenge platform, scripts) are left out of the link graph and the crawler never queues them, even when a page links to them.
+- **Tests**: decoding (key, `#` prefix, UTF-8, garbage), parsing (links, placeholders, extractors) and a crawl behind a Cloudflare-like server (403 on `/cdn-cgi/…`, no broken link, no 4xx).
+
 ## 3.23.1 — 2026-10-28
 
 ### OpenAI: current models (GPT-6 Luna, Sol, Terra, Astra), retired models migrated

@@ -7,6 +7,25 @@ import { isValidHreflang } from './iso-codes.mjs';
 const BLOCKS = 'p, div, li, td, th, h1, h2, h3, h4, h5, h6, br, section, article, header, footer, nav, aside, main, blockquote, dt, dd, figcaption, option, label, button, ul, ol, dl, table, tr, figure, form, fieldset, address, pre, hr';
 const SKIP_SCHEMES = /^(mailto:|tel:|javascript:|data:|sms:|ftp:|whatsapp:|skype:|#)/i;
 
+// Obfuscation d'adresses e-mail par Cloudflare : « /cdn-cgi/l/email-protection#HEX » et <span data-cfemail="HEX">.
+// Le premier octet est la clé, chaque octet suivant est XORé avec elle. Renvoie l'adresse, ou null si ce n'en est pas une.
+export function decodeCfEmail(hex) {
+  const h = String(hex || '').replace(/^#/, '').trim();
+  if (!/^[0-9a-f]{4,}$/i.test(h) || h.length % 2) return null;
+  const key = parseInt(h.slice(0, 2), 16);
+  const bytes = [];
+  for (let i = 2; i < h.length; i += 2) bytes.push(parseInt(h.slice(i, i + 2), 16) ^ key);
+  let email;
+  try {
+    email = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes));
+  } catch {
+    return null;
+  }
+  return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email) ? email : null;
+}
+// Chemins internes de Cloudflare (protection d'e-mails, scripts, défi anti-bot) : jamais des pages du site.
+export const CDN_CGI = /\/cdn-cgi\//i;
+
 export function resolveUrl(href, base) {
   if (!href) return null;
   const h = String(href).trim();
@@ -179,6 +198,19 @@ function runExtractors($, html, extractors, skip = new Set()) {
 
 export function parseHtml(html, pageUrl, { extractors, skipExtractors } = {}) {
   const $ = cheerio.load(html);
+  // Cloudflare « email protection » : le lien « /cdn-cgi/l/email-protection#HEX » redevient un mailto: vers l'adresse
+  // décodée (plus un lien interne cassé), et le texte « [email protected] » redevient l'adresse.
+  $('[data-cfemail]').each((_, el) => {
+    const email = decodeCfEmail($(el).attr('data-cfemail'));
+    if (email) $(el).text(email);
+  });
+  $('a[href*="/cdn-cgi/l/email-protection"]').each((_, el) => {
+    const $el = $(el);
+    const email = decodeCfEmail(($el.attr('href') || '').split('#')[1]);
+    if (!email) return $el.removeAttr('href');
+    $el.attr('href', 'mailto:' + email);
+    if (/^\s*\[email(?:\s|\u00a0)*protected\]\s*$/i.test($el.text())) $el.text(email);
+  });
   const extracted = extractors?.length ? runExtractors($, html, extractors, skipExtractors) : undefined;
   // Le contenu d'un <template> n'est jamais rendu ni indexé : retiré avant toute extraction.
   $('template').remove();
@@ -279,7 +311,7 @@ export function parseHtml(html, pageUrl, { extractors, skipExtractors } = {}) {
   $('a[href], area[href]').each((_, el) => {
     const $el = $(el);
     const to = resolveUrl($el.attr('href'), base);
-    if (!to) return;
+    if (!to || CDN_CGI.test(to)) return; // /cdn-cgi/… : point d'entrée Cloudflare, pas une page du site
     // Ancre comme Google la lit : texte + alt des images (dans l'ordre), sans le <title> d'un SVG d'icône ;
     // à défaut aria-label puis title. <area> : son attribut alt.
     let anchor;
