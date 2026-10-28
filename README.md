@@ -470,6 +470,7 @@ Arachnide would not be what it is without the people who took the time to test i
 - [@Mar1e](https://x.com/Mar1e), for the recommendation to integrate Google Analytics 4.
 - [@effi_10](https://x.com/effi_10), for the recommendations on segmentation.
 - [@EmelineRoblot](https://x.com/EmelineRoblot), for the challenge she set me: crawling more than a million pages without a crash.
+- [@absolute_web](https://x.com/absolute_web), for the advice on Cloudflare email protection and for keeping the OpenAI integration up to date with the latest models.
 - And of course my children, Oliver and Alberto, by far my finest creation and my greatest pride.
 
 ## 👤 Author

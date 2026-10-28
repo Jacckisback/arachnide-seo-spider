@@ -457,6 +457,7 @@ O Arachnide não seria o que é sem as pessoas que dedicaram tempo a testá-lo, 
 - [@Mar1e](https://x.com/Mar1e), pela recomendação de integrar o Google Analytics 4.
 - [@effi_10](https://x.com/effi_10), pelas recomendações sobre a segmentação.
 - [@EmelineRoblot](https://x.com/EmelineRoblot), pelo desafio que me lançou: rastrear mais de um milhão de páginas sem falhar.
+- [@absolute_web](https://x.com/absolute_web), pelos conselhos sobre a proteção de e-mails da Cloudflare e pelas atualizações da integração OpenAI com os modelos mais recentes.
 - E, claro, os meus filhos, Oliver e Alberto, de longe a minha melhor criação e o meu maior orgulho.
 
 ## 👤 Autor
