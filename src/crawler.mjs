@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
 import zlib from 'node:zlib';
-import { parseHtml, resolveUrl } from './parse.mjs';
+import { parseHtml, resolveUrl, CDN_CGI } from './parse.mjs';
 import { robotsFlags } from '../public/shared/directives.js';
 import { parseRobots, rulesFor, isAllowed } from './robots.mjs';
 import { analyze } from './analyze.mjs';
@@ -17,7 +17,7 @@ import { normalizeUrl, compileParamPatterns } from './urlnorm.mjs';
 import { diffUrls } from './sitemap-diff.mjs';
 import { xpathExtract } from './xpath.mjs';
 
-export const VERSION = '3.23.1';
+export const VERSION = '3.23.2';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -349,6 +349,7 @@ export class Crawler extends EventEmitter {
     const n = this.normalize(url);
     if (!n || this.seen.has(n)) return;
     if (!this.isInternal(n)) return;
+    if (CDN_CGI.test(n) && via !== 'start' && via !== 'list') return; // /cdn-cgi/… (Cloudflare) : jamais une page du site
     // L'URL de départ (et celles d'une liste) est toujours explorée : c'est le point d'entrée, même hors des motifs.
     if (via !== 'start' && via !== 'list' && !this.inScope(n)) return this.skip('scope');
     const o = this.opts;

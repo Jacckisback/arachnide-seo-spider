@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { Crawler, USER_AGENTS, DEFAULT_UA } from '../src/crawler.mjs';
-import { parseHtml } from '../src/parse.mjs';
+import { parseHtml, decodeCfEmail } from '../src/parse.mjs';
 import { findChrome } from '../src/renderer.mjs';
 
 test('titre et titres Hn : SVG inline, noscript et template ne comptent pas', () => {
@@ -18,6 +18,48 @@ test('titre et titres Hn : SVG inline, noscript et template ne comptent pas', ()
   assert.deepEqual(r.h2, ['Section']);
   assert.deepEqual(r.headingSkips, []);
   assert.ok(!r.links.some((l) => l.to.includes('template-link')));
+});
+
+test('Cloudflare « email protection » : le lien /cdn-cgi/l/email-protection redevient un mailto, l’adresse est décodée, rien n’est crawlé sous /cdn-cgi/', async () => {
+  // « contact@example.com » encodé par Cloudflare avec la clé 0x5a.
+  const enc = (email, key = 0x5a) => key.toString(16).padStart(2, '0') + [...Buffer.from(email, 'utf8')].map((b) => (b ^ key).toString(16).padStart(2, '0')).join('');
+  assert.equal(decodeCfEmail(enc('contact@example.com')), 'contact@example.com');
+  assert.equal(decodeCfEmail('#' + enc('élise.dupont@société.fr', 0x07)), 'élise.dupont@société.fr');
+  assert.equal(decodeCfEmail('zz'), null);
+  assert.equal(decodeCfEmail(enc('pas une adresse')), null);
+  assert.equal(decodeCfEmail(''), null);
+  const r = parseHtml(`<html><head><title>Contact</title></head><body>
+    <p>Écrivez à <a href="/cdn-cgi/l/email-protection#${enc('contact@example.com')}" class="__cf_email__">[email&#160;protected]</a> ou à
+    <span class="__cf_email__" data-cfemail="${enc('sav@example.com')}">[email&#160;protected]</span>.</p>
+    <a href="/cdn-cgi/l/email-protection">lien sans adresse</a>
+    <a href="/cdn-cgi/challenge-platform/h/b/orchestrate/jsch/v1">défi</a>
+    <a href="/contact">Contact</a>
+    <script src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+  </body></html>`, 'https://www.example.com/');
+  assert.deepEqual(r.links.map((l) => l.to), ['https://www.example.com/contact'], 'ni le lien de protection, ni le défi Cloudflare');
+  // Le texte décodé compte dans le contenu : « contact@example.com » et « sav@example.com » remplacent « [email protected] ».
+  assert.equal(r.links[0].anchor, 'Contact');
+  assert.ok(r.wordCount >= 6, String(r.wordCount));
+  const r2 = parseHtml(`<html><body><p><a href="/cdn-cgi/l/email-protection#${enc('contact@example.com')}">[email&#160;protected]</a> <a href="/p">x</a></p></body></html>`, 'https://www.example.com/', { extractors: [{ name: 'mail', type: 'css', selector: 'a[href^="mailto:"]', target: 'attr', attr: 'href' }, { name: 'txt', type: 'css', selector: 'p', target: 'text' }] });
+  assert.deepEqual(r2.extracted.mail, ['mailto:contact@example.com']);
+  assert.deepEqual(r2.extracted.txt, ['contact@example.com x']);
+  // Sur un site réel derrière Cloudflare : /cdn-cgi/l/email-protection répond 403, mais il n'est ni exploré ni compté comme lien cassé.
+  const srv = http.createServer((req, res) => {
+    if (req.url === '/' || req.url === '/contact') res.setHeader('content-type', 'text/html; charset=utf-8');
+    if (req.url === '/') return res.end(`<html><head><title>Accueil</title></head><body><h1>Accueil</h1><p>${'Texte de page. '.repeat(40)}</p><a href="/cdn-cgi/l/email-protection#${enc('contact@example.com')}">[email&#160;protected]</a> <a href="/contact">Contact</a></body></html>`);
+    if (req.url === '/contact') return res.end('<html><head><title>Contact</title></head><body><h1>Contact</h1><p>Page de contact avec du texte.</p></body></html>');
+    res.writeHead(req.url.startsWith('/cdn-cgi/') ? 403 : 404);
+    res.end('x');
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    const R = await new Crawler(`http://127.0.0.1:${srv.address().port}/`, { concurrency: 2, useSitemaps: false }).start();
+    assert.deepEqual(R.pages.map((p) => new URL(p.url).pathname).sort(), ['/', '/contact']);
+    assert.deepEqual(R.brokenLinks, []);
+    assert.ok(!R.issues.some((i) => i.id === 'broken-internal' || i.id === '4xx'), R.issues.map((i) => i.id).join(','));
+  } finally {
+    srv.close();
+  }
 });
 
 test('site qui refuse le user-agent Arachnide (403) : bascule automatique sur Chrome, signalée', async () => {
