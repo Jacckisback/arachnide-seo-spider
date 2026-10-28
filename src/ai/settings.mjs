@@ -25,7 +25,28 @@ export async function readAiSettings() {
   } catch {
     /* premier lancement */
   }
-  return { provider: 'anthropic', models: {}, keys: {}, customModels: {}, simulation: true, realConfirmed: false, ...s };
+  const out = { provider: 'anthropic', models: {}, keys: {}, customModels: {}, simulation: true, realConfirmed: false, ...s };
+  migrateModels(out);
+  return out;
+}
+
+// Un modèle retiré par le fournisseur (ex. gpt-4o-mini, arrêté par OpenAI) est remplacé par celui qu'il recommande,
+// dans le réglage comme dans la liste rafraîchie ; la liste ne garde que des modèles encore servis.
+export function replacementFor(provider, model) {
+  const retired = MODELS[provider]?.retired || {};
+  const base = String(model || '').replace(/-\d{4}-\d{2}-\d{2}$/, ''); // instantané daté → alias
+  return retired[model] || retired[base] || null;
+}
+export function migrateModels(s) {
+  for (const id of Object.keys(PROVIDERS)) {
+    const to = s.models[id] && replacementFor(id, s.models[id]);
+    if (to) s.models[id] = to;
+    if (Array.isArray(s.customModels[id]) && s.customModels[id].length) {
+      s.customModels[id] = s.customModels[id].filter((m) => m && !replacementFor(id, m.id));
+      if (!s.customModels[id].length) delete s.customModels[id];
+    }
+  }
+  return s;
 }
 
 async function writeAiSettings(s) {
