@@ -17,7 +17,7 @@ import { normalizeUrl, compileParamPatterns } from './urlnorm.mjs';
 import { diffUrls } from './sitemap-diff.mjs';
 import { xpathExtract } from './xpath.mjs';
 
-export const VERSION = '3.23.0';
+export const VERSION = '3.23.1';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);

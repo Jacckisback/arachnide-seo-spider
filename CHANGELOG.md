@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.23.1 — 2026-10-28
+
+### OpenAI: current models (GPT-6 Luna, Sol, Terra, Astra), retired models migrated
+The *Fix with AI* feature offered GPT-4o mini and GPT-4o by default, which OpenAI has scheduled for shutdown (January 14, 2027) and no longer recommends.
+- **Catalogue** (`src/ai/models.json`): default `gpt-6-luna` (OpenAI's recommended replacement for GPT-4o / GPT-4o mini / GPT-4.1, $0.10 / $0.50 per million tokens), then `gpt-6.1-terra`, `gpt-6.1-sol`, `gpt-6-astra` and the previous generation `gpt-5.6-luna` / `terra` / `sol`, with the Standard-tier prices of October 2026 for the cost estimate. Claude's catalogue (Sonnet / Haiku / Opus 5.5) is unchanged.
+- **Model list from the API** (*Test the connection*): text models only — audio, realtime, transcription, image, search, code, cyber and life-science models and dated snapshots of an available alias are left out; models whose `shutdown_date` is past are dropped; a model with an announced shutdown stays, labelled with its date; newest generation first.
+- **Migration**: a saved setting (or a list refreshed earlier) that names a retired model is replaced at read time by the replacement OpenAI documents — `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini` → `gpt-6-luna`; `gpt-4.1-nano`, `gpt-5-nano` → `gpt-5.6-luna`; `o4-mini`, `o3-mini`, `o1-mini`, `gpt-5-mini` → `gpt-5.6-terra`; `o1`, `o3`, `o3-pro`, `gpt-5`, `gpt-5-pro` → `gpt-5.6-sol`. The price estimate follows.
+- **Tests**: filtered and ordered model list with shutdown dates, catalogue sanity, migration of an old `ai.json` and of the cost.
+
 ## 3.23.0 — 2026-10-23
 
 ### Sitemap changes: crawl only the URLs that left the sitemap, decide 301 / 410 / keep

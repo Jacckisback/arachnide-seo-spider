@@ -1,5 +1,5 @@
 {
-  "_comment": "Default models and indicative prices (USD per million tokens) used for the cost estimate. Editable; the model list is refreshed from the provider's API when you test the connection.",
+  "_comment": "Default models and indicative prices (USD per million tokens, OpenAI Standard tier, October 2026) used for the cost estimate. Editable; the model list is refreshed from the provider's API when you test the connection, and models past their shutdown date are dropped.",
   "anthropic": {
     "label": "Claude (Anthropic)",
     "default": "claude-sonnet-5-5",
@@ -11,10 +11,40 @@
   },
   "openai": {
     "label": "ChatGPT (OpenAI)",
-    "default": "gpt-4o-mini",
+    "default": "gpt-6-luna",
     "models": [
-      { "id": "gpt-4o-mini", "label": "GPT-4o mini (fast, cheap)", "price": { "input": 0.15, "output": 0.6 } },
-      { "id": "gpt-4o", "label": "GPT-4o", "price": { "input": 2.5, "output": 10 } }
-    ]
+      { "id": "gpt-6-luna", "label": "GPT-6 Luna (fast, cheap)", "price": { "input": 0.1, "output": 0.5 } },
+      { "id": "gpt-6.1-terra", "label": "GPT-6.1 Terra", "price": { "input": 1, "output": 5 } },
+      { "id": "gpt-6.1-sol", "label": "GPT-6.1 Sol (balanced)", "price": { "input": 2, "output": 10 } },
+      { "id": "gpt-6-astra", "label": "GPT-6 Astra (best quality)", "price": { "input": 10, "output": 50 } },
+      { "id": "gpt-5.6-luna", "label": "GPT-5.6 Luna (previous generation)", "price": { "input": 0.2, "output": 1.2 } },
+      { "id": "gpt-5.6-terra", "label": "GPT-5.6 Terra (previous generation)", "price": { "input": 2, "output": 12 } },
+      { "id": "gpt-5.6-sol", "label": "GPT-5.6 Sol (previous generation)", "price": { "input": 4, "output": 20 } }
+    ],
+    "retired": {
+      "_comment": "Models OpenAI has retired or scheduled for shutdown (developers.openai.com/api/docs/deprecations), mapped to the replacement OpenAI recommends. A saved setting that names one of them is migrated automatically.",
+      "gpt-4o": "gpt-6-luna",
+      "gpt-4o-mini": "gpt-6-luna",
+      "gpt-4.1": "gpt-6-luna",
+      "gpt-4.1-mini": "gpt-6-luna",
+      "gpt-4.1-nano": "gpt-5.6-luna",
+      "gpt-4-turbo": "gpt-6-luna",
+      "gpt-4": "gpt-6-luna",
+      "gpt-3.5-turbo": "gpt-6-luna",
+      "chatgpt-4o-latest": "gpt-6-luna",
+      "gpt-5": "gpt-5.6-sol",
+      "gpt-5-mini": "gpt-5.6-terra",
+      "gpt-5-nano": "gpt-5.6-luna",
+      "gpt-5-pro": "gpt-5.6-sol",
+      "gpt-5-chat-latest": "gpt-5.6-sol",
+      "gpt-5-codex": "gpt-5.6-sol",
+      "o1": "gpt-5.6-sol",
+      "o1-mini": "gpt-5.6-terra",
+      "o1-pro": "gpt-5.6-sol",
+      "o3": "gpt-5.6-sol",
+      "o3-mini": "gpt-5.6-terra",
+      "o3-pro": "gpt-5.6-sol",
+      "o4-mini": "gpt-5.6-terra"
+    }
   }
 }
