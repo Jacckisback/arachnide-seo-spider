@@ -46,5 +46,11 @@
       "o3-pro": "gpt-5.6-sol",
       "o4-mini": "gpt-5.6-terra"
     }
+  },
+  "local": {
+    "label": "Local AI (LM Studio, Ollama…)",
+    "default": "",
+    "free": true,
+    "models": []
   }
 }

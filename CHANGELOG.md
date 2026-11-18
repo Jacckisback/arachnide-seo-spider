@@ -1,5 +1,21 @@
 # Changelog
 
+## 3.24.0 — 2026-11-18
+
+### Local AI: LM Studio, Ollama and any OpenAI-compatible server for *Fix with AI*
+Suggestion from a user: "add a custom provider with an OpenAI-type endpoint to connect LM Studio or Ollama and use your local AIs".
+- **Provider** (`src/ai/local.mjs`): *Local AI (LM Studio, Ollama…)*, a third choice next to Claude and ChatGPT. It talks to any server exposing the OpenAI Chat Completions API — LM Studio (`http://localhost:1234/v1`, the default), Ollama (`http://localhost:11434/v1`), llama.cpp server, vLLM, LocalAI, Jan. The address is normalised (`localhost:11434` → `http://localhost:11434/v1`; a pasted `…/chat/completions` is trimmed); only `http` / `https` are accepted.
+- **No key needed** (an optional one is sent as `Bearer` if the server is protected; `ARACHNIDE_LOCAL_API_KEY` and `ARACHNIDE_LOCAL_BASE_URL` work too). **Empty model = the model loaded on the server** (first non-embedding model of `/v1/models`). **Cost estimate: 0.**
+- **Compatibility**: no `response_format` (LM Studio refuses `json_object`; the JSON instruction is in the prompt and the answer is validated as before), `max_tokens` with room for reasoning models, `<think>…</think>` blocks removed before reading the JSON, 5-minute timeout for CPU inference. A server that is not running gives a clear message (*start LM Studio's server or Ollama*) instead of `fetch failed`.
+- **Interface**: *Options → AI* shows a *Server URL* field with the LM Studio / Ollama addresses, the key becomes optional, *Test the connection* lists the loaded models; corrections, history and the *Fix* tab chip show *Local AI*. Nine keys in the six languages.
+- **Tests**: URL normalisation, request shape (no key, no `response_format`, first loaded model), reasoning blocks, embedding models left out, unreachable server; settings without a key, saved address, invalid address refused, connection test, zero price.
+
+### Bot protection: detected even when the home page comes from the CDN cache
+On sites hosted by Hostinger (hCDN + LiteSpeed WAF), the home page is served from the CDN cache with a 200 for everyone, while every other URL goes through the firewall, which answers 403 to the Arachnide user agent. The existing Chrome fallback only looked at the start URL, so it never triggered: robots.txt unreadable and every internal page reported as a 4xx / broken link (59 of 60 on a real site), although the site works fine in a browser.
+- **Probe**: when the start URL answers below 400 with the Arachnide user agent, a variant the cache cannot serve (`?arachnide-probe=…`) is requested once; a 401 / 403 / 406 there, and a pass with Chrome, switches the crawl to Chrome **before** robots.txt and the sitemaps are read. The probe is not recorded as a page.
+- **Safety net during the crawl**: an internal page refused with 401 / 403 / 406 while the crawl still uses the Arachnide user agent triggers the same test once (shared by the concurrent workers); if Chrome passes, the crawl switches and the page is requested again. A site that refuses Chrome too keeps its real status — a 403 for everyone stays a 403.
+- **Tests**: a server that caches `/` and filters every other path; a firewall rule on one folder only, met mid-crawl with three workers (one warning, every page 200, no broken link).
+
 ## 3.23.2 — 2026-10-28
 
 ### Cloudflare email protection: no more false broken links, real addresses in the content

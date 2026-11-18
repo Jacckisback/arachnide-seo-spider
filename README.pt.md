@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licença MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.23.2-3d5f17" alt="Versão 3.23.2">
+  <img src="https://img.shields.io/badge/version-3.24.0-3d5f17" alt="Versão 3.24.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou mais recente">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 idiomas">
@@ -188,7 +188,7 @@ Configuração (chave de IA, palavra-passe de aplicação do WordPress, token do
 
 Uma auditoria completa (extração HTML, motor de rastreio, regras SEO e rastreios de 8 sites reais) eliminou os falsos positivos e falsos negativos que podiam enganar um profissional de SEO ou GEO.
 
-- **Sites protegidos contra robôs** (403 no user-agent do rastreador): o rastreio muda automaticamente para o Chrome e indica-o, em vez de mostrar todas as páginas com erro.
+- **Sites protegidos contra robôs** (403 no user-agent do rastreador): o rastreio muda automaticamente para o Chrome e indica-o, em vez de mostrar todas as páginas com erro, mesmo quando a página inicial vem da cache do CDN e só as outras páginas são filtradas (Hostinger hCDN, LiteSpeed).
 - **Limitação de taxa (429/503)**: o Arachnide espera e tenta de novo; as páginas travadas já não contam como partidas. Os links para o LinkedIn ou sites protegidos pela Cloudflare são «não verificáveis», não «partidos».
 - **Diretivas lidas como o Google**: `max-image-preview:none` não é um noindex, o `X-Robots-Tag` de outro robô é ignorado, o meta refresh é um redirecionamento.
 - **O conteúdo tal como é**: `<title>` dos SVG ignorados, `alt=""` = imagem decorativa, imagens em lazy-load (`data-src`) analisadas, contagem de palavras em chinês, japonês e tailandês.

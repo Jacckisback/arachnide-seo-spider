@@ -91,6 +91,55 @@ test('site qui refuse le user-agent Arachnide (403) : bascule automatique sur Ch
   }
 });
 
+test('accueil servi par le cache du CDN, pare-feu sur les autres pages (Hostinger hCDN) : bascule sur Chrome', async () => {
+  // L'accueil répond 200 à tout le monde (cache), toute autre URL passe par le WAF qui refuse le user-agent Arachnide.
+  const server = http.createServer((req, res) => {
+    const bot = /ArachnideSEO/.test(req.headers['user-agent']);
+    if (req.url !== '/' && bot) {
+      res.writeHead(403, { 'content-type': 'text/html' });
+      return res.end('<title>403 Forbidden</title>');
+    }
+    res.writeHead(200, { 'content-type': req.url === '/robots.txt' ? 'text/plain' : 'text/html' });
+    if (req.url === '/robots.txt') return res.end('User-agent: *\nDisallow: /prive/\n');
+    res.end(req.url === '/' ? '<title>Accueil</title><h1>Bienvenue</h1><a href="/a">a</a><a href="/b">b</a>' : `<title>Page ${req.url}</title><h1>Page</h1>`);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false }).start();
+    assert.equal(R.meta.uaFallback, true);
+    assert.ok(R.meta.warnings.some((w) => w.key === 'warn.uaBlocked' && w.params.status === 403));
+    assert.deepEqual(R.pages.map((p) => p.status), [200, 200, 200]);
+    assert.ok(!R.meta.warnings.some((w) => w.key === 'warn.robotsUnavailable'), 'robots.txt lu avec Chrome');
+    assert.ok(!R.pages.some((p) => /arachnide-probe/.test(p.url)), 'la sonde n’est pas une page du crawl');
+  } finally {
+    server.close();
+  }
+});
+
+test('pare-feu qui ne se déclenche qu’en cours de crawl : la page refusée est redemandée avec Chrome', async () => {
+  // La sonde passe ; seul /boutique/ est filtré (règle WAF par chemin).
+  const server = http.createServer((req, res) => {
+    if (req.url.startsWith('/boutique/') && /ArachnideSEO/.test(req.headers['user-agent'])) {
+      res.writeHead(403, { 'content-type': 'text/html' });
+      return res.end('<title>403</title>');
+    }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(req.url === '/' || req.url.startsWith('/?') ? '<title>Accueil</title><h1>A</h1><a href="/boutique/x">x</a><a href="/boutique/y">y</a><a href="/c">c</a>' : `<title>P ${req.url}</title><h1>P</h1>`);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const R = await new Crawler(base + '/', { useSitemaps: false, concurrency: 3 }).start();
+    assert.equal(R.meta.uaFallback, true);
+    assert.equal(R.meta.warnings.filter((w) => w.key === 'warn.uaBlocked').length, 1);
+    assert.ok(R.pages.every((p) => p.status === 200), R.pages.map((p) => `${p.url} ${p.status}`).join(', '));
+    assert.ok(!R.issues.some((i) => i.id === 'broken-internal' || i.id === '4xx'));
+  } finally {
+    server.close();
+  }
+});
+
 test('429 avec Retry-After : nouvelle tentative, pas d’erreur 4xx ni de lien cassé', async () => {
   const hits = new Map();
   const server = http.createServer((req, res) => {
