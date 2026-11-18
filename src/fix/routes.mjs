@@ -72,8 +72,10 @@ export async function handleFixRoutes(req, res, p, { send, readBody, broadcast, 
     proposeFixes(R, { issueIds, urls, provider, lang, onProgress: (pr) => broadcast('fix-progress', { job: id, ...pr }) })
       .then(async ({ fixes, errors }) => {
         await replaceProposals(site, fixes);
-        jobs.set(id, { status: 'done', count: fixes.length, errors });
-        broadcast('fix-done', { job: id, count: fixes.length, errors });
+        // Les corrections « échouées » (réponse IA invalide ou vide) ne sont pas comptées comme générées.
+        const failed = fixes.filter((f) => f.status === 'failed').length;
+        jobs.set(id, { status: 'done', count: fixes.length - failed, failed, errors });
+        broadcast('fix-done', { job: id, count: fixes.length - failed, failed, errors });
       })
       .catch((e) => {
         jobs.set(id, { status: 'error', error: e.message, code: e.code });

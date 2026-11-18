@@ -106,7 +106,10 @@ function listen() {
     const d = JSON.parse(e.data);
     FS.busy = null;
     if (d.error) C.toast(d.code === 'no_provider' ? T('fix.noProvider') : d.error, 'error');
-    else C.toast(T('fix.generated', { n: d.count }) + (d.errors?.length ? ' · ' + T('fix.someErrors', { n: d.errors.length }) : ''), d.errors?.length ? 'info' : 'ok');
+    else {
+      const bad = (d.errors?.length || 0) + (d.failed || 0);
+      C.toast(T('fix.generated', { n: d.count }) + (bad ? ' · ' + T('fix.someErrors', { n: bad }) : ''), bad ? (d.count ? 'info' : 'error') : 'ok');
+    }
     await loadFixData();
     paint();
   });

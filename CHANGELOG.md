@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.24.1 — 2026-11-18
+
+### Local AI: reasoning models (Qwen3, DeepSeek-R1, gpt-oss, Magistral…) no longer give empty corrections
+With thinking enabled, a local model often spent the whole 2 000-token budget reasoning; LM Studio / Ollama then returned an empty answer (the reasoning goes to a separate field) and the correction came back blank, with a "generated" toast.
+- **Budget**: 16 000 tokens for local servers (free), so the model can think and then answer.
+- **Reasoning fields**: `reasoning_content` (LM Studio, llama.cpp) and `reasoning` (Ollama) are read when the final text is empty — the last JSON object with a `newValue` is taken from the end of the reasoning. `<think>` blocks cut by the token limit are dropped.
+- **Clear failure instead of a blank card**: an answer cut while reasoning, or empty, becomes a *failed* correction with the reason (*the model used all its tokens reasoning: turn thinking off for this model…*); the toast counts failed corrections as errors instead of "generated". Simulation mode was never involved: it only prevents writing to the site.
+- **Tests**: reasoning in a separate field, answer left in Ollama's `reasoning`, reasoning cut by the limit, empty answer, JSON extraction.
+
 ## 3.24.0 — 2026-11-18
 
 ### Local AI: LM Studio, Ollama and any OpenAI-compatible server for *Fix with AI*
