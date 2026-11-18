@@ -18,7 +18,7 @@ export const FixSchema = z.object({
   oldValue: z.union([z.string(), z.boolean(), z.null()]),
   newValue: z.union([z.string(), z.boolean(), z.null()]),
   method: z.enum(['ai', 'deterministic', 'manual']),
-  provider: z.enum(['anthropic', 'openai']).nullable(),
+  provider: z.enum(['anthropic', 'openai', 'local']).nullable(),
   confidence: z.number().min(0).max(1),
   rationale: z.string().max(600),
   status: z.enum(STATUSES),

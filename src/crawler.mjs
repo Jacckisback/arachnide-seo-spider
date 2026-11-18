@@ -17,7 +17,7 @@ import { normalizeUrl, compileParamPatterns } from './urlnorm.mjs';
 import { diffUrls } from './sitemap-diff.mjs';
 import { xpathExtract } from './xpath.mjs';
 
-export const VERSION = '3.23.2';
+export const VERSION = '3.24.0';
 
 // Formats d'image sans compression moderne (pas de WebP / AVIF / SVG / JPEG XL).
 const LEGACY_FORMATS = new Set(['jpg', 'png', 'gif', 'bmp', 'tiff']);
@@ -32,6 +32,9 @@ const FACET_PATHS_MAX = 20;
 const DISCOVERY_FACTOR = 4;
 const RETRY_STATUS = new Set([500, 502, 504]);
 const RETRY_DELAY_MS = 5000;
+// Refus typiques d'un pare-feu applicatif (WAF) envers un robot inconnu.
+const BLOCK_STATUS = new Set([401, 403, 406, 429, 503]);
+const UA_BLOCK_STATUS = new Set([401, 403, 406]);
 const newExternal = (url) => ({ url, status: null, statusText: '', inlinks: 0, pages: 0, firstPage: '', lastPage: '' });
 // Options rejouables : tout ce qui se sérialise (les fonctions injectées pour les tests sont ignorées).
 const journalOpts = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => typeof v !== 'function' && v !== undefined));
@@ -457,7 +460,7 @@ export class Crawler extends EventEmitter {
     if (at > now) await sleep(at - now);
   }
 
-  async request(url, method = 'GET') {
+  async request(url, method = 'GET', ua = this.opts.userAgent) {
     await this.throttle();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.opts.timeoutMs);
@@ -468,7 +471,7 @@ export class Crawler extends EventEmitter {
         redirect: 'manual',
         signal: ctrl.signal,
         headers: {
-          'user-agent': this.opts.userAgent,
+          'user-agent': ua,
           accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           ...(this.opts.acceptLanguage ? { 'accept-language': this.opts.acceptLanguage } : {}),
           // Authentification et en-têtes personnalisés : uniquement vers le site audité.
@@ -476,7 +479,7 @@ export class Crawler extends EventEmitter {
         },
       });
       const ttfb = Math.round(performance.now() - t0);
-      return { res, ttfb, t0, timer };
+      return { res, ttfb, t0, timer, ua };
     } catch (e) {
       clearTimeout(timer);
       throw e;
@@ -523,6 +526,33 @@ export class Crawler extends EventEmitter {
     }
   }
 
+  // Statut d'une URL (0 si erreur réseau), corps abandonné.
+  async statusOf(url, ua) {
+    try {
+      const { res, timer } = await this.request(url, 'GET', ua);
+      clearTimeout(timer);
+      await res.body?.cancel();
+      return res.status;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Le site refuse le user-agent Arachnide : on réessaie l'URL refusée avec Chrome ; si elle passe, tout le crawl
+  // bascule sur Chrome (une seule fois, partagé par les workers concurrents).
+  tryUaFallback(url, blockedStatus) {
+    if (this.opts.userAgent !== DEFAULT_UA && !this.uaSwitch) return Promise.resolve(false);
+    this.uaSwitch ||= (async () => {
+      const st = await this.statusOf(url, USER_AGENTS.chrome);
+      if (!st || st >= 400) return false;
+      this.opts.userAgent = USER_AGENTS.chrome;
+      this.uaFallback = true;
+      this.warn('warn.uaBlocked', { status: blockedStatus });
+      return true;
+    })();
+    return this.uaSwitch;
+  }
+
   async resolveStart() {
     // Suit les redirections de l'URL de départ pour connaître l'hôte réel du site.
     this.hosts = new Set([new URL(this.startUrl).hostname.toLowerCase()]);
@@ -550,23 +580,16 @@ export class Crawler extends EventEmitter {
       }
       break;
     }
-    // Protection anti-bot (LiteSpeed, Cloudflare, Sucuri…) : certains hébergeurs refusent les user-agents inconnus
-    // avec un 403 alors qu'un navigateur passe. Dans ce cas on crawle avec le user-agent Chrome et on le signale,
-    // pour que l'audit reflète ce que voient les visiteurs et Google, et non la protection.
-    if ([401, 403, 406, 429, 503].includes(this.startStatus) && this.opts.userAgent === DEFAULT_UA) {
-      const blockedStatus = this.startStatus;
-      this.opts.userAgent = USER_AGENTS.chrome;
-      try {
-        const { res, timer } = await this.request(url);
-        clearTimeout(timer);
-        await res.body?.cancel();
-        if (res.status < 400) {
-          this.uaFallback = true;
-          this.warn('warn.uaBlocked', { status: blockedStatus });
-        } else this.opts.userAgent = DEFAULT_UA;
-      } catch {
-        this.opts.userAgent = DEFAULT_UA;
-      }
+    // Protection anti-bot (LiteSpeed, Cloudflare, Sucuri, Hostinger hCDN…) : certains hébergeurs refusent les
+    // user-agents inconnus avec un 403 alors qu'un navigateur passe. Dans ce cas on crawle avec le user-agent Chrome et
+    // on le signale, pour que l'audit reflète ce que voient les visiteurs et Google, et non la protection.
+    if (BLOCK_STATUS.has(this.startStatus)) await this.tryUaFallback(url, this.startStatus);
+    // L'accueil sort souvent du cache du CDN (200 pour tout le monde) alors que le pare-feu filtre toutes les autres
+    // pages : on sonde aussi une variante de l'URL de départ que le cache ne peut pas servir.
+    else if (this.startStatus && this.startStatus < 400 && this.opts.userAgent === DEFAULT_UA) {
+      const probe = url + (url.includes('?') ? '&' : '?') + 'arachnide-probe=' + Date.now().toString(36);
+      const st = await this.statusOf(probe);
+      if (UA_BLOCK_STATUS.has(st)) await this.tryUaFallback(probe, st);
     }
     this.finalStart = url;
     this.origin = new URL(url).origin;
@@ -887,6 +910,21 @@ export class Crawler extends EventEmitter {
       if (this.deferRetry(item)) return;
       this.settle(item, this.errorRecord(item, e));
       return;
+    }
+    // Filet de sécurité : une page refusée (401 / 403 / 406) alors que le crawl tourne encore avec le user-agent
+    // Arachnide déclenche le test avec Chrome ; si le pare-feu laisse passer Chrome, la page est redemandée.
+    if (UA_BLOCK_STATUS.has(reqRes.res.status) && this.isInternal(item.url) && (this.opts.userAgent === DEFAULT_UA || this.uaSwitch)) {
+      if ((await this.tryUaFallback(item.url, reqRes.res.status)) && reqRes.ua !== this.opts.userAgent) {
+        clearTimeout(reqRes.timer);
+        await reqRes.res.body?.cancel();
+        try {
+          reqRes = await this.request(item.url);
+        } catch (e) {
+          if (this.deferRetry(item)) return;
+          this.settle(item, this.errorRecord(item, e));
+          return;
+        }
+      }
     }
     const { res, ttfb, timer } = reqRes;
     try {

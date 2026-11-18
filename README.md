@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/version-3.23.2-3d5f17" alt="Version 3.23.2">
+  <img src="https://img.shields.io/badge/version-3.24.0-3d5f17" alt="Version 3.24.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 or newer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 languages">
@@ -182,7 +182,7 @@ After a crawl, open the **Fix in 1 click** tab: issues are grouped by impact (pa
 
 ### Set up
 
-- **AI key** — *Options → AI*: choose Claude (Anthropic) or ChatGPT (OpenAI), paste your API key ([console.anthropic.com](https://console.anthropic.com/settings/keys) or [platform.openai.com](https://platform.openai.com/api-keys)), pick a model, click *Test the connection*. The key is stored encrypted on your computer only and sent only to that provider; you pay the provider directly.
+- **AI key** — *Options → AI*: choose Claude (Anthropic) or ChatGPT (OpenAI), paste your API key ([console.anthropic.com](https://console.anthropic.com/settings/keys) or [platform.openai.com](https://platform.openai.com/api-keys)), pick a model, click *Test the connection*. The key is stored encrypted on your computer only and sent only to that provider; you pay the provider directly. Or choose **Local AI (LM Studio, Ollama…)**: enter the address of any OpenAI-compatible server (`http://localhost:1234/v1` for LM Studio, `http://localhost:11434/v1` for Ollama), no key needed, nothing leaves your machine and the cost is zero.
 - **WordPress** — in the *Fix* tab click the connection button → *WordPress* → *Download the WordPress plugin (.zip)*, then in WordPress *Plugins → Add New → Upload Plugin*. Create an **application password** in *Users → Profile → Application Passwords* (name it “Arachnide”, copy it), and enter the site address, username and that password in Arachnide. An Editor account is enough for content; Administrator for redirects. Works with Yoast SEO, Rank Math, SEOPress, All in One SEO and Redirection.
 - **GitHub / Lovable** — create a **fine-grained token** in *GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens*: *Only select repositories* (one repo), permissions *Contents: Read and write* and *Pull requests: Read and write*. Enter `owner/repo` and the token. Arachnide opens a pull request on `arachnide/fix-YYYYMMDD-HHMM` and shows the diff first; for Lovable, merging it into the default branch updates the project automatically.
 
@@ -201,7 +201,7 @@ How connectors work and how to add a CMS: [docs/CONNECTORS.md](docs/CONNECTORS.m
 
 A full audit (HTML extraction, crawl engine, SEO rules and crawls of 8 real sites) removed the false positives and false negatives that could mislead an SEO or GEO professional.
 
-- **Bot-protected sites** (403 on the crawler's user agent): the crawl switches to Chrome automatically and tells you, instead of reporting every page as an error.
+- **Bot-protected sites** (403 on the crawler's user agent): the crawl switches to Chrome automatically and tells you, instead of reporting every page as an error — even when the home page comes from the CDN cache and only the other pages are filtered (Hostinger hCDN, LiteSpeed).
 - **Rate limiting (429/503)**: Arachnide waits and retries; throttled pages are no longer counted as broken. External links to LinkedIn or Cloudflare-protected sites are "could not be checked", not "broken".
 - **Directives read like Google**: `max-image-preview:none` is not a noindex, another bot's `X-Robots-Tag` is ignored, meta refresh is a redirect.
 - **Content seen as it is**: SVG `<title>` ignored, `alt=""` is a decorative image, lazy-loaded images (`data-src`) analysed, word count for Chinese, Japanese and Thai.

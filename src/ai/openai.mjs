@@ -6,11 +6,15 @@ export class OpenAIProvider extends AIProvider {
   get base() {
     return this.baseUrl || 'https://api.openai.com';
   }
+  // Racine de l'API compatible OpenAI (…/v1) : les serveurs locaux la donnent directement.
+  get root() {
+    return this.base.replace(/\/+$/, '') + '/v1';
+  }
   headers() {
     return { authorization: `Bearer ${this.apiKey}`, 'content-type': 'application/json' };
   }
   async complete({ system, user, maxTokens = 400 }) {
-    const res = await this.fetch(this.base + '/v1/chat/completions', {
+    const res = await this.fetch(this.root + '/chat/completions', {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({
@@ -32,7 +36,7 @@ export class OpenAIProvider extends AIProvider {
   // instantanés datés quand l'alias existe, ni les modèles déjà retirés (champ shutdown_date de l'API). Un modèle dont
   // le retrait est annoncé reste proposé, avec sa date, pour ne pas casser un réglage en cours. Les plus récents d'abord.
   async listModels() {
-    const res = await this.fetch(this.base + '/v1/models', { headers: this.headers(), signal: AbortSignal.timeout(20000) });
+    const res = await this.fetch(this.root + '/models', { headers: this.headers(), signal: AbortSignal.timeout(20000) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new AIError(`OpenAI ${res.status}: ${data.error?.message || res.statusText}`, { status: res.status });
     const today = new Date().toISOString().slice(0, 10);

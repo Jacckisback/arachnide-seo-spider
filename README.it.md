@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licenza MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.23.2-3d5f17" alt="Versione 3.23.2">
+  <img src="https://img.shields.io/badge/version-3.24.0-3d5f17" alt="Versione 3.24.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 o successivo">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 lingue">
@@ -188,7 +188,7 @@ Configurazione (chiave IA, password per le applicazioni di WordPress, token GitH
 
 Un audit completo (estrazione HTML, motore di scansione, regole SEO e scansioni di 8 siti reali) ha eliminato i falsi positivi e i falsi negativi che potevano trarre in inganno un professionista SEO o GEO.
 
-- **Siti protetti contro i bot** (403 sullo user-agent del crawler): la scansione passa automaticamente a Chrome e lo segnala, invece di mostrare tutte le pagine in errore.
+- **Siti protetti contro i bot** (403 sullo user-agent del crawler): la scansione passa automaticamente a Chrome e lo segnala, invece di mostrare tutte le pagine in errore, anche quando la home arriva dalla cache del CDN e solo le altre pagine vengono filtrate (Hostinger hCDN, LiteSpeed).
 - **Limitazione della frequenza (429/503)**: Arachnide attende e riprova; le pagine rallentate non sono più contate come rotte. I link verso LinkedIn o siti protetti da Cloudflare sono «non verificabili», non «rotti».
 - **Direttive lette come Google**: `max-image-preview:none` non è un noindex, l’`X-Robots-Tag` di un altro bot viene ignorato, il meta refresh è un reindirizzamento.
 - **Il contenuto così com’è**: `<title>` degli SVG ignorati, `alt=""` = immagine decorativa, immagini in lazy-load (`data-src`) analizzate, conteggio delle parole in cinese, giapponese e thai.

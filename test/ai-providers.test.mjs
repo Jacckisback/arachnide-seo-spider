@@ -12,6 +12,7 @@ delete process.env.ANTHROPIC_API_KEY;
 delete process.env.OPENAI_API_KEY;
 const { AnthropicProvider } = await import('../src/ai/anthropic.mjs');
 const { OpenAIProvider } = await import('../src/ai/openai.mjs');
+const { LocalProvider, normalizeLocalUrl, stripThinking } = await import('../src/ai/local.mjs');
 const { saveAiSettings, publicAiSettings, getProvider, testAiConnection, replacementFor } = await import('../src/ai/settings.mjs');
 
 const ANSWER = JSON.stringify({ newValue: 'Cours de français en ligne avec un professeur natif à Madrid', rationale: 'Reprend le sujet', confidence: 0.85 });
@@ -109,5 +110,57 @@ test('clé API : chiffrée sur disque, jamais renvoyée, test de connexion sans 
   assert.deepEqual([bad.ok, bad.error], [false, 'invalid_key']);
   await saveAiSettings({ providers: { openai: { apiKey: null } } });
   assert.equal((await publicAiSettings()).providers.openai.hasKey, false);
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('IA locale (LM Studio / Ollama) : API compatible OpenAI, sans clé, modèle chargé par défaut, réflexion retirée, coût nul', async () => {
+  assert.equal(normalizeLocalUrl(''), 'http://localhost:1234/v1');
+  assert.equal(normalizeLocalUrl('localhost:11434'), 'http://localhost:11434/v1');
+  assert.equal(normalizeLocalUrl('http://127.0.0.1:1234/'), 'http://127.0.0.1:1234/v1');
+  assert.equal(normalizeLocalUrl('http://192.168.1.20:8080/v1/chat/completions'), 'http://192.168.1.20:8080/v1');
+  assert.equal(normalizeLocalUrl('ftp://x'), null);
+  assert.equal(stripThinking('<think>hmm {"a":1}</think>\n{"b":2}'), '{"b":2}');
+  const seen = [];
+  const fetch = async (url, init = {}) => {
+    seen.push({ url, init });
+    if (url.endsWith('/models')) return Response.json({ object: 'list', data: [{ id: 'qwen3-8b' }, { id: 'nomic-embed-text' }, { id: 'llama3.2:3b' }] });
+    return Response.json({ choices: [{ message: { content: `<think>Le titre doit faire 50 caractères…</think>${ANSWER}` } }] });
+  };
+  const p = new LocalProvider({ fetch, baseUrl: 'http://localhost:11434' });
+  assert.deepEqual((await p.listModels()).map((m) => m.id), ['qwen3-8b', 'llama3.2:3b'], 'pas de modèle d’embedding');
+  const f = await p.generateFix({ id: 'title-short' }, ctx);
+  assert.equal(f.provider, 'local');
+  assert.equal(f.newValue, 'Cours de français en ligne avec un professeur natif à Madrid');
+  const chat = seen.find((x) => x.url.endsWith('/chat/completions'));
+  assert.equal(chat.url, 'http://localhost:11434/v1/chat/completions');
+  assert.equal(chat.init.headers.authorization, undefined, 'aucune clé envoyée');
+  const body = JSON.parse(chat.init.body);
+  assert.equal(body.model, 'qwen3-8b', 'premier modèle chargé');
+  assert.equal(body.response_format, undefined, 'LM Studio refuse json_object');
+  // Serveur éteint : erreur explicite.
+  const down = new LocalProvider({ baseUrl: 'http://127.0.0.1:9/v1', fetch: async () => { throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }); } });
+  await assert.rejects(down.listModels(), (e) => e.code === 'unreachable' && /127\.0\.0\.1:9\/v1/.test(e.message));
+});
+
+test('IA locale : réglages sans clé, adresse enregistrée, test de connexion, prix nul', async () => {
+  await assert.rejects(saveAiSettings({ provider: 'local', providers: { local: { baseUrl: 'javascript:alert(1)' } } }), (e) => e.status === 400);
+  const pub = await saveAiSettings({ provider: 'local', providers: { local: { baseUrl: 'localhost:11434', model: 'llama3.2:3b' } } });
+  assert.equal(pub.provider, 'local');
+  assert.equal(pub.providers.local.keyless, true);
+  assert.equal(pub.providers.local.baseUrl, 'http://localhost:11434/v1');
+  assert.equal(pub.providers.local.model, 'llama3.2:3b');
+  const seen = [];
+  const fetch = async (url) => (seen.push(url), Response.json({ data: [{ id: 'llama3.2:3b' }] }));
+  const p = await getProvider({ fetch });
+  assert.ok(p, 'prêt sans clé');
+  assert.equal(p.id, 'local');
+  assert.deepEqual(p.price, { input: 0, output: 0 });
+  const t = await testAiConnection({ provider: 'local', fetch });
+  assert.deepEqual([t.ok, t.models.map((m) => m.id)], [true, ['llama3.2:3b']]);
+  assert.equal(seen[0], 'http://localhost:11434/v1/models');
+  const down = await testAiConnection({ provider: 'local', fetch: async () => { throw new TypeError('fetch failed'); } });
+  assert.deepEqual([down.ok, down.error, down.detail], [false, 'unreachable', 'http://localhost:11434/v1']);
+  // Modèle vidé : le modèle chargé sur le serveur sera pris.
+  assert.equal((await saveAiSettings({ providers: { local: { model: '' } } })).providers.local.model, '');
   await fs.rm(tmp, { recursive: true, force: true });
 });

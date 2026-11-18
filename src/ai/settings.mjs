@@ -8,12 +8,15 @@ import { CONFIG_DIR } from '../sites.mjs';
 import { seal, unseal } from '../secret.mjs';
 import { AnthropicProvider } from './anthropic.mjs';
 import { OpenAIProvider } from './openai.mjs';
+import { LocalProvider, LOCAL_DEFAULT_URL, normalizeLocalUrl } from './local.mjs';
 
 const MODELS = createRequire(import.meta.url)('./models.json');
 const FILE = () => path.join(CONFIG_DIR, 'ai.json');
-export const PROVIDERS = { anthropic: AnthropicProvider, openai: OpenAIProvider };
+export const PROVIDERS = { anthropic: AnthropicProvider, openai: OpenAIProvider, local: LocalProvider };
+// Fournisseurs sans clé obligatoire (serveur local) : seule l'adresse du serveur compte.
+const KEYLESS = new Set(['local']);
 // Variables d'environnement acceptées à la place d'une clé saisie.
-const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY' };
+const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', local: 'ARACHNIDE_LOCAL_API_KEY' };
 
 const encrypt = seal;
 const decrypt = unseal;
@@ -25,7 +28,8 @@ export async function readAiSettings() {
   } catch {
     /* premier lancement */
   }
-  const out = { provider: 'anthropic', models: {}, keys: {}, customModels: {}, simulation: true, realConfirmed: false, ...s };
+  const out = { provider: 'anthropic', models: {}, keys: {}, customModels: {}, baseUrls: {}, simulation: true, realConfirmed: false, ...s };
+  out.baseUrls ||= {};
   migrateModels(out);
   return out;
 }
@@ -67,6 +71,7 @@ export async function publicAiSettings() {
       hasKey: !!s.keys[id] || !!process.env[ENV_KEYS[id]],
       fromEnv: !s.keys[id] && !!process.env[ENV_KEYS[id]],
     };
+    if (KEYLESS.has(id)) Object.assign(providers[id], { keyless: true, baseUrl: localUrl(s), defaultBaseUrl: LOCAL_DEFAULT_URL, free: true });
   }
   return { provider: s.provider, providers, simulation: s.simulation !== false, realConfirmed: !!s.realConfirmed };
 }
@@ -77,7 +82,12 @@ export async function saveAiSettings(input) {
   for (const id of Object.keys(PROVIDERS)) {
     const p = input.providers?.[id];
     if (!p) continue;
-    if (typeof p.model === 'string' && p.model.trim()) s.models[id] = p.model.trim().slice(0, 100);
+    if (typeof p.model === 'string' && (p.model.trim() || KEYLESS.has(id))) s.models[id] = p.model.trim().slice(0, 200);
+    if (KEYLESS.has(id) && typeof p.baseUrl === 'string') {
+      const u = normalizeLocalUrl(p.baseUrl);
+      if (!u) throw Object.assign(new Error('Invalid server URL'), { status: 400, key: 'ai.err.badUrl' });
+      s.baseUrls[id] = u;
+    }
     if (Array.isArray(p.models)) s.customModels[id] = p.models.filter((m) => m && typeof m.id === 'string').slice(0, 50).map((m) => ({ id: m.id.slice(0, 100), label: String(m.label || m.id).slice(0, 100) }));
     if (p.apiKey === null) delete s.keys[id];
     else if (typeof p.apiKey === 'string' && p.apiKey.trim()) s.keys[id] = await encrypt(p.apiKey.trim());
@@ -89,6 +99,7 @@ export async function saveAiSettings(input) {
 }
 
 export function modelPrice(provider, model) {
+  if (MODELS[provider]?.free) return { input: 0, output: 0 };
   return MODELS[provider]?.models.find((m) => m.id === model)?.price || MODELS[provider]?.models[0]?.price || { input: 3, output: 15 };
 }
 
@@ -99,22 +110,26 @@ export async function getProvider({ provider, fetch } = {}) {
   const Cls = PROVIDERS[id];
   if (!Cls) return null;
   const apiKey = s.keys[id] ? await decrypt(s.keys[id]) : process.env[ENV_KEYS[id]];
-  if (!apiKey) return null;
+  if (!apiKey && !KEYLESS.has(id)) return null;
   const model = s.models[id] || MODELS[id].default;
   // ARACHNIDE_ANTHROPIC_BASE_URL / ARACHNIDE_OPENAI_BASE_URL : passerelle d'entreprise ou serveur de test.
-  const p = new Cls({ apiKey, model, fetch, baseUrl: process.env[`ARACHNIDE_${id.toUpperCase()}_BASE_URL`] });
+  // IA locale : l'adresse saisie dans les paramètres (ARACHNIDE_LOCAL_BASE_URL la remplace).
+  const baseUrl = process.env[`ARACHNIDE_${id.toUpperCase()}_BASE_URL`] || (KEYLESS.has(id) ? localUrl(s) : undefined);
+  const p = new Cls({ apiKey, model, fetch, baseUrl });
   p.price = modelPrice(id, model);
   return p;
 }
 
 // Test de connexion : liste des modèles (vérifie la clé sans générer de texte).
 export async function testAiConnection({ provider, apiKey, fetch } = {}) {
-  const p = apiKey ? new PROVIDERS[provider]({ apiKey, fetch }) : await getProvider({ provider, fetch });
+  const p = apiKey && !KEYLESS.has(provider) ? new PROVIDERS[provider]({ apiKey, fetch }) : await getProvider({ provider, fetch });
   if (!p) return { ok: false, error: 'no_key' };
   try {
     const models = await p.listModels();
     return { ok: true, models: models.slice(0, 60) };
   } catch (e) {
-    return { ok: false, status: e.status, error: e.status === 401 ? 'invalid_key' : e.message.replace(/sk-[\w-]+/g, 'sk-…') };
+    return { ok: false, status: e.status, error: e.code === 'unreachable' ? 'unreachable' : e.status === 401 ? 'invalid_key' : e.message.replace(/sk-[\w-]+/g, 'sk-…'), detail: e.code === 'unreachable' ? p.root : undefined };
   }
 }
+
+const localUrl = (s) => s.baseUrls?.local || LOCAL_DEFAULT_URL;

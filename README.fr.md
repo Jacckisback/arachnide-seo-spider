@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="Licence MIT"></a>
-  <img src="https://img.shields.io/badge/version-3.23.2-3d5f17" alt="Version 3.23.2">
+  <img src="https://img.shields.io/badge/version-3.24.0-3d5f17" alt="Version 3.24.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 ou plus récent">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 langues">
@@ -182,7 +182,7 @@ Après un crawl, ouvrez l’onglet **Corriger en 1 clic** : les problèmes sont 
 
 ### Mise en route
 
-- **Clé IA** — *Options → IA* : choisissez Claude (Anthropic) ou ChatGPT (OpenAI), collez votre clé API ([console.anthropic.com](https://console.anthropic.com/settings/keys) ou [platform.openai.com](https://platform.openai.com/api-keys)), choisissez un modèle, cliquez sur *Tester la connexion*. La clé est chiffrée et stockée uniquement sur votre ordinateur, envoyée seulement à ce fournisseur ; vous le payez directement.
+- **Clé IA** — *Options → IA* : choisissez Claude (Anthropic) ou ChatGPT (OpenAI), collez votre clé API ([console.anthropic.com](https://console.anthropic.com/settings/keys) ou [platform.openai.com](https://platform.openai.com/api-keys)), choisissez un modèle, cliquez sur *Tester la connexion*. La clé est chiffrée et stockée uniquement sur votre ordinateur, envoyée seulement à ce fournisseur ; vous le payez directement. Ou choisissez **IA locale (LM Studio, Ollama…)** : saisissez l’adresse de n’importe quel serveur compatible OpenAI (`http://localhost:1234/v1` pour LM Studio, `http://localhost:11434/v1` pour Ollama), sans clé ; rien ne sort de votre machine et c’est gratuit.
 - **WordPress** — dans l’onglet *Corriger*, bouton de connexion → *WordPress* → *Télécharger le plugin WordPress (.zip)*, puis dans WordPress *Extensions → Ajouter → Téléverser une extension*. Créez un **mot de passe d’application** dans *Utilisateurs → Profil → Mots de passe d’application* (nommez-le « Arachnide », copiez-le) et saisissez l’adresse du site, l’identifiant et ce mot de passe dans Arachnide. Un compte Éditeur suffit pour les contenus ; Administrateur pour les redirections. Compatible Yoast SEO, Rank Math, SEOPress, All in One SEO et Redirection.
 - **GitHub / Lovable** — créez un **token fine-grained** dans *GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens* : *Only select repositories* (un seul dépôt), permissions *Contents : Read and write* et *Pull requests : Read and write*. Saisissez `propriétaire/dépôt` et le token. Arachnide ouvre une Pull Request sur `arachnide/fix-AAAAMMJJ-HHMM` après vous avoir montré le diff ; avec Lovable, la fusion dans la branche par défaut met le projet à jour automatiquement.
 
@@ -201,7 +201,7 @@ Fonctionnement des connecteurs et ajout d’un CMS : [docs/CONNECTORS.md](docs/C
 
 Un audit complet (extraction HTML, moteur de crawl, règles SEO et crawls de 8 vrais sites) a supprimé les faux positifs et les faux négatifs qui pouvaient tromper un professionnel du SEO ou du GEO.
 
-- **Sites protégés contre les robots** (403 sur le user-agent du crawler) : le crawl passe automatiquement sur Chrome et vous le signale, au lieu d’afficher toutes les pages en erreur.
+- **Sites protégés contre les robots** (403 sur le user-agent du crawler) : le crawl passe automatiquement sur Chrome et vous le signale, au lieu d’afficher toutes les pages en erreur — même quand l’accueil sort du cache du CDN et que seules les autres pages sont filtrées (Hostinger hCDN, LiteSpeed).
 - **Limitation de débit (429/503)** : Arachnide attend et réessaie, les pages freinées ne sont plus comptées comme cassées. Les liens vers LinkedIn ou des sites protégés par Cloudflare sont « non vérifiables », pas « cassés ».
 - **Directives lues comme Google** : `max-image-preview:none` n’est pas un noindex, le `X-Robots-Tag` d’un autre robot est ignoré, le meta refresh est une redirection.
 - **Le contenu tel qu’il est** : `<title>` des SVG ignorés, `alt=""` = image décorative, images en lazy-load (`data-src`) analysées, comptage des mots en chinois, japonais et thaï.

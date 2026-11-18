@@ -13,14 +13,19 @@ export const api = async (path, body) => {
 
 // ---------- Paramètres > IA ----------
 let aiState = null;
+// Nom affiché d'un fournisseur (corrections, historique, puce de l'onglet).
+const providerName = (id) => (id === 'openai' ? 'ChatGPT' : id === 'local' ? T('ai.localShort') : 'Claude');
 function renderAiSettings() {
   const id = $('#aiProvider').value;
   const p = aiState.providers[id];
   $('#aiModelList').innerHTML = p.models.map((m) => `<option value="${C.esc(m.id)}">${C.esc(m.label)}</option>`).join('');
   $('#aiModel').value = p.model;
   $('#aiKey').value = '';
-  $('#aiKey').placeholder = p.hasKey ? '••••••••••••' : id === 'anthropic' ? 'sk-ant-…' : 'sk-…';
-  $('#aiKeyState').textContent = p.fromEnv ? T('ai.keyEnv') : p.hasKey ? T('ai.keySaved') : T('ai.keyMissing');
+  $('#aiKey').placeholder = p.hasKey ? '••••••••••••' : id === 'anthropic' ? 'sk-ant-…' : p.keyless ? T('ai.keyOptionalPh') : 'sk-…';
+  $('#aiKeyState').textContent = p.fromEnv ? T('ai.keyEnv') : p.hasKey ? T('ai.keySaved') : p.keyless ? T('ai.keyOptional') : T('ai.keyMissing');
+  $('#aiBaseUrlRow').hidden = !p.keyless;
+  if (p.keyless) $('#aiBaseUrl').value = p.baseUrl || p.defaultBaseUrl || '';
+  $('#aiModel').placeholder = p.keyless ? T('ai.modelAuto') : '';
   $('#aiForget').hidden = !p.hasKey || p.fromEnv;
 }
 
@@ -33,7 +38,8 @@ async function loadAiSettings() {
 async function saveAi() {
   const id = $('#aiProvider').value;
   const key = $('#aiKey').value.trim();
-  aiState = await api('/api/ai/settings', { provider: id, providers: { [id]: { model: $('#aiModel').value, ...(key ? { apiKey: key } : {}) } } });
+  const extra = aiState?.providers[id]?.keyless ? { baseUrl: $('#aiBaseUrl').value } : {};
+  aiState = await api('/api/ai/settings', { provider: id, providers: { [id]: { model: $('#aiModel').value, ...extra, ...(key ? { apiKey: key } : {}) } } });
   renderAiSettings();
   return aiState;
 }
@@ -45,7 +51,7 @@ function initAiSettings() {
       await saveAi();
       $('#aiStatus').textContent = T('ai.saved');
     } catch (e) {
-      $('#aiStatus').textContent = e.message;
+      $('#aiStatus').textContent = e.key ? T(e.key) : e.message;
     }
   });
   $('#aiTest').addEventListener('click', async () => {
@@ -57,7 +63,7 @@ function initAiSettings() {
         // Liste des modèles disponibles pour ce compte : proposée dans le champ Modèle.
         $('#aiModelList').innerHTML = r.models.map((m) => `<option value="${C.esc(m.id)}">${C.esc(m.label)}</option>`).join('');
       }
-      $('#aiStatus').textContent = r.ok ? T('ai.ok', { n: r.models?.length || 0 }) : T('ai.err.' + (r.error === 'no_key' || r.error === 'invalid_key' ? r.error : 'other'), { error: r.error });
+      $('#aiStatus').textContent = r.ok ? T('ai.ok', { n: r.models?.length || 0 }) : T('ai.err.' + (['no_key', 'invalid_key', 'unreachable'].includes(r.error) ? r.error : 'other'), { error: r.error, url: r.detail || '' });
     } catch (e) {
       $('#aiStatus').textContent = e.message;
     }
@@ -139,7 +145,7 @@ function headerBar() {
   const conn = FS.catalog.connection;
   return `<div class="toolbar"><div class="tb-title"><h2>${C.icon('wand')} ${esc(T('tab.fix'))}</h2><p class="help">${esc(T('fix.intro'))}</p></div>
     <div class="tb-actions">
-      <span class="chip ${prov ? 'ok' : 'warn'}" title="${esc(T('cfg.ai'))}">${esc(prov ? `${prov.id === 'anthropic' ? 'Claude' : 'ChatGPT'} · ${prov.model}` : T('fix.noProviderShort'))}</span>
+      <span class="chip ${prov ? 'ok' : 'warn'}" title="${esc(T('cfg.ai'))}">${esc(prov ? `${providerName(prov.id)}${prov.model ? ' · ' + prov.model : ''}` : T('fix.noProviderShort'))}</span>
       <button class="btn" id="fixConn">${C.icon('link')} ${esc(T('fix.conn.' + conn.type))}</button>
       <button class="btn" id="fixAi">${C.icon('settings')} ${esc(T('cfg.ai'))}</button>
     </div></div>`;
@@ -212,7 +218,7 @@ function fixCard(f) {
       <span class="chip muted">${esc(T('fix.kind.' + f.target.kind))}</span>${f.target.selector ? `<code class="fix-sel">${esc(f.target.selector)}</code>` : ''}
       <span class="spacer"></span><span class="chip ${f.status === 'failed' ? 'error' : f.status === 'approved' ? 'ok' : 'muted'}">${esc(T('fix.status.' + f.status))}</span></div>
     ${plan ? after : `<div class="fix-ba"><div><h5>${esc(T('fix.before'))}</h5><div class="fix-val old">${esc(f.target.kind === 'redirect' && f.oldValue == null ? T('fix.status404') : show(f.oldValue))}</div>${counter(f.target.kind, f.oldValue)}</div><div><h5>${esc(T('fix.after'))}</h5>${after}</div></div>`}
-    <div class="fix-foot"><span class="muted">${f.method === 'ai' ? esc(T('fix.byAi', { p: f.provider === 'openai' ? 'ChatGPT' : 'Claude', c: Math.round(f.confidence * 100) })) : esc(T('fix.method.' + f.method))}${f.rationale ? ' · ' + esc(rationaleText(f)) : ''}${f.error ? ` · <b class="err">${esc(f.error)}</b>` : ''}</span>
+    <div class="fix-foot"><span class="muted">${f.method === 'ai' ? esc(T('fix.byAi', { p: providerName(f.provider), c: Math.round(f.confidence * 100) })) : esc(T('fix.method.' + f.method))}${f.rationale ? ' · ' + esc(rationaleText(f)) : ''}${f.error ? ` · <b class="err">${esc(f.error)}</b>` : ''}</span>
       <span class="spacer"></span>${plan ? '' : `${f.method === 'ai' ? `<button class="btn tiny" data-regen="${f.id}">${esc(T('fix.regen'))}</button>` : ''}<button class="btn tiny" data-ignore="${f.id}">${esc(T('fix.ignore'))}</button>${f.status !== 'approved' ? `<button class="btn tiny primary" data-approve="${f.id}">${C.icon('check')} ${esc(T('fix.approve'))}</button>` : ''}`}</div></div>`;
 }
 
@@ -371,7 +377,7 @@ function paintHistory(view) {
       ${HS.batch ? `<button class="btn small" id="hUndoBatch">${esc(T('fix.undoBatch'))}</button>` : ''}</div>
     ${list.length ? `<table class="fix-hist"><thead><tr><th>${esc(T('fix.date'))}</th><th>URL</th><th>${esc(T('col.issue'))}</th><th>${esc(T('fix.before'))}</th><th>${esc(T('fix.after'))}</th><th>${esc(T('fix.statusCol'))}</th><th></th></tr></thead><tbody>
       ${list.map((f) => `<tr><td class="nowrap">${f.appliedAt ? esc(C.t().date(f.appliedAt)) : '—'}<br><small class="muted">${esc(f.batch || '')}</small></td><td class="wrap"><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.url)}</a></td>
-        <td>${esc(T('issue.' + f.issueType + '.label'))}<br><small class="muted">${esc(T('fix.kind.' + f.target.kind))} · ${esc(f.provider ? (f.provider === 'openai' ? 'ChatGPT' : 'Claude') : T('fix.method.' + f.method))} · ${esc(T('fix.conn.' + (f.connector || 'export')))}</small></td>
+        <td>${esc(T('issue.' + f.issueType + '.label'))}<br><small class="muted">${esc(T('fix.kind.' + f.target.kind))} · ${esc(f.provider ? providerName(f.provider) : T('fix.method.' + f.method))} · ${esc(T('fix.conn.' + (f.connector || 'export')))}</small></td>
         <td class="wrap old">${esc(show(f.oldValue))}</td><td class="wrap">${esc(show(f.newValue))}</td>
         <td><span class="chip ${f.status === 'verified' ? 'ok' : f.status === 'failed' ? 'error' : 'muted'}">${esc(T('fix.status.' + f.status))}</span>${f.error ? `<br><small class="muted">${esc(T('fix.err.' + f.error) === 'fix.err.' + f.error ? f.error : T('fix.err.' + f.error))}</small>` : ''}</td>
         <td class="nowrap">${canUndo(f) ? `<button class="btn tiny" data-verify="${f.id}">${esc(T('fix.verify'))}</button> <button class="btn tiny" data-undo="${f.id}">${esc(T('fix.undo'))}</button>` : ''}</td></tr>`).join('')}
@@ -447,7 +453,7 @@ function exportPdf(list, titleKey) {
   if (!w) return C.toast(T('fix.popupBlocked'), 'error');
   const conn = FS.catalog?.connection?.type || 'export';
   const rows = list
-    .map((f) => `<tr><td>${esc(f.url)}<br><small>${esc(T('issue.' + f.issueType + '.label'))} · ${esc(T('fix.kind.' + f.target.kind))}${f.target.selector ? ' · ' + esc(f.target.selector) : ''}</small></td><td>${esc(show(f.oldValue))}</td><td><b>${esc(show(f.newValue ?? T(f.rationale)))}</b></td><td>${esc(f.appliedAt ? C.t().date(f.appliedAt) : '—')}</td><td>${esc(f.provider ? (f.provider === 'openai' ? 'ChatGPT' : 'Claude') : T('fix.method.' + f.method))}</td><td>${esc(T('fix.status.' + f.status))}</td></tr>`)
+    .map((f) => `<tr><td>${esc(f.url)}<br><small>${esc(T('issue.' + f.issueType + '.label'))} · ${esc(T('fix.kind.' + f.target.kind))}${f.target.selector ? ' · ' + esc(f.target.selector) : ''}</small></td><td>${esc(show(f.oldValue))}</td><td><b>${esc(show(f.newValue ?? T(f.rationale)))}</b></td><td>${esc(f.appliedAt ? C.t().date(f.appliedAt) : '—')}</td><td>${esc(f.provider ? providerName(f.provider) : T('fix.method.' + f.method))}</td><td>${esc(T('fix.status.' + f.status))}</td></tr>`)
     .join('');
   w.document.write(`<!doctype html><html lang="${C.t().lang}"><head><meta charset="utf-8"><title>${esc(T(titleKey))}</title>
 <style>body{font:12px/1.45 -apple-system,Segoe UI,Arial,sans-serif;color:#1b1f27;margin:24px}h1{font-size:20px;margin:0 0 4px}p{color:#5b6578}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #e3e6ec;padding:6px;text-align:left;vertical-align:top;word-break:break-word}th{font-size:11px;text-transform:uppercase;color:#5b6578}small{color:#5b6578}ol{padding-left:18px}</style></head><body>

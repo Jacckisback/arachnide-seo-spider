@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8cc63f" alt="MIT-Lizenz"></a>
-  <img src="https://img.shields.io/badge/version-3.23.2-3d5f17" alt="Version 3.23.2">
+  <img src="https://img.shields.io/badge/version-3.24.0-3d5f17" alt="Version 3.24.0">
   <img src="https://img.shields.io/badge/node-%E2%89%A5%2018.17-3d5f17" alt="Node.js 18.17 oder neuer">
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555" alt="macOS, Windows, Linux">
   <img src="https://img.shields.io/badge/languages-EN%20FR%20DE%20ES%20IT%20PT-555" alt="6 Sprachen">
@@ -188,7 +188,7 @@ Einrichtung (KI-Schlüssel, WordPress-Anwendungspasswort, GitHub-Token): siehe [
 
 Ein vollständiges Audit (HTML-Extraktion, Crawl-Engine, SEO-Regeln und Crawls von 8 echten Websites) hat die falsch positiven und falsch negativen Befunde beseitigt, die SEO- und GEO-Profis in die Irre führen konnten.
 
-- **Gegen Bots geschützte Websites** (403 auf den User-Agent des Crawlers): Der Crawl wechselt automatisch zu Chrome und weist darauf hin, statt alle Seiten als Fehler zu melden.
+- **Gegen Bots geschützte Websites** (403 auf den User-Agent des Crawlers): Der Crawl wechselt automatisch zu Chrome und weist darauf hin, statt alle Seiten als Fehler zu melden — auch wenn die Startseite aus dem CDN-Cache kommt und nur die übrigen Seiten gefiltert werden (Hostinger hCDN, LiteSpeed).
 - **Ratenbegrenzung (429/503)**: Arachnide wartet und versucht es erneut; gebremste Seiten zählen nicht mehr als defekt. Links zu LinkedIn oder Cloudflare-geschützten Websites gelten als „nicht prüfbar“, nicht als „defekt“.
 - **Direktiven wie Google gelesen**: `max-image-preview:none` ist kein noindex, das `X-Robots-Tag` eines anderen Bots wird ignoriert, Meta-Refresh ist eine Weiterleitung.
 - **Inhalte, wie sie sind**: SVG-`<title>` ignoriert, `alt=""` = dekoratives Bild, Lazy-Load-Bilder (`data-src`) analysiert, Wortzählung für Chinesisch, Japanisch und Thai.
