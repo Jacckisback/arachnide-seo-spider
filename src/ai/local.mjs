@@ -1,8 +1,12 @@
 // IA locale — tout serveur compatible avec l'API OpenAI (LM Studio, Ollama, llama.cpp server, vLLM, LocalAI, Jan…).
 // Rien ne sort de la machine (ou du réseau local) : pas de clé obligatoire, coût nul. La consigne JSON est donnée dans
-// le message, sans response_format (LM Studio refuse { type: "json_object" }) ; les blocs de réflexion <think> des
-// modèles qui raisonnent sont retirés avant la lecture du JSON.
+// le message, sans response_format (LM Studio refuse { type: "json_object" }).
+// Modèles qui raisonnent (Qwen3, DeepSeek-R1, gpt-oss, Magistral…) : la réflexion arrive soit dans le texte entre
+// <think>…</think> (retirée), soit à part (reasoning_content chez LM Studio / llama.cpp, reasoning chez Ollama). Elle
+// consomme des jetons avant la réponse : le plafond est large, et si le texte final est vide, le JSON est cherché à la
+// fin de la réflexion ; sinon une erreur explicite remplace la proposition vide.
 import { AIError } from './provider.mjs';
+import { makeFix } from '../fix/schema.mjs';
 import { OpenAIProvider } from './openai.mjs';
 
 export const LOCAL_DEFAULT_URL = 'http://localhost:1234/v1'; // LM Studio ; Ollama : http://localhost:11434/v1
@@ -50,8 +54,8 @@ export class LocalProvider extends OpenAIProvider {
         headers: this.headers(),
         body: JSON.stringify({
           model,
-          // Les modèles qui raisonnent consomment des jetons avant de répondre : marge confortable, c'est gratuit.
-          max_tokens: Math.max(maxTokens * 4, 2000),
+          // Les modèles qui raisonnent consomment des milliers de jetons avant de répondre : c'est gratuit, on laisse large.
+          max_tokens: LOCAL_MAX_TOKENS,
           temperature: 0.3,
           stream: false,
           messages: [
@@ -66,7 +70,26 @@ export class LocalProvider extends OpenAIProvider {
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new AIError(`Local AI ${res.status}: ${data.error?.message || data.error || res.statusText}`, { status: res.status });
-    return stripThinking(data.choices?.[0]?.message?.content || '');
+    const choice = data.choices?.[0] || {};
+    const msg = choice.message || {};
+    const text = stripThinking(msg.content || '');
+    if (text) return text;
+    // Réponse vide : le JSON est peut-être à la fin de la réflexion (certains modèles y écrivent la réponse).
+    const reasoning = String(msg.reasoning_content || msg.reasoning || msg.thinking || '');
+    const json = lastJsonObject(reasoning);
+    if (json) return json;
+    if (choice.finish_reason === 'length') throw new AIError(`The local model "${model}" used all its ${LOCAL_MAX_TOKENS} tokens reasoning without answering: disable thinking for this model (LM Studio: model settings › Reasoning off; Ollama: a non-thinking variant) or use a bigger context.`, { code: 'reasoning_length' });
+    throw new AIError(`The local model "${model}" returned an empty answer${reasoning ? ' (only reasoning)' : ''}.`, { code: 'empty' });
+  }
+  // Réponse vide ou réflexion sans fin : correction « échouée » avec la raison, visible sur la carte, au lieu d'une
+  // erreur muette (serveur injoignable : erreur globale, comme avant).
+  async generateFix(issue, ctx) {
+    try {
+      return await super.generateFix(issue, ctx);
+    } catch (e) {
+      if (e.code !== 'reasoning_length' && e.code !== 'empty') throw e;
+      return makeFix({ issueType: issue.id, url: ctx.url, kind: ctx.kind, selector: ctx.target || null, oldValue: ctx.oldValue ?? null, newValue: null, method: 'ai', provider: this.id, confidence: 0, rationale: '', status: 'failed', error: e.message });
+    }
   }
   async listModels() {
     let res;
@@ -85,7 +108,40 @@ export class LocalProvider extends OpenAIProvider {
   }
 }
 
-export const stripThinking = (t) => String(t).replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
+const LOCAL_MAX_TOKENS = 16000;
+
+// Dernier objet JSON équilibré d'un texte (accolades dans les chaînes ignorées), s'il contient une réponse attendue.
+export function lastJsonObject(text) {
+  const s = String(text || '');
+  for (let end = s.lastIndexOf('}'); end >= 0; end = s.lastIndexOf('}', end - 1)) {
+    let depth = 0;
+    let inStr = false;
+    for (let i = end; i >= 0; i--) {
+      const c = s[i];
+      if (c === '"' && s[i - 1] !== '\\') inStr = !inStr;
+      if (inStr) continue;
+      if (c === '}') depth++;
+      else if (c === '{' && --depth === 0) {
+        const cand = s.slice(i, end + 1);
+        try {
+          const o = JSON.parse(cand);
+          if (o && typeof o === 'object' && 'newValue' in o) return cand;
+        } catch {
+          /* pas du JSON : on continue vers la gauche */
+        }
+        break;
+      }
+    }
+  }
+  return null;
+}
+
+export const stripThinking = (t) =>
+  String(t)
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^[\s\S]*<\/think>/i, '') // balise ouvrante dans le gabarit de discussion, seule la fermante arrive
+    .replace(/<think>[\s\S]*$/i, '') // réflexion coupée par la limite de jetons : rien d'exploitable
+    .trim();
 
 function unreachable(root, e) {
   const code = e?.cause?.code || e?.name || 'Error';

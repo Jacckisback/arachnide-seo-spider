@@ -12,7 +12,7 @@ delete process.env.ANTHROPIC_API_KEY;
 delete process.env.OPENAI_API_KEY;
 const { AnthropicProvider } = await import('../src/ai/anthropic.mjs');
 const { OpenAIProvider } = await import('../src/ai/openai.mjs');
-const { LocalProvider, normalizeLocalUrl, stripThinking } = await import('../src/ai/local.mjs');
+const { LocalProvider, normalizeLocalUrl, stripThinking, lastJsonObject } = await import('../src/ai/local.mjs');
 const { saveAiSettings, publicAiSettings, getProvider, testAiConnection, replacementFor } = await import('../src/ai/settings.mjs');
 
 const ANSWER = JSON.stringify({ newValue: 'Cours de français en ligne avec un professeur natif à Madrid', rationale: 'Reprend le sujet', confidence: 0.85 });
@@ -163,4 +163,28 @@ test('IA locale : réglages sans clé, adresse enregistrée, test de connexion, 
   // Modèle vidé : le modèle chargé sur le serveur sera pris.
   assert.equal((await saveAiSettings({ providers: { local: { model: '' } } })).providers.local.model, '');
   await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('IA locale, modèles qui raisonnent : réflexion à part, réflexion coupée, réponse vide → erreur visible, jamais une proposition vide', async () => {
+  const reply = (message, finish_reason = 'stop') => async (url) => (url.endsWith('/models') ? Response.json({ data: [{ id: 'qwen3-8b' }] }) : Response.json({ choices: [{ message, finish_reason }] }));
+  let seenBody;
+  // LM Studio (« separate reasoning_content ») : réflexion à part, réponse normale dans content.
+  const lm = new LocalProvider({ model: 'qwen3-8b', fetch: async (url, init) => ((seenBody = JSON.parse(init.body)), reply({ content: ANSWER, reasoning_content: 'Je réfléchis {longuement}…' })(url)) });
+  assert.equal((await lm.generateFix({ id: 'title-short' }, ctx)).newValue, 'Cours de français en ligne avec un professeur natif à Madrid');
+  assert.ok(seenBody.max_tokens >= 16000, 'assez de jetons pour réfléchir puis répondre');
+  // Ollama : la réponse est restée dans le champ reasoning, content vide → JSON récupéré à la fin de la réflexion.
+  const ol = new LocalProvider({ model: 'qwen3:8b', fetch: reply({ content: '', reasoning: `Analysons la page {titre}. Réponse : ${ANSWER}` }) });
+  assert.equal((await ol.generateFix({ id: 'title-short' }, ctx)).status, 'proposed');
+  // Réflexion coupée par la limite : correction « échouée » avec la raison, pas une carte vide.
+  const cut = new LocalProvider({ model: 'qwen3-8b', fetch: reply({ content: '<think>Le titre actuel est trop court, il faudrait…' }, 'length') });
+  const f = await cut.generateFix({ id: 'title-short' }, ctx);
+  assert.equal(f.status, 'failed');
+  assert.equal(f.newValue, null);
+  assert.match(f.error, /reasoning without answering/);
+  const empty = new LocalProvider({ model: 'm', fetch: reply({ content: '' }) });
+  assert.match((await empty.generateFix({ id: 'title-short' }, ctx)).error, /empty answer/);
+  // Extraction : dernier objet JSON contenant newValue, accolades dans les chaînes tolérées.
+  assert.equal(JSON.parse(lastJsonObject('{x} puis {"newValue":"a {b}","rationale":"r","confidence":1} fin')).newValue, 'a {b}');
+  assert.equal(lastJsonObject('pas de réponse {ici}'), null);
+  assert.equal(stripThinking('<think>coupé net'), '');
 });
