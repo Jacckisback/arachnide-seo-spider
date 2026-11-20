@@ -12,6 +12,7 @@ import { sendMail } from './mailer.mjs';
 import { getT } from '../public/shared/i18n.js';
 import { compareResults } from '../public/shared/compare.js';
 import { buildReport } from '../public/shared/report.js';
+import { reportFonts } from './report-fonts.mjs';
 
 const FILE = path.join(CONFIG_DIR, 'schedules.json');
 
@@ -168,7 +169,7 @@ export async function runSchedule(schedule, { onProgress, now = new Date() } = {
     if (schedule.emails?.length && (alerts.length || schedule.alerts?.always)) {
       try {
         const mail = alertEmail({ R, prev, alerts, compare, t, schedule });
-        const report = buildReport(R, { title: schedule.name, maxUrls: 10, compare }, t);
+        const report = buildReport(R, { title: schedule.name, maxUrls: 10, compare, fonts: await reportFonts() }, t);
         await sendMail({ to: schedule.emails, ...mail, attachments: [{ filename: `${host}_report.html`, content: report, contentType: 'text/html' }] });
         emailed = true;
       } catch (e) {

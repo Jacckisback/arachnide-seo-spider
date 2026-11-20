@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.25.0 — 2026-11-20
+
+### Client report: an expert's dossier, not a printout
+The HTML / PDF audit report is what the client keeps. It now reads like an expertise file: one idea (a signed technical inspection), one signature (the score set as a verdict on the cover), and every detail tuned for print.
+- **Typography**: Newsreader (titles, section numbers, key figures) and Inter (text, tables), **embedded in the file** (WOFF2, latin subset, SIL OFL 1.1; about 140 KB) so the report looks the same in the client's mailbox, offline and in the PDF. The page footer, which fell back to Times, now uses the text font. Scale 1.25, lining tabular figures in every table, balanced headings, no orphan words.
+- **Cover**: brand rule, site name, the score as a large figure in its status colour with the grade and **a one-sentence verdict** (blocking errors, top priority with its URL count), four key facts, and the "prepared for / by / date / contact" block. No more empty band and half-blank page.
+- **Synthesis and plan**: sections numbered "01 · Synthesis" with a hairline; KPIs as a ruled register; key findings as aligned rows (severity, issue, URL count); priority headings as a coloured marker instead of solid bars; lighter table headers.
+- **Detailed analysis**: **URLs shown relative to the audited site** (`/achat-or/lingot-1-kg/` instead of the full address, a note says which origin) and breakable after `/` and `-` — no more addresses split mid-word; each URL is a clickable link in the PDF; redirect targets in the details are shortened the same way. Other sites keep their full address.
+- **Colours**: one threshold (75 / 50) for the gauge, bars and segment scores, which disagreed before (a 79 % category showed orange next to a green gauge); severity pills drawn as outlines, readable in black-and-white print; tinted paper and blue-black ink instead of pure white / black on screen.
+- **Print**: cover without margins or footer, headings never left alone at the bottom of a page, rows and key blocks never split.
+- New keys `report.verdictClean`, `report.verdictErrors`, `report.verdictTop`, `report.relativeUrls` in the six languages.
+
+### Interface polish (Chrome modern web guidance)
+- Balanced headings and orphan-free paragraphs (`text-wrap`), `font-synthesis: none`, `accent-color` on native controls, themed text selection.
+- Scrollbars in the theme colours (`scrollbar-color`, thumb above 3:1), standard width instead of `thin` on the detail panels (a thin thumb is too small to grab for some people).
+- Keyboard focus visible on table rows; tabular figures on every counter.
+- `theme-color` for light and dark; the history dialog closes on a click outside (`closedby="any"`, progressive enhancement).
+- **Tests**: embedded fonts, singular verdict, relative and breakable URLs (with and without `www`, other hosts untouched), report without fonts.
+
 ## 3.24.1 — 2026-11-18
 
 ### Local AI: reasoning models (Qwen3, DeepSeek-R1, gpt-oss, Magistral…) no longer give empty corrections

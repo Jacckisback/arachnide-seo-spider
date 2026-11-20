@@ -1628,6 +1628,7 @@ async function openReportDialog() {
   for (const k of ['title', 'client', 'author', 'company', 'contact', 'website', 'color', 'intro']) if (saved[k] != null && form[k]) form[k].value = saved[k];
   if (!form.color.value) form.color.value = '#5b8c1e';
   form.maxUrls.value = saved.maxUrls || 10;
+  reportFonts(); // préchargées pendant que la fenêtre est ouverte
   $('#logoPreview').innerHTML = saved.logo ? `<img src="${saved.logo}" alt="">` : '';
   const crawls = await fetch('/api/crawls').then((r) => r.json()).catch(() => []);
   const host = hostOf();
@@ -1664,7 +1665,7 @@ $('#reportForm').addEventListener('submit', async (e) => {
   let compare = null;
   if (form.compare.value) compare = await api('/api/compare?with=' + encodeURIComponent(form.compare.value)).catch(() => null);
   const rt = await getT(opts.lang);
-  const html = buildReport(state.R, { ...saved, compare: state.segId ? null : compare, segments: segDefs().length ? segmentStats(state.full) : null }, rt);
+  const html = buildReport(state.R, { ...saved, compare: state.segId ? null : compare, segments: segDefs().length ? segmentStats(state.full) : null, fonts: await reportFonts() }, rt);
   $('#reportDialog').close();
   const w = window.open('', '_blank');
   if (!w) {
@@ -1675,6 +1676,24 @@ $('#reportForm').addEventListener('submit', async (e) => {
   w.document.write(html);
   w.document.close();
 });
+
+// Polices du rapport, embarquées dans le fichier (data: URL) pour qu'il ait le même aspect chez le client, hors ligne et
+// en PDF. Lues une fois, au premier rapport.
+let reportFontsCache = null;
+async function reportFonts() {
+  if (reportFontsCache) return reportFontsCache;
+  const files = { serif: 'fonts/newsreader-latin-wght-normal.woff2', sans: 'fonts/inter-latin-wght-normal.woff2' };
+  const out = {};
+  await Promise.all(Object.entries(files).map(async ([k, f]) => {
+    try {
+      const blob = await (await fetch(f)).blob();
+      out[k] = await new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(fr.result.replace(/^data:[^;,]*/, 'data:font/woff2')); fr.onerror = ko; fr.readAsDataURL(blob); });
+    } catch {
+      /* police indisponible : polices du système */
+    }
+  }));
+  return (reportFontsCache = out);
+}
 
 /* ---------- Chargement ---------- */
 async function loadResult(R, { file = null } = {}) {

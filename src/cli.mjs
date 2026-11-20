@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Crawler, USER_AGENTS, VERSION } from './crawler.mjs';
 import { getT, detailText, LANGS } from '../public/shared/i18n.js';
 import { buildReport } from '../public/shared/report.js';
+import { reportFonts } from './report-fonts.mjs';
 import { compareResults } from '../public/shared/compare.js';
 import { toCrawlerOptions } from './options.mjs';
 import { applySegments, suggestFromFolders, segmentStats, sliceResult, NONE } from '../public/shared/segments.js';
@@ -311,7 +312,7 @@ if (val('alert-email')) {
   const { alerts, compare } = evaluateAlerts(r, prev, { scoreDrop: Number(val('alert-score-drop', 5)), errors: true });
   if (alerts.length) {
     const mail = alertEmail({ R: r, prev, alerts, compare, t, schedule: { name: host } });
-    await sendMail({ to: val('alert-email'), ...mail, attachments: [{ filename: `${host}_report.html`, content: buildReport(r, { maxUrls: 10, compare }, t), contentType: 'text/html' }] })
+    await sendMail({ to: val('alert-email'), ...mail, attachments: [{ filename: `${host}_report.html`, content: buildReport(r, { maxUrls: 10, compare, fonts: await reportFonts() }, t), contentType: 'text/html' }] })
       .then(() => console.log(`✉  ${t('alert.count', { n: alerts.length })} → ${val('alert-email')}`))
       .catch((e) => console.error(`✉  ${e.message}`));
   } else console.log(`✉  ${t('alert.none')}`);
@@ -363,6 +364,7 @@ if (flag('report')) await output('report', async () => {
     website: val('website', ''),
     color: val('color', '#5b8c1e'),
     maxUrls: 10,
+    fonts: await reportFonts(),
     compare: segId ? null : compare,
     segments: segRows.length ? segRows : null,
   }, t);
