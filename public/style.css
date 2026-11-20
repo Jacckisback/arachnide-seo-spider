@@ -1399,3 +1399,23 @@ button.link.accent { color: var(--accent); font-weight: 600; }
 #listDialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .smd-head { margin: -6px 0 10px; }
 .chip.small { font-size: 10px; padding: 0 6px; }
+
+/* ---------- Finitions (3.25) : micro-typographie, interface du navigateur, focus ----------
+   Lignes équilibrées pour les titres courts, sans mot orphelin pour les paragraphes (text-wrap : amélioration
+   progressive, ignorée sans dommage ailleurs). Jamais de faux gras ni de faux italique. Barres de défilement aux
+   couleurs du thème, pouce à plus de 3:1 sur la carte (WCAG 1.4.11), épaisseur standard (une barre fine est trop
+   petite à saisir pour certains). */
+html { font-synthesis: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; accent-color: var(--accent); }
+h1, h2, h3, h4, .dialog-head b, th { text-wrap: balance; }
+p, li, dd, .help, .opt-note, .cfg-help, small { text-wrap: pretty; }
+a:hover { text-underline-offset: .18em; text-decoration-thickness: .06em; }
+::selection { background: color-mix(in oklch, var(--accent) 32%, transparent); }
+:root { --sb-thumb: color-mix(in oklch, var(--muted) 78%, var(--panel)); --sb-track: transparent; }
+.view, .tabs, .dialog-body, .cfg-body, .table-wrap, .detail-body, .iv-detail, .pl-detail, .map-inspector, .map-list, .map-results, pre.robots, .fix-diff, .fix-urls ul, .il-col {
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+.iv-detail, .pl-detail, .map-inspector { scrollbar-width: auto; }
+/* Lignes de tableau parcourues au clavier : le focus se voit, comme partout ailleurs. */
+tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Tous les chiffres qui se comparent ou se mettent à jour restent alignés. */
+.count, .count-pill, .ver, .kpi b, .kpi strong, .stat b, .num, .score, .big { font-variant-numeric: tabular-nums; }

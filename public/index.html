@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#090e15" media="(prefers-color-scheme: dark)">
   <title>Arachnide SEO Spider</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -246,7 +248,7 @@
   </div>
   </div>
 
-  <dialog id="historyDialog">
+  <dialog id="historyDialog" closedby="any">
     <form method="dialog" class="dialog-head"><h2 data-i18n="ui.history">History</h2><button class="btn icon" data-icon="x" data-i18n-title="ui.close"></button></form>
     <div id="historyList" class="dialog-body"></div>
   </dialog>
