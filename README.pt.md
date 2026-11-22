@@ -16,6 +16,7 @@
 </p>
 
 <p align="center">🌐 Site e documentação: <a href="https://arachnide-seo.com"><b>arachnide-seo.com</b></a></p>
+<p align="center">👤 Criado por <a href="https://thierrygustin.com"><b>Thierry Gustin</b></a>, consultor SEO freelancer — <a href="https://thierrygustin.com">thierrygustin.com</a></p>
 
 ---
 
